@@ -305,7 +305,7 @@ dialog::backdrop{background:rgba(10,14,10,.45)}
 
 <dialog id="confirmDlg">
   <div class="dlg-head"><h3 id="confirmTitle">Confirm</h3></div>
-  <div class="dlg-body"><p class="full" id="confirmText" style="margin:0"></p></div>
+  <div class="dlg-body"><p class="full" id="confirmText" style="margin:0;white-space:pre-line"></p></div>
   <div class="dlg-foot"><span class="spacer"></span><button class="btn" id="confirmNo">Cancel</button><button class="btn primary" id="confirmYes">Yes</button></div>
 </dialog>
 
@@ -344,7 +344,11 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const toastEl=$('#toast');let toastT;
 function toast(msg){toastEl.textContent=msg;toastEl.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>toastEl.classList.remove('show'),2200);}
 function confirmBox(title,text){return new Promise(res=>{const d=$('#confirmDlg');$('#confirmTitle').textContent=title;$('#confirmText').textContent=text;
-  const yes=$('#confirmYes'),no=$('#confirmNo');const done=v=>{d.close();yes.onclick=no.onclick=null;res(v);};yes.onclick=()=>done(true);no.onclick=()=>done(false);d.onclose=()=>res(false);d.showModal();});}
+  const yes=$('#confirmYes'),no=$('#confirmNo');let settled=false;const done=v=>{if(settled)return;settled=true;yes.onclick=no.onclick=null;d.onclose=null;if(d.open)d.close();res(v);};
+  yes.onclick=()=>done(true);no.onclick=()=>done(false);
+  if(d.open)d.close();
+  d.onclose=()=>{ if(!d.open) done(false); };   // Esc / backdrop; a stale close from a previous prompt arrives while this one is open and is ignored
+  d.showModal();});}
 
 // ---------- state ----------
 let blocks=new Map();
@@ -587,9 +591,9 @@ board.addEventListener('drop',async e=>{ const lb=e.target.closest('.lanebody');
   if(b.date===date&&b.line===line&&b.start===start) return;
   const c=conflict(date,line,start,b.hours,b.id); if(c){ toast(`Can't move there: overlaps ${describe(c)} (${fmtT(c.start)}–${fmtT(c.start+c.hours)})`); return; }
   const ln=LINES.find(l=>l.id===line); const dayName=DAY_NAMES[(fromIso(date).getDay()+6)%7]||date;
-  const yes=await confirmBox('Move?',`${describe(b)} → ${dayName} ${fmtDate(fromIso(date))}, ${ln?ln.name:line}, ${fmtT(start)}–${fmtT(start+b.hours)}`);
+  const late=date!==b.date&&isLate(date,b);
+  const yes=await confirmBox(late?'Move past the need-by date?':'Move?',`${describe(b)} → ${dayName} ${fmtDate(fromIso(date))}, ${ln?ln.name:line}, ${fmtT(start)}–${fmtT(start+b.hours)}${late?`\n\nThis mix is needed by ${fmtNeed(b)}; the new date is after that.`:''}`);
   if(!yes) return;
-  if(date!==b.date&&!(await lateCheck(b,date,'This move'))) return;
   store.save({...b,date,line,start}); });
 board.addEventListener('dragend',()=>{ dragId=null; document.querySelectorAll('.dragover,.dragbad').forEach(x=>x.classList.remove('dragover','dragbad')); });
 
