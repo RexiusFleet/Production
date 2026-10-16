@@ -264,7 +264,7 @@ dialog::backdrop{background:rgba(10,14,10,.45)}
       </div>
       <div class="field job-only"><label for="fQty">Quantity</label><input id="fQty" type="number" min="0" step="1" inputmode="numeric" placeholder="50"></div>
       <div class="field job-only"><label for="fUnit">Unit</label>
-        <select id="fUnit"><option value="yd">Yards</option><option value="unit">Units (7.5 cubic yards)</option></select></div>
+        <select id="fUnit"><option value="unit">Units (7.5 cubic yards)</option><option value="yd">Yards</option></select></div>
       <div class="field job-only"><label for="fType">Mix type</label>
         <select id="fType"><option value="Mix Only">Mix Only</option><option value="Screen Only">Screen Only</option><option value="Blender Only">Blender Only</option><option value="B/S Mix">B/S Mix</option></select></div>
       <div class="timing">
@@ -596,7 +596,7 @@ function openDialog(b,slot){
   editing=b||null; draft={kind:b?b.kind:'job'};
   $('#dlgTitle').textContent=b?(b.kind==='down'?'Line down':'Edit mix'):'Add mix';
   $('#fProduct').value=b?(b.product||''):''; $('#fPtype').value=b?(b.ptype||''):''; $('#fPnum').value=b?(b.pnum||''):'';
-  $('#fQty').value=b&&b.qty!=null?b.qty:''; $('#fBqty').value=b&&b.bqty!=null?b.bqty:''; $('#fUnit').value=b?(b.unit||'yd'):'yd'; $('#fType').value=b?normType(b.type):'Mix Only';
+  $('#fQty').value=b&&b.qty!=null?b.qty:''; $('#fBqty').value=b&&b.bqty!=null?b.bqty:''; $('#fUnit').value=b?(b.unit||'unit'):'unit'; $('#fType').value=b?normType(b.type):'Mix Only';
   const conf=!!(b&&b.kind==='job'&&b.confirmed); $('#confirmBtn').hidden=!(b&&b.kind==='job'&&!conf&&canConfirm); $('#unconfirmBtn').hidden=!(conf&&canConfirm); $('#confirmedNote').hidden=!conf; if(conf) $('#confirmedNote').textContent='✓ Confirmed'+(b.confirmedAt?' '+new Date(b.confirmedAt).toLocaleDateString(undefined,{month:'short',day:'numeric'}):'');
   $('#fLine').value=b?b.line:slot.line; $('#fDate').value=b?b.date:slot.date; fStart.value=b?b.start:slot.start; $('#fNotes').value=b?(b.notes||''):'';
   const hours=b?b.hours:(slot.hours||1);
