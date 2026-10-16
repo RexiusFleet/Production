@@ -240,7 +240,7 @@ dialog::backdrop{background:rgba(10,14,10,.45)}
   </form>
 </div>
 
-<div class="placebar" id="placebar" hidden><b>Placing copy</b><span id="placeText"></span><button type="button" id="placeCancel">Cancel (Esc)</button></div>
+<div class="placebar" id="placebar" hidden><b>Place on board</b><span id="placeText"></span><button type="button" id="placeCancel">Cancel (Esc)</button></div>
 <section class="summary" id="summary" aria-label="Week totals"></section>
 <div class="ghost" id="ghost" hidden></div>
 
@@ -277,7 +277,7 @@ dialog::backdrop{background:rgba(10,14,10,.45)}
       <div class="timing">
         <div class="field"><label for="fLine">Line</label>
           <select id="fLine"><option value="386">386 (Organic)</option><option value="384">384</option><option value="mix">Mix Only</option></select></div>
-        <div class="field"><label for="fDate">Date</label><input id="fDate" type="date" required></div>
+        <div class="field"><label for="fDate">Date</label><input id="fDate" type="date"></div>
         <div class="field"><label for="fStart">Start</label><select id="fStart"></select></div>
         <div class="field batch-only"><label for="fPrep">Setup time</label><select id="fPrep"></select></div>
         <div class="field batch-only"><label for="fBatches">30-min batches</label><input id="fBatches" type="number" min="0" max="20" step="1" value="0"></div>
@@ -297,6 +297,7 @@ dialog::backdrop{background:rgba(10,14,10,.45)}
       <span class="confirmed-note" id="confirmedNote" hidden></span>
       <span class="spacer"></span>
       <button type="button" class="btn" id="cancelBtn">Cancel</button>
+      <button type="button" class="btn" id="placeBtn" hidden title="Pick the spot on the board with the mouse">Save &amp; place on board</button>
       <button type="submit" class="btn primary" id="saveBtn">Save</button>
     </div>
   </form>
@@ -379,7 +380,11 @@ const store={mode:'connecting',
       this.channel=sb.channel('mix_blocks_live').on('postgres_changes',{event:'*',schema:'public',table:'mix_blocks'},payload=>{
         if(payload.eventType==='DELETE'){ blocks.delete(payload.old.id); } else { const b=normalize(fromRow(payload.new)); blocks.set(b.id,b); }
         render();
-      }).subscribe(status=>{ setSync(status==='SUBSCRIBED'?'live':'local', status==='SUBSCRIBED'?'Live · shared board':'Connected · refresh to sync'); });
+      }).subscribe(status=>{ setSync(status==='SUBSCRIBED'?'live':'local', status==='SUBSCRIBED'?'Live · shared board':'Connected · refresh to sync'); if(status==='SUBSCRIBED'&&this.subscribedOnce) this.loadAll(); if(status==='SUBSCRIBED') this.subscribedOnce=true; });
+      // safety net: re-fetch when the tab wakes up, the network returns, or every 60 s
+      const refetch=()=>{ if(me&&document.visibilityState==='visible') this.loadAll(); };
+      document.addEventListener('visibilitychange',refetch); window.addEventListener('online',refetch); window.addEventListener('focus',refetch);
+      setInterval(refetch,60000);
     }
   },
   async loadAll(){
@@ -452,6 +457,7 @@ function render(){
   const weekBlocks=[...blocks.values()].filter(b=>dates.includes(b.date));
   const t=totals(weekBlocks);
   const laneStats=LINES.map(l=>{const lt=totals(weekBlocks.filter(b=>b.line===l.id));return `<div class="stat lane"><span class="k">${l.name}</span><span class="v num"><span class="swatch" style="background:var(--l${l.id})"></span>${lt.yd||lt.unit?fmtTot(lt):'—'}</span></div>`;}).join('');
+  $('#summary').hidden=(store.mode==='live'&&!canConfirm);   // metrics strip is manager-only
   $('#summary').innerHTML=`
     <div class="stat"><span class="k">Yards this week</span><span class="v num">${t.yd.toLocaleString()}<small>yd</small></span></div>
     <div class="stat"><span class="k">Units · 7.5 yd each</span><span class="v num">${t.unit.toLocaleString()}<small>units · ${(t.unit*YD_PER_UNIT).toLocaleString()} yd</small></span></div>
@@ -621,24 +627,30 @@ function openDialog(b,slot){
   const hours=b?b.hours:(slot.hours||1);
   if(b&&b.kind==='job'&&isBatchType(b.type)){ fPrep.value=b.prep; fBatches.value=Math.round((b.hours-b.prep)*2); } else { const prep=Math.min(1,hours); fPrep.value=prep; fBatches.value=Math.round((hours-prep)*2); }
   fHours.value=Math.max(.5,hours);
-  $('#delBtn').hidden=!b; $('#dupBtn').hidden=!b||isRequestor;
+  $('#delBtn').hidden=!b; $('#dupBtn').hidden=!b||isRequestor; $('#placeBtn').hidden=!!b;
   setKind(isRequestor?'job':draft.kind);
   dlg.showModal(); if(draft.kind==='job') $('#fProduct').focus();
 }
 $('#fPnum').addEventListener('input',()=>{ const v=$('#fPnum').value; const m=v.match(/^\s*(cc|rc)\s*#?\s*(\d+)/i); if(m){ $('#fPtype').value=m[1].toUpperCase(); $('#fPnum').value=m[2]; } if($('#fPnum').value&&!$('#fPtype').value) $('#fPtype').value='CC'; });
-form.addEventListener('submit',async e=>{
-  e.preventDefault();
+function buildFromForm(){
   const kind=draft.kind; const start=Number(fStart.value);
   const b={id:editing?editing.id:uid(),kind,date:$('#fDate').value,line:$('#fLine').value,start,notes:$('#fNotes').value.trim()};
   if(kind==='job'){ const type=normType($('#fType').value); let prep=Number(fPrep.value), nb=Math.max(0,Math.min(20,Math.round(Number(fBatches.value)||0))); if(!isBatchType(type)){ prep=Number(fHours.value); nb=0; }
     Object.assign(b,{product:$('#fProduct').value.trim(),ptype:$('#fPnum').value.trim()?($('#fPtype').value||'CC'):'',pnum:$('#fPnum').value.trim().replace(/\D/g,''),qty:$('#fQty').value===''?null:Number($('#fQty').value),bqty:$('#fBqty').value===''?null:Number($('#fBqty').value),unit:$('#fUnit').value,type,prep,hours:prep+nb*.5,confirmed:!!(editing&&editing.confirmed),tentative:isRequestor?true:!!(editing&&editing.tentative),need_by:$('#fNeedBy').value||null,requested_by:editing?(editing.requested_by||null):(isRequestor&&me?me.id:null)});
-    if(!b.product){ $('#fProduct').focus(); return; } }
+    if(!b.product){ $('#fProduct').focus(); return null; } }
   else { b.product='Line down'; b.hours=Number(fHours.value); }
+  return b;
+}
+form.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const b=buildFromForm(); if(!b) return;
   if(!b.date){ $('#fDate').focus(); return; }
   const c=conflict(b.date,b.line,b.start,b.hours,b.id); if(c){ toast(`Overlaps ${describe(c)} (${fmtT(c.start)}–${fmtT(c.start+c.hours)}) on that line`); return; }
   if(b.kind==='job'&&b.need_by&&isLate(b.date,b)){ const go=await lateCheck(b,b.date,'This date'); if(!go) return; }
   if(await store.save(b)){ dlg.close(); toast(editing?'Saved':(isRequestor?'Request added — tentative until confirmed':'Added to the board')); }
 });
+// Save & place: build the chip, then drop it on the board by hand (date, line and time come from where you click)
+$('#placeBtn').onclick=()=>{ if(!$('#fProduct').checkValidity()&&draft.kind==='job'){ $('#fProduct').reportValidity(); return; } const b=buildFromForm(); if(!b) return; dlg.close(); startPlacing(b); };
 $('#cancelBtn').onclick=()=>dlg.close();
 $('#confirmBtn').onclick=async()=>{ if(!editing)return; if(await confirmMix(editing,true)) dlg.close(); };
 $('#unconfirmBtn').onclick=async()=>{ if(!editing)return; if(await confirmMix(editing,false)) dlg.close(); };
@@ -649,7 +661,7 @@ $('#dupBtn').onclick=()=>{ if(!editing)return; const tpl={...editing,id:uid(),co
 let placing=null; const ghost=$('#ghost');
 function startPlacing(tpl){
   placing={tpl,lb:null,start:null,ok:false}; document.body.classList.add('placing');
-  $('#placeText').textContent=`${describe(tpl)} · ${tpl.hours} hr — click a free spot on any line, any day`; $('#placebar').hidden=false;
+  $('#placeText').textContent=`${describe(tpl)} · ${tpl.hours} hr — click a free spot on any line, any day (Esc to cancel)`; $('#placebar').hidden=false;
   const pl=projLabel(tpl);
   ghost.className='ghost'+(tpl.kind==='down'?' down':'');
   ghost.innerHTML=tpl.kind==='down'?'Line down':`<div class="head"><div class="p">${pl?`<span class="badge num">${esc(pl)}</span>`:''}${esc(tpl.product)}</div>${tpl.qty!=null&&tpl.qty!==''?`<div class="q num">${tpl.qty}<small>${tpl.unit==='unit'?'units':'yd'}</small></div>`:''}</div>`;
@@ -677,7 +689,7 @@ async function placeHere(e){
   if(!p.ok){ const c=conflict(p.lb.dataset.date,p.lb.dataset.line,p.start,p.tpl.hours,p.tpl.id); toast(`That spot overlaps ${c?describe(c):'another chip'}`); return; }
   const nb={...p.tpl,date:p.lb.dataset.date,line:p.lb.dataset.line,start:p.start};
   if(!(await lateCheck(nb,nb.date,'This spot'))) return;
-  stopPlacing(); if(await store.save(nb)) toast(`${describe(nb)} placed at ${fmtT(nb.start)}`);
+  stopPlacing(); if(await store.save(nb)) toast(`${describe(nb)} placed ${fmtDate(fromIso(nb.date))} at ${fmtT(nb.start)}${nb.tentative?' · tentative until confirmed':''}`);
 }
 
 // ---------- boot ----------
