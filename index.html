@@ -198,6 +198,11 @@ dialog::backdrop{background:rgba(10,14,10,.45)}
 .timing .sum{grid-column:1/-1;font-size:12px;color:var(--muted)}
 .dlg-foot{padding:12px 18px 16px;border-top:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap}
 .dlg-foot .spacer{flex:1}
+#confirmDlg.danger{border:2px solid var(--danger)}
+#confirmDlg.danger .dlg-head{background:var(--danger);color:#fff;border-bottom-color:var(--danger)}
+#confirmDlg.danger .dlg-head h3{color:#fff}
+#confirmDlg.danger .dlg-body{background:color-mix(in srgb,var(--danger) 10%,var(--surface))}
+#confirmDlg.danger #confirmYes{background:var(--danger);border-color:var(--danger);color:#fff}
 .hint{font-size:12px;color:var(--muted)}
 .toast{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 14px;border-radius:6px;font-weight:500;z-index:50;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
@@ -343,7 +348,7 @@ const projLabel=b=>b.pnum?((b.ptype||'')+'#'+b.pnum):'';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const toastEl=$('#toast');let toastT;
 function toast(msg){toastEl.textContent=msg;toastEl.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>toastEl.classList.remove('show'),2200);}
-function confirmBox(title,text){return new Promise(res=>{const d=$('#confirmDlg');$('#confirmTitle').textContent=title;$('#confirmText').textContent=text;
+function confirmBox(title,text,opts){return new Promise(res=>{const d=$('#confirmDlg');d.classList.toggle('danger',!!(opts&&opts.danger));$('#confirmTitle').textContent=title;$('#confirmText').textContent=text;$('#confirmYes').textContent=(opts&&opts.yes)||'Yes';
   const yes=$('#confirmYes'),no=$('#confirmNo');let settled=false;const done=v=>{if(settled)return;settled=true;yes.onclick=no.onclick=null;d.onclose=null;if(d.open)d.close();res(v);};
   yes.onclick=()=>done(true);no.onclick=()=>done(false);
   if(d.open)d.close();
@@ -434,7 +439,7 @@ async function confirmMix(b,on){ if(!canConfirm){ toast('Only the production man
 function canTouch(b){ if(!isRequestor) return true; return !!(b.kind==='job'&&b.tentative&&me&&b.requested_by===me.id); }
 function isLate(date,b){ return !!(b.need_by&&date>b.need_by); }
 function fmtNeed(b){ return b.need_by?fmtDate(fromIso(b.need_by)):''; }
-async function lateCheck(b,newDate,what){ if(!isLate(newDate,b)) return true; return confirmBox('Past the need-by date',`${describe(b)} is needed by ${fmtNeed(b)}. ${what} puts it on ${fmtDate(fromIso(newDate))}, after that date. Go ahead anyway?`); }
+async function lateCheck(b,newDate,what){ if(!isLate(newDate,b)) return true; return confirmBox('⚠ Past the need-by date',`${describe(b)} is needed by ${fmtNeed(b)}. ${what} puts it on ${fmtDate(fromIso(newDate))}, after that date. Go ahead anyway?`,{danger:true,yes:'Move it anyway'}); }
 function describe(b){ return b.kind==='down'?'Line down':(b.product||'mix'); }
 // ---------- undo (this browser session) ----------
 const undoStack=[];
@@ -592,7 +597,7 @@ board.addEventListener('drop',async e=>{ const lb=e.target.closest('.lanebody');
   const c=conflict(date,line,start,b.hours,b.id); if(c){ toast(`Can't move there: overlaps ${describe(c)} (${fmtT(c.start)}–${fmtT(c.start+c.hours)})`); return; }
   const ln=LINES.find(l=>l.id===line); const dayName=DAY_NAMES[(fromIso(date).getDay()+6)%7]||date;
   const late=date!==b.date&&isLate(date,b);
-  const yes=await confirmBox(late?'Move past the need-by date?':'Move?',`${describe(b)} → ${dayName} ${fmtDate(fromIso(date))}, ${ln?ln.name:line}, ${fmtT(start)}–${fmtT(start+b.hours)}${late?`\n\nThis mix is needed by ${fmtNeed(b)}; the new date is after that.`:''}`);
+  const yes=await confirmBox(late?'⚠ Moving past the need-by date':'Move?',`${describe(b)} → ${dayName} ${fmtDate(fromIso(date))}, ${ln?ln.name:line}, ${fmtT(start)}–${fmtT(start+b.hours)}${late?`\n\nThis mix is needed by ${fmtNeed(b)}. The new date is after that.`:''}`,late?{danger:true,yes:'Move it anyway'}:null);
   if(!yes) return;
   store.save({...b,date,line,start}); });
 board.addEventListener('dragend',()=>{ dragId=null; document.querySelectorAll('.dragover,.dragbad').forEach(x=>x.classList.remove('dragover','dragbad')); });
