@@ -364,7 +364,7 @@ const store={mode:'connecting',
     showLogin(false);
     try{ const {data}=await sb.from('mix_profiles').select('*').eq('user_id',me.id).maybeSingle(); myProfile=data||null; }catch(e){ myProfile=null; }
     canConfirm=!!(myProfile&&myProfile.role==='manager'); canWrite=true;
-    $('#whoami').textContent=(myProfile&&myProfile.display_name)||me.email||''; $('#whoami').title=canConfirm?'Production manager · can confirm mixes':'Crew';
+    $('#whoami').textContent=((myProfile&&myProfile.display_name)||me.email||'')+(canConfirm?' · Manager':' · Crew'); $('#whoami').title=canConfirm?'Production manager · can confirm mixes':(myProfile?'Crew · can add and move mixes, cannot confirm':'No profile row found · ask the admin to run the profile back-fill in the README');
     await this.loadAll();
     if(!this.channel){
       this.channel=sb.channel('mix_blocks_live').on('postgres_changes',{event:'*',schema:'public',table:'mix_blocks'},payload=>{
