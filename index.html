@@ -93,7 +93,7 @@ button{cursor:pointer}
 .daycol{background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden;display:flex;flex-direction:column;min-width:0;container-type:inline-size}
 @container (max-width:280px){ .dayhead .tot,.dayhead .note{display:none} .dayhead{padding:8px 8px 6px;gap:6px} .dayhead h2{font-size:17px} }
 .daycol.today{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
-.dayhead{padding:8px 10px 6px;display:flex;align-items:baseline;gap:8px;border-bottom:1px solid var(--line);cursor:pointer;height:38px}
+.dayhead{padding:8px 10px 6px;display:flex;align-items:baseline;gap:8px;border-bottom:1px solid var(--line);height:38px}
 .dayhead h2{margin:0;font-family:var(--font-display);font-size:19px;font-weight:700;text-transform:uppercase;letter-spacing:.02em}
 .dayhead .date{color:var(--muted);font-size:12px}
 .dayhead .tot{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap}
@@ -216,11 +216,7 @@ dialog::backdrop{background:rgba(10,14,10,.45)}
     <button class="btn icon" id="nextWeek" title="Next week" aria-label="Next week">›</button>
     <span class="label num" id="weekLabel">Week of —</span>
   </div>
-  <div class="seg" role="group" aria-label="View">
-    <button id="viewWeek" aria-pressed="true">Week</button>
-    <button id="viewDay" aria-pressed="false">Day</button>
-  </div>
-  <button class="btn" id="copyWeekBtn" title="Copy this week's jobs to next week">Copy → next wk</button>
+  <button class="btn" id="undoBtn" disabled title="Nothing to undo">↶ Undo</button>
   <button class="btn primary" id="addBtn">+ Add mix</button>
   <span class="sync" id="sync"><span class="dot"></span><span id="syncText">Connecting…</span></span>
   <span class="who" id="whoami"></span>
@@ -343,18 +339,16 @@ function confirmBox(title,text){return new Promise(res=>{const d=$('#confirmDlg'
 // ---------- state ----------
 let blocks=new Map();
 let weekStart=mondayOf(new Date());
-let view='week';
+const view='week';
 let dayIndex=Math.min(5,(new Date().getDay()+6)%7);
 let canWrite=true, canConfirm=false;
 let editing=null, draft=null;
-try{ if(localStorage.getItem('mb.view')==='day') view='day'; }catch(e){}
-if(window.innerWidth<760) view='day';
 
 // ---------- storage: shared db with a local fallback ----------
 const CFG=window.MIX_BOARD_CONFIG||{};
 let sb=null, me=null, myProfile=null;
 const ROW_FIELDS=['kind','date','line','start','hours','prep','product','ptype','pnum','qty','bqty','unit','type','notes','confirmed'];
-function toRow(b){ const r={id:b.id}; ROW_FIELDS.forEach(k=>{ r[k]=(b[k]===undefined?null:b[k]); }); if(b.kind==='down'){ r.prep=null; r.qty=null; r.bqty=null; } if(r.confirmed==null) r.confirmed=false; return r; }
+function toRow(b){ const r={id:b.id}; ROW_FIELDS.forEach(k=>{ r[k]=(b[k]===undefined?null:b[k]); }); r.ptype=r.ptype||''; r.pnum=r.pnum||''; r.unit=r.unit||'yd'; r.type=normType(r.type); r.notes=r.notes||''; r.product=r.product||(b.kind==='down'?'Line down':''); if(b.kind==='down'){ r.prep=null; r.qty=null; r.bqty=null; r.confirmed=false; } if(r.confirmed==null) r.confirmed=false; if(r.qty==='') r.qty=null; if(r.bqty==='') r.bqty=null; return r; }
 function fromRow(r){ const b={id:r.id}; ROW_FIELDS.forEach(k=>{ if(r[k]!==null&&r[k]!==undefined) b[k]=r[k]; }); if(b.start!=null) b.start=Number(b.start); if(b.hours!=null) b.hours=Number(b.hours); if(b.prep!=null) b.prep=Number(b.prep); if(b.qty!=null) b.qty=Number(b.qty); if(b.bqty!=null) b.bqty=Number(b.bqty); b.confirmedAt=r.confirmed_at||null; b.confirmedBy=r.confirmed_by||null; b.updatedAt=r.updated_at||null; return b; }
 const store={mode:'connecting',
   async init(){
@@ -385,7 +379,8 @@ const store={mode:'connecting',
     blocks=new Map(); data.forEach(r=>{ const b=normalize(fromRow(r)); blocks.set(b.id,b); }); render();
   },
   fallback(msg){ this.mode='local'; showLogin(false); $('#whoami').textContent=''; try{ const raw=localStorage.getItem('mb.blocks'); blocks=new Map(); if(raw) JSON.parse(raw).forEach(b=>blocks.set(b.id,normalize(b))); }catch(e){} setSync('local',msg||'Local only · this browser'); render(); },
-  async save(b){
+  async save(b,opts){
+    if(!(opts&&opts.noUndo)) pushUndo({label:(blocks.has(b.id)?'edit':'add')+' '+describe(b), prev:blocks.has(b.id)?{...blocks.get(b.id)}:null, id:b.id});
     b.updatedAt=new Date().toISOString();
     if(this.mode==='live'){
       const {data,error}=await sb.from('mix_blocks').upsert(toRow(b)).select().single();
@@ -394,7 +389,8 @@ const store={mode:'connecting',
     }
     blocks.set(b.id,b); this.persist(); render(); return true;
   },
-  async remove(id){
+  async remove(id,opts){
+    if(!(opts&&opts.noUndo)&&blocks.has(id)) pushUndo({label:'delete '+describe(blocks.get(id)), prev:{...blocks.get(id)}, id});
     if(this.mode==='live'){ const {error}=await sb.from('mix_blocks').delete().eq('id',id); if(error){ toast('Could not delete: '+error.message); return false; } blocks.delete(id); render(); return true; }
     blocks.delete(id); this.persist(); render(); return true;
   },
@@ -418,6 +414,19 @@ function conflict(date,line,start,hours,excludeId){ const e=start+hours; return 
 function batchQty(b,n){ if(b.bqty!=null&&b.bqty!=='') return Number(b.bqty); if(b.qty!=null&&b.qty!==''&&n>0){ const v=Number(b.qty)/n; return Math.round(v*10)/10; } return null; }
 async function confirmMix(b,on){ if(!canConfirm){ toast('Only the production manager (Editor access) can confirm mixes.'); return false; } const nb={...b,confirmed:on}; const ok=await store.save(nb); if(ok) toast(on?`${describe(b)} confirmed`:`${describe(b)} set back to unconfirmed`); return ok; }
 function describe(b){ return b.kind==='down'?'Line down':(b.product||'mix'); }
+// ---------- undo (this browser session) ----------
+const undoStack=[];
+function pushUndo(entry){ undoStack.push(entry); if(undoStack.length>40) undoStack.shift(); refreshUndo(); }
+function refreshUndo(){ const b=$('#undoBtn'); const top=undoStack[undoStack.length-1]; b.disabled=!top; b.title=top?`Undo ${top.label}`:'Nothing to undo'; }
+async function undo(){
+  const e=undoStack.pop(); refreshUndo(); if(!e) return;
+  let ok;
+  if(e.prev){ ok=await store.save({...e.prev},{noUndo:true}); }
+  else { ok=await store.remove(e.id,{noUndo:true}); }
+  if(ok) toast(`Undid ${e.label}`); else { undoStack.push(e); refreshUndo(); }
+}
+$('#undoBtn').onclick=undo;
+document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='z'){ const t=e.target; if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.tagName==='SELECT')) return; if(document.querySelector('dialog[open]')) return; e.preventDefault(); undo(); } });
 function totals(list){ const t={yd:0,unit:0,jobs:0,downH:0,batches:0,confirmed:0}; list.forEach(b=>{ if(b.kind==='down'){t.downH+=b.hours||0;return;} t.jobs++; if(b.confirmed)t.confirmed++; t.batches+=Math.max(1,Math.round((b.hours-b.prep)*2)||0); const q=Number(b.qty)||0; if(b.unit==='unit')t.unit+=q; else t.yd+=q; }); return t; }
 function fmtTot(t){ const parts=[]; if(t.yd)parts.push(t.yd+' yd'); if(t.unit)parts.push(t.unit+' units'); return parts.join(' · ')||'—'; }
 function productList(){ const s=new Set(DEFAULT_PRODUCTS); blocks.forEach(b=>{ if(b.kind==='job'&&b.product) s.add(b.product); }); return [...s].sort((a,b)=>a.localeCompare(b)); }
@@ -427,7 +436,6 @@ function render(){
   $('#loading').hidden=true; const board=$('#board'); board.hidden=false;
   const dates=weekDates(); const todayIso=iso(new Date());
   $('#weekLabel').textContent='Week of '+fmtDate(weekStart);
-  $('#viewWeek').setAttribute('aria-pressed',view==='week'); $('#viewDay').setAttribute('aria-pressed',view==='day');
   const weekBlocks=[...blocks.values()].filter(b=>dates.includes(b.date));
   const t=totals(weekBlocks);
   const laneStats=LINES.map(l=>{const lt=totals(weekBlocks.filter(b=>b.line===l.id));return `<div class="stat lane"><span class="k">${l.name}</span><span class="v num"><span class="swatch" style="background:var(--l${l.id})"></span>${lt.yd||lt.unit?fmtTot(lt):'—'}</span></div>`;}).join('');
@@ -444,7 +452,7 @@ function render(){
   dayIdxs.forEach(i=>{
     const date=dates[i]; const dt=totals(weekBlocks.filter(b=>b.date===date));
     html+=`<div class="daycol${date===todayIso?' today':''}" data-date="${date}">
-      <div class="dayhead" data-day="${i}" title="${DAY_NOTES[i]?DAY_NOTES[i]+' · ':''}Open day view"><h2>${DAY_NAMES[i]}</h2><span class="date num">${fmtDate(fromIso(date))}</span>${DAY_NOTES[i]?`<span class="note">${DAY_NOTES[i]}</span>`:''}<span class="tot num">${fmtTot(dt)}</span></div>
+      <div class="dayhead" data-day="${i}"${DAY_NOTES[i]?` title="${DAY_NOTES[i]}"`:''}><h2>${DAY_NAMES[i]}</h2><span class="date num">${fmtDate(fromIso(date))}</span>${DAY_NOTES[i]?`<span class="note">${DAY_NOTES[i]}</span>`:''}<span class="tot num">${fmtTot(dt)}</span></div>
       <div class="lanes">`;
     LINES.forEach(l=>{
       html+=`<div class="lane" data-line="${l.id}"><div class="lanehead">${view==='day'?l.name:l.short}</div><div class="lanebody" data-date="${date}" data-line="${l.id}" style="--slots:${SLOTS}">`;
@@ -490,7 +498,6 @@ board.addEventListener('click',e=>{
   if(e.target.closest('.rz')) return;
   const ck=e.target.closest('.ck'); if(ck){ e.stopPropagation(); const b=blocks.get(ck.closest('.card').dataset.id); if(b) confirmMix(b,true); return; }
   const card=e.target.closest('.card'); if(card){ openDialog(blocks.get(card.dataset.id)); return; }
-  const head=e.target.closest('.dayhead'); if(head){ dayIndex=Number(head.dataset.day); setView('day'); return; }
 });
 // drag on empty slots to pick a time range
 let sel=null;
@@ -564,21 +571,10 @@ board.addEventListener('drop',async e=>{ const lb=e.target.closest('.lanebody');
   store.save({...b,date,line,start}); });
 board.addEventListener('dragend',()=>{ dragId=null; document.querySelectorAll('.dragover,.dragbad').forEach(x=>x.classList.remove('dragover','dragbad')); });
 
-function setView(v){ view=v; try{localStorage.setItem('mb.view',v);}catch(e){} render(); }
-$('#viewWeek').onclick=()=>setView('week');
-$('#viewDay').onclick=()=>setView('day');
-$('#prevWeek').onclick=()=>{ if(view==='day'){ if(dayIndex>0){dayIndex--;} else {dayIndex=5;weekStart=addDays(weekStart,-7);} } else weekStart=addDays(weekStart,-7); render(); };
-$('#nextWeek').onclick=()=>{ if(view==='day'){ if(dayIndex<5){dayIndex++;} else {dayIndex=0;weekStart=addDays(weekStart,7);} } else weekStart=addDays(weekStart,7); render(); };
+$('#prevWeek').onclick=()=>{ weekStart=addDays(weekStart,-7); render(); };
+$('#nextWeek').onclick=()=>{ weekStart=addDays(weekStart,7); render(); };
 $('#todayBtn').onclick=()=>{ weekStart=mondayOf(new Date()); dayIndex=Math.min(5,(new Date().getDay()+6)%7); render(); };
 $('#addBtn').onclick=()=>openDialog(null,{date:weekDates()[view==='day'?dayIndex:Math.min(5,(new Date().getDay()+6)%7)],line:'mix',start:H0,hours:1});
-$('#copyWeekBtn').onclick=async()=>{
-  const dates=weekDates(); const src=[...blocks.values()].filter(b=>dates.includes(b.date));
-  if(!src.length){toast('Nothing on this week to copy');return;}
-  const ok=await confirmBox('Copy to next week',`Copy ${src.length} items from the week of ${fmtDate(weekStart)} onto the week of ${fmtDate(addDays(weekStart,7))}? Existing items on next week stay as they are.`);
-  if(!ok)return; let n=0;
-  let skipped=0; for(const b of src){ const nb={...b,id:uid(),date:iso(addDays(fromIso(b.date),7)),confirmed:false}; if(conflict(nb.date,nb.line,nb.start,nb.hours,nb.id)){skipped++;continue;} if(await store.save(nb)) n++; }
-  toast(`Copied ${n} items to next week${skipped?` · ${skipped} skipped (slot already taken)`:''}`);
-};
 
 // ---------- dialog ----------
 const dlg=$('#dlg'), form=$('#form');
