@@ -148,6 +148,8 @@ button{cursor:pointer}
 .card .tag.tent{background:var(--surface-2);color:var(--muted);border:1px solid var(--line-strong)}
 .card .tag.need{background:var(--lmix-soft);color:var(--lmix)}
 .card .tag.late{background:var(--danger);color:#fff}
+.card .tag.notef{background:var(--fg);color:var(--bg);padding:1px 4px;font-size:11px}
+.card.job.confirmed .tag.notef{background:var(--confirm-ink);color:var(--confirm-bg)}
 .card.job.confirmed .tag.need{background:rgba(255,255,255,.2);color:var(--confirm-ink)}
 .card.locked{cursor:default}
 .btn.confirm{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
@@ -291,6 +293,7 @@ dialog::backdrop{background:rgba(10,14,10,.45)}
         <div class="sum num" id="timingSum"></div>
       </div>
       <div class="field"><label for="fNeedBy">Need by date <span style="text-transform:none;letter-spacing:0">(optional)</span></label><input id="fNeedBy" type="date"></div>
+      <div class="field"><label for="fNeedByTime">Need by time <span style="text-transform:none;letter-spacing:0">(optional · end of day if blank)</span></label><select id="fNeedByTime"><option value="">—</option></select></div>
       <div class="field"><label>Scheduling</label><div class="hint" id="tentNote" style="padding-top:8px">—</div></div>
       <div class="field full"><label for="fNotes">Notes <span style="text-transform:none;letter-spacing:0">(customer, recipe tweaks)</span></label><textarea id="fNotes"></textarea></div>
     </div>
@@ -366,9 +369,9 @@ let editing=null, draft=null;
 // ---------- storage: shared db with a local fallback ----------
 const CFG=window.MIX_BOARD_CONFIG||{};
 let sb=null, me=null, myProfile=null;
-const ROW_FIELDS=['kind','date','line','start','hours','prep','product','ptype','pnum','qty','bqty','unit','type','notes','confirmed','tentative','need_by','requested_by'];
-function toRow(b){ const r={id:b.id}; ROW_FIELDS.forEach(k=>{ r[k]=(b[k]===undefined?null:b[k]); }); r.ptype=r.ptype||''; r.pnum=r.pnum||''; r.unit=r.unit||'yd'; r.type=normType(r.type); r.notes=r.notes||''; r.product=r.product||(b.kind==='down'?'Line down':''); if(b.kind==='down'){ r.prep=null; r.qty=null; r.bqty=null; r.confirmed=false; r.tentative=false; r.need_by=null; } r.tentative=!!r.tentative; if(!r.need_by) r.need_by=null; if(isRequestor){ r.tentative=true; r.requested_by=me?me.id:null; } if(r.confirmed==null) r.confirmed=false; if(r.qty==='') r.qty=null; if(r.bqty==='') r.bqty=null; return r; }
-function fromRow(r){ const b={id:r.id}; ROW_FIELDS.forEach(k=>{ if(r[k]!==null&&r[k]!==undefined) b[k]=r[k]; }); if(b.start!=null) b.start=Number(b.start); if(b.hours!=null) b.hours=Number(b.hours); if(b.prep!=null) b.prep=Number(b.prep); if(b.qty!=null) b.qty=Number(b.qty); if(b.bqty!=null) b.bqty=Number(b.bqty); b.confirmedAt=r.confirmed_at||null; b.confirmedBy=r.confirmed_by||null; b.updatedAt=r.updated_at||null; b.tentative=!!r.tentative; b.need_by=r.need_by||null; b.requested_by=r.requested_by||null; return b; }
+const ROW_FIELDS=['kind','date','line','start','hours','prep','product','ptype','pnum','qty','bqty','unit','type','notes','confirmed','tentative','need_by','need_by_time','requested_by'];
+function toRow(b){ const r={id:b.id}; ROW_FIELDS.forEach(k=>{ r[k]=(b[k]===undefined?null:b[k]); }); r.ptype=r.ptype||''; r.pnum=r.pnum||''; r.unit=r.unit||'yd'; r.type=normType(r.type); r.notes=r.notes||''; r.product=r.product||(b.kind==='down'?'Line down':''); if(b.kind==='down'){ r.prep=null; r.qty=null; r.bqty=null; r.confirmed=false; r.tentative=false; r.need_by=null; } r.tentative=!!r.tentative; if(!r.need_by){ r.need_by=null; r.need_by_time=null; } if(r.need_by_time==null||r.need_by_time==='') r.need_by_time=null; if(isRequestor){ r.tentative=true; r.requested_by=me?me.id:null; } if(r.confirmed==null) r.confirmed=false; if(r.qty==='') r.qty=null; if(r.bqty==='') r.bqty=null; return r; }
+function fromRow(r){ const b={id:r.id}; ROW_FIELDS.forEach(k=>{ if(r[k]!==null&&r[k]!==undefined) b[k]=r[k]; }); if(b.start!=null) b.start=Number(b.start); if(b.hours!=null) b.hours=Number(b.hours); if(b.prep!=null) b.prep=Number(b.prep); if(b.qty!=null) b.qty=Number(b.qty); if(b.bqty!=null) b.bqty=Number(b.bqty); b.confirmedAt=r.confirmed_at||null; b.confirmedBy=r.confirmed_by||null; b.updatedAt=r.updated_at||null; b.tentative=!!r.tentative; b.need_by=r.need_by||null; b.need_by_time=(r.need_by_time==null?null:Number(r.need_by_time)); b.requested_by=r.requested_by||null; return b; }
 const store={mode:'connecting',
   async init(){
     if(!CFG.SUPABASE_URL||!CFG.SUPABASE_ANON_KEY||!window.supabase){ this.fallback('No Supabase config · local only'); return; }
@@ -437,9 +440,9 @@ function conflict(date,line,start,hours,excludeId){ const e=start+hours; return 
 function batchQty(b,n){ if(b.bqty!=null&&b.bqty!=='') return Number(b.bqty); if(b.qty!=null&&b.qty!==''&&n>0){ const v=Number(b.qty)/n; return Math.round(v*10)/10; } return null; }
 async function confirmMix(b,on){ if(!canConfirm){ toast('Only the production manager (Editor access) can confirm mixes.'); return false; } const nb={...b,confirmed:on}; if(on) nb.tentative=false; const ok=await store.save(nb); if(ok) toast(on?`${describe(b)} confirmed`:`${describe(b)} set back to unconfirmed`); return ok; }
 function canTouch(b){ if(!isRequestor) return true; return !!(b.kind==='job'&&b.tentative&&me&&b.requested_by===me.id); }
-function isLate(date,b){ return !!(b.need_by&&date>b.need_by); }
-function fmtNeed(b){ return b.need_by?fmtDate(fromIso(b.need_by)):''; }
-async function lateCheck(b,newDate,what){ if(!isLate(newDate,b)) return true; return confirmBox('⚠ Past the need-by date',`${describe(b)} is needed by ${fmtNeed(b)}. ${what} puts it on ${fmtDate(fromIso(newDate))}, after that date. Go ahead anyway?`,{danger:true,yes:'Move it anyway'}); }
+function isLate(b,date,start,hours){ date=date??b.date; start=start??b.start; hours=hours??b.hours; if(!b.need_by) return false; if(date>b.need_by) return true; return date===b.need_by&&b.need_by_time!=null&&(start+hours)>b.need_by_time+1e-9; }
+function fmtNeed(b){ return b.need_by?fmtDate(fromIso(b.need_by))+(b.need_by_time!=null?' '+fmtT(b.need_by_time):''):''; }
+async function lateCheck(b,pos,what){ const date=pos.date??b.date, start=pos.start??b.start, hours=pos.hours??b.hours; if(!isLate(b,date,start,hours)) return true; return confirmBox('⚠ Past the need-by '+(b.need_by_time!=null&&date===b.need_by?'time':'date'),`${describe(b)} is needed by ${fmtNeed(b)}. ${what} has it finishing ${fmtDate(fromIso(date))} at ${fmtT(start+hours)}, after that. Go ahead anyway?`,{danger:true,yes:'Do it anyway'}); }
 function describe(b){ return b.kind==='down'?'Line down':(b.product||'mix'); }
 // ---------- undo (this browser session) ----------
 const undoStack=[];
@@ -454,7 +457,7 @@ async function undo(){
 }
 $('#undoBtn').onclick=undo;
 document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='z'){ const t=e.target; if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.tagName==='SELECT')) return; if(document.querySelector('dialog[open]')) return; e.preventDefault(); undo(); } });
-function totals(list){ const t={yd:0,unit:0,jobs:0,downH:0,batches:0,confirmed:0,tentative:0,late:0}; list.forEach(b=>{ if(b.kind==='down'){t.downH+=b.hours||0;return;} t.jobs++; if(b.confirmed)t.confirmed++; if(b.tentative)t.tentative++; if(isLate(b.date,b))t.late++; t.batches+=Math.max(1,Math.round((b.hours-b.prep)*2)||0); const q=Number(b.qty)||0; if(b.unit==='unit')t.unit+=q; else t.yd+=q; }); return t; }
+function totals(list){ const t={yd:0,unit:0,jobs:0,downH:0,batches:0,confirmed:0,tentative:0,late:0}; list.forEach(b=>{ if(b.kind==='down'){t.downH+=b.hours||0;return;} t.jobs++; if(b.confirmed)t.confirmed++; if(b.tentative)t.tentative++; if(isLate(b))t.late++; t.batches+=Math.max(1,Math.round((b.hours-b.prep)*2)||0); const q=Number(b.qty)||0; if(b.unit==='unit')t.unit+=q; else t.yd+=q; }); return t; }
 function fmtTot(t){ const parts=[]; if(t.yd)parts.push(t.yd+' yd'); if(t.unit)parts.push(t.unit+' units'); return parts.join(' · ')||'—'; }
 function productList(){ const s=new Set(DEFAULT_PRODUCTS); blocks.forEach(b=>{ if(b.kind==='job'&&b.product) s.add(b.product); }); return [...s].sort((a,b)=>a.localeCompare(b)); }
 
@@ -503,7 +506,7 @@ function cardHtml(b){
   let batches='';
   if(nBatch>0){ const bq=batchQty(b,nBatch); const u=b.unit==='unit'?'units':'yd'; batches='<div class="batches">'; for(let i=0;i<nBatch;i++){ const t=b.start+b.prep+i*.5; batches+=`<div class="batch num"><b><span class="bw">batch </span><span class="bh">#</span>${i+1}</b><span class="bl">${fmtT(t)}</span>${bq!=null?`<span class="bq">${bq}<span class="bw"> ${u}</span><span class="bh">${b.unit==='unit'?'un':'yd'}</span></span>`:''}</div>`; } batches+='</div>'; }
   const pl=projLabel(b);
-  const late=isLate(b.date,b); const tags=`${b.tentative?'<span class="tag tent">Tentative</span>':''}${b.need_by?`<span class="tag ${late?'late':'need'}" title="Need by ${fmtNeed(b)}">${late?'Late · ':'Need '}${fmtNeed(b)}</span>`:''}`;
+  const late=isLate(b); const tags=`${b.notes?`<span class="tag notef" title="${esc(b.notes)}">⚑</span>`:''}${b.tentative?'<span class="tag tent">Tentative</span>':''}${b.need_by?`<span class="tag ${late?'late':'need'}" title="Need by ${fmtNeed(b)}">${late?'Late · ':'Need '}${fmtNeed(b)}</span>`:''}`;
   return `<div class="card job${b.confirmed?' confirmed':''}${b.tentative?' tentative':''}${canTouch(b)?'':' locked'}${prepRows<=2?' short':''}" data-id="${b.id}" data-line="${b.line}" draggable="${canTouch(b)?'true':'false'}" style="${style};--head-h:calc(var(--slot-h) * ${prepRows} - 3px)" title="${esc(b.product)}${pl?' '+pl:''}${b.tentative?' · tentative request':''}${b.need_by?' · need by '+fmtNeed(b):''} — ${esc(b.notes||'')}">
     <div class="head">
       <div class="p">${tags}${pl?`<span class="badge num">${esc(pl)}</span>`:''}${esc(b.product)}</div>
@@ -578,6 +581,7 @@ document.addEventListener('pointermove',e=>{
 });
 async function endResize(e){
   if(!rs||e.pointerId!==rs.id) return; const r=rs; rs=null; r.card.classList.remove('resizing'); r.card.draggable=true; suppressClick=true;
+  if(r.hours!==r.b.hours&&r.b.kind==='job'&&!isLate(r.b)&&isLate(r.b,r.b.date,r.b.start,r.hours)){ const go=await lateCheck(r.b,{hours:r.hours},'This extension'); if(!go){ render(); return; } }
   if(r.hours!==r.b.hours){ const yes=await confirmBox('Extend?',`${describe(r.b)}: ${fmtT(r.b.start)}–${fmtT(r.b.start+r.b.hours)} → ${fmtT(r.b.start)}–${fmtT(r.b.start+r.hours)}`); if(!yes){ render(); return; } const upd={...r.b,hours:r.hours}; if(r.b.kind==='job'&&!isBatchType(r.b.type)) upd.prep=r.hours; const ok=await store.save(upd); if(ok){ const nb=Math.round((r.hours-(upd.prep||0))*2); toast(r.b.kind==='down'?`Blocked until ${fmtT(r.b.start+r.hours)}`:(isBatchType(r.b.type)?`${r.b.product}: ${nb} batch${nb===1?'':'es'}, ends ${fmtT(r.b.start+r.hours)}`:`${r.b.product}: now ${fmtT(r.b.start)}–${fmtT(r.b.start+r.hours)}`)); } else render(); }
   else render();
 }
@@ -596,8 +600,8 @@ board.addEventListener('drop',async e=>{ const lb=e.target.closest('.lanebody');
   if(b.date===date&&b.line===line&&b.start===start) return;
   const c=conflict(date,line,start,b.hours,b.id); if(c){ toast(`Can't move there: overlaps ${describe(c)} (${fmtT(c.start)}–${fmtT(c.start+c.hours)})`); return; }
   const ln=LINES.find(l=>l.id===line); const dayName=DAY_NAMES[(fromIso(date).getDay()+6)%7]||date;
-  const late=date!==b.date&&isLate(date,b);
-  const yes=await confirmBox(late?'⚠ Moving past the need-by date':'Move?',`${describe(b)} → ${dayName} ${fmtDate(fromIso(date))}, ${ln?ln.name:line}, ${fmtT(start)}–${fmtT(start+b.hours)}${late?`\n\nThis mix is needed by ${fmtNeed(b)}. The new date is after that.`:''}`,late?{danger:true,yes:'Move it anyway'}:null);
+  const late=isLate(b,date,start,b.hours)&&!isLate(b);
+  const yes=await confirmBox(late?'⚠ Moving past the need-by date':'Move?',`${describe(b)} → ${dayName} ${fmtDate(fromIso(date))}, ${ln?ln.name:line}, ${fmtT(start)}–${fmtT(start+b.hours)}${late?`\n\nThis mix is needed by ${fmtNeed(b)}. The new slot finishes after that.`:''}`,late?{danger:true,yes:'Move it anyway'}:null);
   if(!yes) return;
   store.save({...b,date,line,start}); });
 board.addEventListener('dragend',()=>{ dragId=null; document.querySelectorAll('.dragover,.dragbad').forEach(x=>x.classList.remove('dragover','dragbad')); });
@@ -612,6 +616,7 @@ const dlg=$('#dlg'), form=$('#form');
 const fStart=$('#fStart'), fPrep=$('#fPrep'), fHours=$('#fHours'), fBatches=$('#fBatches');
 for(let h=H0;h<H_END;h+=.5){ const o=document.createElement('option'); o.value=h; o.textContent=fmtTLong(h); fStart.appendChild(o); }
 for(let h=.5;h<=4;h+=.5){ const o=document.createElement('option'); o.value=h; o.textContent=h===.5?'30 min':h+' hr'; fPrep.appendChild(o); }
+for(let h=H0+.5;h<=H_END;h+=.5){ const o=document.createElement('option'); o.value=h; o.textContent=fmtTLong(h); $('#fNeedByTime').appendChild(o); }
 for(let h=.5;h<=11;h+=.5){ const o=document.createElement('option'); o.value=h; o.textContent=h===.5?'30 min':h+' hr'; fHours.appendChild(o); }
 function syncFields(){ const k=draft.kind; const batch=(k==='job'&&isBatchType($('#fType').value)); document.querySelectorAll('.job-only').forEach(el=>el.hidden=(k==='down')); document.querySelectorAll('.batch-only').forEach(el=>el.hidden=!batch); document.querySelectorAll('.dur-only').forEach(el=>el.hidden=batch); $('#fHoursLabel').textContent=k==='down'?'Blocked for':'Duration'; }
 function setKind(k){ draft.kind=k; document.querySelectorAll('.kindtabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.kind===k)); $('#fProduct').required=(k==='job'); syncFields(); updateSum(); }
@@ -626,7 +631,7 @@ function openDialog(b,slot){
   if(!canWrite){ toast('You can view this board but not change it.'); return; }
   editing=b||null; draft={kind:b?b.kind:'job'};
   $('#dlgTitle').textContent=b?(b.kind==='down'?'Line down':(b.tentative?'Edit request':'Edit mix')):(isRequestor?'Request mix':'Add mix');
-  $('#fNeedBy').value=b&&b.need_by?b.need_by:'';
+  $('#fNeedBy').value=b&&b.need_by?b.need_by:''; $('#fNeedByTime').value=b&&b.need_by_time!=null?String(b.need_by_time):'';
   document.querySelector('.kindtabs').parentElement.hidden=isRequestor;
   $('#tentNote').textContent=isRequestor?'Saved as a tentative request. Mike confirms it to lock it in.':(b&&b.tentative?'Tentative request — confirming it makes it a scheduled mix.':(b&&b.confirmed?'Confirmed and scheduled.':'Scheduled, awaiting confirmation.'));
   $('#fProduct').value=b?(b.product||''):''; $('#fPtype').value=b?(b.ptype||''):''; $('#fPnum').value=b?(b.pnum||''):'';
@@ -637,6 +642,8 @@ function openDialog(b,slot){
   if(b&&b.kind==='job'&&isBatchType(b.type)){ fPrep.value=b.prep; fBatches.value=Math.round((b.hours-b.prep)*2); } else { const prep=Math.min(1,hours); fPrep.value=prep; fBatches.value=Math.round((hours-prep)*2); }
   fHours.value=Math.max(.5,hours);
   $('#delBtn').hidden=!b; $('#dupBtn').hidden=!b||isRequestor; $('#placeBtn').hidden=!!b;
+  // requestors place new requests on the board by hand; plain Save stays for edits
+  const placeOnly=(!b&&isRequestor); $('#saveBtn').hidden=placeOnly; $('#placeBtn').classList.toggle('primary',placeOnly); $('#placeBtn').textContent=placeOnly?'Save & place on calendar':'Save & place on board';
   setKind(isRequestor?'job':draft.kind);
   dlg.showModal(); if(draft.kind==='job') $('#fProduct').focus();
 }
@@ -645,17 +652,18 @@ function buildFromForm(){
   const kind=draft.kind; const start=Number(fStart.value);
   const b={id:editing?editing.id:uid(),kind,date:$('#fDate').value,line:$('#fLine').value,start,notes:$('#fNotes').value.trim()};
   if(kind==='job'){ const type=normType($('#fType').value); let prep=Number(fPrep.value), nb=Math.max(0,Math.min(20,Math.round(Number(fBatches.value)||0))); if(!isBatchType(type)){ prep=Number(fHours.value); nb=0; }
-    Object.assign(b,{product:$('#fProduct').value.trim(),ptype:$('#fPnum').value.trim()?($('#fPtype').value||'CC'):'',pnum:$('#fPnum').value.trim().replace(/\D/g,''),qty:$('#fQty').value===''?null:Number($('#fQty').value),bqty:$('#fBqty').value===''?null:Number($('#fBqty').value),unit:$('#fUnit').value,type,prep,hours:prep+nb*.5,confirmed:!!(editing&&editing.confirmed),tentative:isRequestor?true:!!(editing&&editing.tentative),need_by:$('#fNeedBy').value||null,requested_by:editing?(editing.requested_by||null):(isRequestor&&me?me.id:null)});
+    Object.assign(b,{product:$('#fProduct').value.trim(),ptype:$('#fPnum').value.trim()?($('#fPtype').value||'CC'):'',pnum:$('#fPnum').value.trim().replace(/\D/g,''),qty:$('#fQty').value===''?null:Number($('#fQty').value),bqty:$('#fBqty').value===''?null:Number($('#fBqty').value),unit:$('#fUnit').value,type,prep,hours:prep+nb*.5,confirmed:!!(editing&&editing.confirmed),tentative:isRequestor?true:!!(editing&&editing.tentative),need_by:$('#fNeedBy').value||null,need_by_time:($('#fNeedBy').value&&$('#fNeedByTime').value!=='')?Number($('#fNeedByTime').value):null,requested_by:editing?(editing.requested_by||null):(isRequestor&&me?me.id:null)});
     if(!b.product){ $('#fProduct').focus(); return null; } }
   else { b.product='Line down'; b.hours=Number(fHours.value); }
   return b;
 }
 form.addEventListener('submit',async e=>{
   e.preventDefault();
+  if($('#saveBtn').hidden){ $('#placeBtn').click(); return; }
   const b=buildFromForm(); if(!b) return;
   if(!b.date){ $('#fDate').focus(); return; }
   const c=conflict(b.date,b.line,b.start,b.hours,b.id); if(c){ toast(`Overlaps ${describe(c)} (${fmtT(c.start)}–${fmtT(c.start+c.hours)}) on that line`); return; }
-  if(b.kind==='job'&&b.need_by&&isLate(b.date,b)){ const go=await lateCheck(b,b.date,'This date'); if(!go) return; }
+  if(b.kind==='job'&&b.need_by&&isLate(b)&&!(editing&&isLate(editing))){ const go=await lateCheck(b,{},'This schedule'); if(!go) return; }
   if(await store.save(b)){ dlg.close(); toast(editing?'Saved':(isRequestor?'Request added — tentative until confirmed':'Added to the board')); }
 });
 // Save & place: build the chip, then drop it on the board by hand (date, line and time come from where you click)
@@ -697,7 +705,7 @@ async function placeHere(e){
   const p=placing; if(!p.lb){ return; }
   if(!p.ok){ const c=conflict(p.lb.dataset.date,p.lb.dataset.line,p.start,p.tpl.hours,p.tpl.id); toast(`That spot overlaps ${c?describe(c):'another chip'}`); return; }
   const nb={...p.tpl,date:p.lb.dataset.date,line:p.lb.dataset.line,start:p.start};
-  if(!(await lateCheck(nb,nb.date,'This spot'))) return;
+  if(!(await lateCheck(nb,{},'This spot'))) return;
   stopPlacing(); if(await store.save(nb)) toast(`${describe(nb)} placed ${fmtDate(fromIso(nb.date))} at ${fmtT(nb.start)}${nb.tentative?' · tentative until confirmed':''}`);
 }
 
