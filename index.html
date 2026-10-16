@@ -143,6 +143,13 @@ button{cursor:pointer}
 .card:hover .ck{opacity:1}
 .card .ck:hover{color:var(--accent);border-color:var(--accent)}
 .card.confirmed .ck{display:none}
+.card.job.tentative{background:var(--surface);border:1px dashed var(--line-strong);border-left:4px dashed var(--fg)}
+.card .tag{display:inline-block;font-family:var(--font-display);font-weight:600;font-size:10px;letter-spacing:.06em;text-transform:uppercase;border-radius:3px;padding:1px 4px;margin-right:3px;vertical-align:1px}
+.card .tag.tent{background:var(--surface-2);color:var(--muted);border:1px solid var(--line-strong)}
+.card .tag.need{background:var(--lmix-soft);color:var(--lmix)}
+.card .tag.late{background:var(--danger);color:#fff}
+.card.job.confirmed .tag.need{background:rgba(255,255,255,.2);color:var(--confirm-ink)}
+.card.locked{cursor:default}
 .btn.confirm{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
 .confirmed-note{font-size:12px;color:var(--accent);font-weight:600;align-self:center}
 .card.down{background:var(--down);border-left:0;border:1px dashed var(--down-edge);color:var(--down-ink);align-items:center;justify-content:center;cursor:pointer}
@@ -278,6 +285,8 @@ dialog::backdrop{background:rgba(10,14,10,.45)}
         <div class="field dur-only"><label for="fHours" id="fHoursLabel">Duration</label><select id="fHours"></select></div>
         <div class="sum num" id="timingSum"></div>
       </div>
+      <div class="field"><label for="fNeedBy">Need by date <span style="text-transform:none;letter-spacing:0">(optional)</span></label><input id="fNeedBy" type="date"></div>
+      <div class="field"><label>Scheduling</label><div class="hint" id="tentNote" style="padding-top:8px">—</div></div>
       <div class="field full"><label for="fNotes">Notes <span style="text-transform:none;letter-spacing:0">(customer, recipe tweaks)</span></label><textarea id="fNotes"></textarea></div>
     </div>
     <div class="dlg-foot">
@@ -341,15 +350,15 @@ let blocks=new Map();
 let weekStart=mondayOf(new Date());
 const view='week';
 let dayIndex=Math.min(5,(new Date().getDay()+6)%7);
-let canWrite=true, canConfirm=false;
+let canWrite=true, canConfirm=false, isRequestor=false, myRole='crew';
 let editing=null, draft=null;
 
 // ---------- storage: shared db with a local fallback ----------
 const CFG=window.MIX_BOARD_CONFIG||{};
 let sb=null, me=null, myProfile=null;
-const ROW_FIELDS=['kind','date','line','start','hours','prep','product','ptype','pnum','qty','bqty','unit','type','notes','confirmed'];
-function toRow(b){ const r={id:b.id}; ROW_FIELDS.forEach(k=>{ r[k]=(b[k]===undefined?null:b[k]); }); r.ptype=r.ptype||''; r.pnum=r.pnum||''; r.unit=r.unit||'yd'; r.type=normType(r.type); r.notes=r.notes||''; r.product=r.product||(b.kind==='down'?'Line down':''); if(b.kind==='down'){ r.prep=null; r.qty=null; r.bqty=null; r.confirmed=false; } if(r.confirmed==null) r.confirmed=false; if(r.qty==='') r.qty=null; if(r.bqty==='') r.bqty=null; return r; }
-function fromRow(r){ const b={id:r.id}; ROW_FIELDS.forEach(k=>{ if(r[k]!==null&&r[k]!==undefined) b[k]=r[k]; }); if(b.start!=null) b.start=Number(b.start); if(b.hours!=null) b.hours=Number(b.hours); if(b.prep!=null) b.prep=Number(b.prep); if(b.qty!=null) b.qty=Number(b.qty); if(b.bqty!=null) b.bqty=Number(b.bqty); b.confirmedAt=r.confirmed_at||null; b.confirmedBy=r.confirmed_by||null; b.updatedAt=r.updated_at||null; return b; }
+const ROW_FIELDS=['kind','date','line','start','hours','prep','product','ptype','pnum','qty','bqty','unit','type','notes','confirmed','tentative','need_by','requested_by'];
+function toRow(b){ const r={id:b.id}; ROW_FIELDS.forEach(k=>{ r[k]=(b[k]===undefined?null:b[k]); }); r.ptype=r.ptype||''; r.pnum=r.pnum||''; r.unit=r.unit||'yd'; r.type=normType(r.type); r.notes=r.notes||''; r.product=r.product||(b.kind==='down'?'Line down':''); if(b.kind==='down'){ r.prep=null; r.qty=null; r.bqty=null; r.confirmed=false; r.tentative=false; r.need_by=null; } r.tentative=!!r.tentative; if(!r.need_by) r.need_by=null; if(isRequestor){ r.tentative=true; r.requested_by=me?me.id:null; } if(r.confirmed==null) r.confirmed=false; if(r.qty==='') r.qty=null; if(r.bqty==='') r.bqty=null; return r; }
+function fromRow(r){ const b={id:r.id}; ROW_FIELDS.forEach(k=>{ if(r[k]!==null&&r[k]!==undefined) b[k]=r[k]; }); if(b.start!=null) b.start=Number(b.start); if(b.hours!=null) b.hours=Number(b.hours); if(b.prep!=null) b.prep=Number(b.prep); if(b.qty!=null) b.qty=Number(b.qty); if(b.bqty!=null) b.bqty=Number(b.bqty); b.confirmedAt=r.confirmed_at||null; b.confirmedBy=r.confirmed_by||null; b.updatedAt=r.updated_at||null; b.tentative=!!r.tentative; b.need_by=r.need_by||null; b.requested_by=r.requested_by||null; return b; }
 const store={mode:'connecting',
   async init(){
     if(!CFG.SUPABASE_URL||!CFG.SUPABASE_ANON_KEY||!window.supabase){ this.fallback('No Supabase config · local only'); return; }
@@ -363,8 +372,8 @@ const store={mode:'connecting',
     if(!me){ showLogin(true); blocks=new Map(); render(); setSync('local','Signed out'); if(this.channel){ sb.removeChannel(this.channel); this.channel=null; } return; }
     showLogin(false);
     try{ const {data}=await sb.from('mix_profiles').select('*').eq('user_id',me.id).maybeSingle(); myProfile=data||null; }catch(e){ myProfile=null; }
-    canConfirm=!!(myProfile&&myProfile.role==='manager'); canWrite=true;
-    $('#whoami').textContent=((myProfile&&myProfile.display_name)||me.email||'')+(canConfirm?' · Manager':' · Crew'); $('#whoami').title=canConfirm?'Production manager · can confirm mixes':(myProfile?'Crew · can add and move mixes, cannot confirm':'No profile row found · ask the admin to run the profile back-fill in the README');
+    myRole=(myProfile&&myProfile.role)||'crew'; canConfirm=(myRole==='manager'); isRequestor=(myRole==='requestor'); canWrite=true;
+    $('#whoami').textContent=((myProfile&&myProfile.display_name)||me.email||'')+(canConfirm?' · Manager':isRequestor?' · Requestor':' · Crew'); $('#addBtn').textContent=isRequestor?'+ Request mix':'+ Add mix'; $('#whoami').title=canConfirm?'Production manager · can confirm mixes':(myProfile?'Crew · can add and move mixes, cannot confirm':'No profile row found · ask the admin to run the profile back-fill in the README');
     await this.loadAll();
     if(!this.channel){
       this.channel=sb.channel('mix_blocks_live').on('postgres_changes',{event:'*',schema:'public',table:'mix_blocks'},payload=>{
@@ -404,7 +413,7 @@ $('#loginForm').addEventListener('submit',async e=>{
   btn.disabled=false; if(error) $('#loginErr').textContent=error.message;
 });
 $('#signOut').onclick=async()=>{ if(sb) await sb.auth.signOut(); };
-function normalize(b){ b.start=Number(b.start)||H0; b.hours=Math.max(.5,snap(Number(b.hours)||1)); if(b.kind==='job'){ b.type=normType(b.type); b.prep=Math.min(b.hours,Math.max(.5,snap(Number(b.prep)||1))); if(!isBatchType(b.type)) b.prep=b.hours; b.ptype=b.ptype||''; b.pnum=b.pnum||''; b.confirmed=!!b.confirmed; } delete b.status; return b; }
+function normalize(b){ b.start=Number(b.start)||H0; b.hours=Math.max(.5,snap(Number(b.hours)||1)); if(b.kind==='job'){ b.type=normType(b.type); b.prep=Math.min(b.hours,Math.max(.5,snap(Number(b.prep)||1))); if(!isBatchType(b.type)) b.prep=b.hours; b.ptype=b.ptype||''; b.pnum=b.pnum||''; b.confirmed=!!b.confirmed; b.tentative=!!b.tentative&&!b.confirmed; } delete b.status; return b; }
 function setSync(mode,text){ const s=$('#sync'); s.className='sync '+mode; $('#syncText').textContent=text; }
 
 // ---------- derived ----------
@@ -412,7 +421,11 @@ function weekDates(){ return DAY_NAMES.map((_,i)=>iso(addDays(weekStart,i))); }
 function blocksFor(date,line){ return [...blocks.values()].filter(b=>b.date===date&&b.line===line).sort((a,b)=>a.start-b.start); }
 function conflict(date,line,start,hours,excludeId){ const e=start+hours; return [...blocks.values()].find(o=>o.id!==excludeId&&o.date===date&&o.line===line&&o.start<e&&o.start+o.hours>start)||null; }
 function batchQty(b,n){ if(b.bqty!=null&&b.bqty!=='') return Number(b.bqty); if(b.qty!=null&&b.qty!==''&&n>0){ const v=Number(b.qty)/n; return Math.round(v*10)/10; } return null; }
-async function confirmMix(b,on){ if(!canConfirm){ toast('Only the production manager (Editor access) can confirm mixes.'); return false; } const nb={...b,confirmed:on}; const ok=await store.save(nb); if(ok) toast(on?`${describe(b)} confirmed`:`${describe(b)} set back to unconfirmed`); return ok; }
+async function confirmMix(b,on){ if(!canConfirm){ toast('Only the production manager (Editor access) can confirm mixes.'); return false; } const nb={...b,confirmed:on}; if(on) nb.tentative=false; const ok=await store.save(nb); if(ok) toast(on?`${describe(b)} confirmed`:`${describe(b)} set back to unconfirmed`); return ok; }
+function canTouch(b){ if(!isRequestor) return true; return !!(b.kind==='job'&&b.tentative&&me&&b.requested_by===me.id); }
+function isLate(date,b){ return !!(b.need_by&&date>b.need_by); }
+function fmtNeed(b){ return b.need_by?fmtDate(fromIso(b.need_by)):''; }
+async function lateCheck(b,newDate,what){ if(!isLate(newDate,b)) return true; return confirmBox('Past the need-by date',`${describe(b)} is needed by ${fmtNeed(b)}. ${what} puts it on ${fmtDate(fromIso(newDate))}, after that date. Go ahead anyway?`); }
 function describe(b){ return b.kind==='down'?'Line down':(b.product||'mix'); }
 // ---------- undo (this browser session) ----------
 const undoStack=[];
@@ -427,7 +440,7 @@ async function undo(){
 }
 $('#undoBtn').onclick=undo;
 document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='z'){ const t=e.target; if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.tagName==='SELECT')) return; if(document.querySelector('dialog[open]')) return; e.preventDefault(); undo(); } });
-function totals(list){ const t={yd:0,unit:0,jobs:0,downH:0,batches:0,confirmed:0}; list.forEach(b=>{ if(b.kind==='down'){t.downH+=b.hours||0;return;} t.jobs++; if(b.confirmed)t.confirmed++; t.batches+=Math.max(1,Math.round((b.hours-b.prep)*2)||0); const q=Number(b.qty)||0; if(b.unit==='unit')t.unit+=q; else t.yd+=q; }); return t; }
+function totals(list){ const t={yd:0,unit:0,jobs:0,downH:0,batches:0,confirmed:0,tentative:0,late:0}; list.forEach(b=>{ if(b.kind==='down'){t.downH+=b.hours||0;return;} t.jobs++; if(b.confirmed)t.confirmed++; if(b.tentative)t.tentative++; if(isLate(b.date,b))t.late++; t.batches+=Math.max(1,Math.round((b.hours-b.prep)*2)||0); const q=Number(b.qty)||0; if(b.unit==='unit')t.unit+=q; else t.yd+=q; }); return t; }
 function fmtTot(t){ const parts=[]; if(t.yd)parts.push(t.yd+' yd'); if(t.unit)parts.push(t.unit+' units'); return parts.join(' · ')||'—'; }
 function productList(){ const s=new Set(DEFAULT_PRODUCTS); blocks.forEach(b=>{ if(b.kind==='job'&&b.product) s.add(b.product); }); return [...s].sort((a,b)=>a.localeCompare(b)); }
 
@@ -442,7 +455,7 @@ function render(){
   $('#summary').innerHTML=`
     <div class="stat"><span class="k">Yards this week</span><span class="v num">${t.yd.toLocaleString()}<small>yd</small></span></div>
     <div class="stat"><span class="k">Units · 7.5 yd each</span><span class="v num">${t.unit.toLocaleString()}<small>units · ${(t.unit*YD_PER_UNIT).toLocaleString()} yd</small></span></div>
-    <div class="stat"><span class="k">Mixes confirmed</span><span class="v num">${t.confirmed}<small>of ${t.jobs} confirmed</small></span></div>
+    <div class="stat"><span class="k">Mixes confirmed</span><span class="v num">${t.confirmed}<small>of ${t.jobs} confirmed${t.tentative?` · ${t.tentative} tentative`:''}${t.late?` · <span style="color:var(--danger)">${t.late} late</span>`:''}</small></span></div>
     <div class="stat"><span class="k">Line down</span><span class="v num">${t.downH}<small>hrs</small></span></div>
     ${laneStats}`;
   board.className='board'+(view==='day'?' day':'');
@@ -475,9 +488,10 @@ function cardHtml(b){
   let batches='';
   if(nBatch>0){ const bq=batchQty(b,nBatch); const u=b.unit==='unit'?'units':'yd'; batches='<div class="batches">'; for(let i=0;i<nBatch;i++){ const t=b.start+b.prep+i*.5; batches+=`<div class="batch num"><b><span class="bw">batch </span><span class="bh">#</span>${i+1}</b><span class="bl">${fmtT(t)}</span>${bq!=null?`<span class="bq">${bq}<span class="bw"> ${u}</span><span class="bh">${b.unit==='unit'?'un':'yd'}</span></span>`:''}</div>`; } batches+='</div>'; }
   const pl=projLabel(b);
-  return `<div class="card job${b.confirmed?' confirmed':''}${prepRows<=2?' short':''}" data-id="${b.id}" data-line="${b.line}" draggable="true" style="${style};--head-h:calc(var(--slot-h) * ${prepRows} - 3px)" title="${esc(b.product)}${pl?' '+pl:''} — ${esc(b.notes||'')}">
+  const late=isLate(b.date,b); const tags=`${b.tentative?'<span class="tag tent">Tentative</span>':''}${b.need_by?`<span class="tag ${late?'late':'need'}" title="Need by ${fmtNeed(b)}">${late?'Late · ':'Need '}${fmtNeed(b)}</span>`:''}`;
+  return `<div class="card job${b.confirmed?' confirmed':''}${b.tentative?' tentative':''}${canTouch(b)?'':' locked'}${prepRows<=2?' short':''}" data-id="${b.id}" data-line="${b.line}" draggable="${canTouch(b)?'true':'false'}" style="${style};--head-h:calc(var(--slot-h) * ${prepRows} - 3px)" title="${esc(b.product)}${pl?' '+pl:''}${b.tentative?' · tentative request':''}${b.need_by?' · need by '+fmtNeed(b):''} — ${esc(b.notes||'')}">
     <div class="head">
-      <div class="p">${pl?`<span class="badge num">${esc(pl)}</span>`:''}${esc(b.product)}</div>
+      <div class="p">${tags}${pl?`<span class="badge num">${esc(pl)}</span>`:''}${esc(b.product)}</div>
       ${b.qty!=null&&b.qty!==''?`<div class="q num">${b.qty}<small>${b.unit==='unit'?'units':'yd'}${b.type&&b.type!=='Mix Only'?' · '+esc(b.type):''}</small></div>`:`<div class="q"><small>${esc(b.type||'')}</small></div>`}
       <div class="meta num">${fmtT(b.start)}–${fmtT(b.start+b.hours)}${nBatch>0?' · '+nBatch+' batch'+(nBatch>1?'es':''):''}${b.type&&b.type!=='Mix Only'?' · '+esc(b.type):''}${b.notes?' · ✎':''}</div>
       ${canConfirm&&!b.confirmed?`<button class="ck" title="Confirm this mix (production manager)">✓</button>`:''}
@@ -497,7 +511,7 @@ board.addEventListener('click',e=>{
   if(suppressClick){ suppressClick=false; return; }
   if(e.target.closest('.rz')) return;
   const ck=e.target.closest('.ck'); if(ck){ e.stopPropagation(); const b=blocks.get(ck.closest('.card').dataset.id); if(b) confirmMix(b,true); return; }
-  const card=e.target.closest('.card'); if(card){ openDialog(blocks.get(card.dataset.id)); return; }
+  const card=e.target.closest('.card'); if(card){ const b=blocks.get(card.dataset.id); if(b&&!canTouch(b)){ toast('Requestors can only change their own tentative requests.'); return; } openDialog(b); return; }
 });
 // drag on empty slots to pick a time range
 let sel=null;
@@ -533,6 +547,7 @@ let rs=null;
 function startResize(e,card){
   const b=blocks.get(card.dataset.id); if(!b) return;
   if(!canWrite){ toast('You can view this board but not change it.'); return; }
+  if(!canTouch(b)){ toast('Requestors can only change their own tentative requests.'); return; }
   e.preventDefault(); e.stopPropagation();
   const lb=card.parentElement; const sh=lb.getBoundingClientRect().height/SLOTS;
   rs={card,b,sh,hours:b.hours,id:e.pointerId}; card.classList.add('resizing'); card.draggable=false;
@@ -556,7 +571,7 @@ document.addEventListener('pointercancel',endResize);
 
 // drag to move (HTML5 DnD)
 let dragId=null;
-board.addEventListener('dragstart',e=>{ const c=e.target.closest('.card'); if(!c||rs||placing){e.preventDefault();return;} dragId=c.dataset.id; e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',dragId);}catch(x){} });
+board.addEventListener('dragstart',e=>{ const c=e.target.closest('.card'); if(!c||rs||placing||c.classList.contains('locked')){e.preventDefault();return;} dragId=c.dataset.id; e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',dragId);}catch(x){} });
 function dropStart(lb,e,b){ const r=lb.getBoundingClientRect(); const sh=r.height/SLOTS; let start=H0+Math.floor((e.clientY-r.top)/sh)/2; return Math.max(H0,Math.min(H_END-b.hours,start)); }
 board.addEventListener('dragover',e=>{ const lb=e.target.closest('.lanebody'); if(!lb||!dragId)return; e.preventDefault(); const b=blocks.get(dragId); document.querySelectorAll('.dragover,.dragbad').forEach(x=>{ if(x!==lb) x.classList.remove('dragover','dragbad'); }); const bad=b&&conflict(lb.dataset.date,lb.dataset.line,dropStart(lb,e,b),b.hours,b.id); lb.classList.toggle('dragbad',!!bad); lb.classList.toggle('dragover',!bad); e.dataTransfer.dropEffect=bad?'none':'move'; });
 board.addEventListener('dragleave',e=>{ const lb=e.target.closest('.lanebody'); if(lb&&!lb.contains(e.relatedTarget)) lb.classList.remove('dragover','dragbad'); });
@@ -568,6 +583,7 @@ board.addEventListener('drop',async e=>{ const lb=e.target.closest('.lanebody');
   const ln=LINES.find(l=>l.id===line); const dayName=DAY_NAMES[(fromIso(date).getDay()+6)%7]||date;
   const yes=await confirmBox('Move?',`${describe(b)} → ${dayName} ${fmtDate(fromIso(date))}, ${ln?ln.name:line}, ${fmtT(start)}–${fmtT(start+b.hours)}`);
   if(!yes) return;
+  if(date!==b.date&&!(await lateCheck(b,date,'This move'))) return;
   store.save({...b,date,line,start}); });
 board.addEventListener('dragend',()=>{ dragId=null; document.querySelectorAll('.dragover,.dragbad').forEach(x=>x.classList.remove('dragover','dragbad')); });
 
@@ -594,7 +610,10 @@ document.querySelectorAll('.kindtabs button').forEach(b=>b.onclick=()=>setKind(b
 function openDialog(b,slot){
   if(!canWrite){ toast('You can view this board but not change it.'); return; }
   editing=b||null; draft={kind:b?b.kind:'job'};
-  $('#dlgTitle').textContent=b?(b.kind==='down'?'Line down':'Edit mix'):'Add mix';
+  $('#dlgTitle').textContent=b?(b.kind==='down'?'Line down':(b.tentative?'Edit request':'Edit mix')):(isRequestor?'Request mix':'Add mix');
+  $('#fNeedBy').value=b&&b.need_by?b.need_by:'';
+  document.querySelector('.kindtabs').parentElement.hidden=isRequestor;
+  $('#tentNote').textContent=isRequestor?'Saved as a tentative request. Mike confirms it to lock it in.':(b&&b.tentative?'Tentative request — confirming it makes it a scheduled mix.':(b&&b.confirmed?'Confirmed and scheduled.':'Scheduled, awaiting confirmation.'));
   $('#fProduct').value=b?(b.product||''):''; $('#fPtype').value=b?(b.ptype||''):''; $('#fPnum').value=b?(b.pnum||''):'';
   $('#fQty').value=b&&b.qty!=null?b.qty:''; $('#fBqty').value=b&&b.bqty!=null?b.bqty:''; $('#fUnit').value=b?(b.unit||'unit'):'unit'; $('#fType').value=b?normType(b.type):'Mix Only';
   const conf=!!(b&&b.kind==='job'&&b.confirmed); $('#confirmBtn').hidden=!(b&&b.kind==='job'&&!conf&&canConfirm); $('#unconfirmBtn').hidden=!(conf&&canConfirm); $('#confirmedNote').hidden=!conf; if(conf) $('#confirmedNote').textContent='✓ Confirmed'+(b.confirmedAt?' '+new Date(b.confirmedAt).toLocaleDateString(undefined,{month:'short',day:'numeric'}):'');
@@ -602,8 +621,8 @@ function openDialog(b,slot){
   const hours=b?b.hours:(slot.hours||1);
   if(b&&b.kind==='job'&&isBatchType(b.type)){ fPrep.value=b.prep; fBatches.value=Math.round((b.hours-b.prep)*2); } else { const prep=Math.min(1,hours); fPrep.value=prep; fBatches.value=Math.round((hours-prep)*2); }
   fHours.value=Math.max(.5,hours);
-  $('#delBtn').hidden=!b; $('#dupBtn').hidden=!b;
-  setKind(draft.kind);
+  $('#delBtn').hidden=!b; $('#dupBtn').hidden=!b||isRequestor;
+  setKind(isRequestor?'job':draft.kind);
   dlg.showModal(); if(draft.kind==='job') $('#fProduct').focus();
 }
 $('#fPnum').addEventListener('input',()=>{ const v=$('#fPnum').value; const m=v.match(/^\s*(cc|rc)\s*#?\s*(\d+)/i); if(m){ $('#fPtype').value=m[1].toUpperCase(); $('#fPnum').value=m[2]; } if($('#fPnum').value&&!$('#fPtype').value) $('#fPtype').value='CC'; });
@@ -612,12 +631,13 @@ form.addEventListener('submit',async e=>{
   const kind=draft.kind; const start=Number(fStart.value);
   const b={id:editing?editing.id:uid(),kind,date:$('#fDate').value,line:$('#fLine').value,start,notes:$('#fNotes').value.trim()};
   if(kind==='job'){ const type=normType($('#fType').value); let prep=Number(fPrep.value), nb=Math.max(0,Math.min(20,Math.round(Number(fBatches.value)||0))); if(!isBatchType(type)){ prep=Number(fHours.value); nb=0; }
-    Object.assign(b,{product:$('#fProduct').value.trim(),ptype:$('#fPnum').value.trim()?($('#fPtype').value||'CC'):'',pnum:$('#fPnum').value.trim().replace(/\D/g,''),qty:$('#fQty').value===''?null:Number($('#fQty').value),bqty:$('#fBqty').value===''?null:Number($('#fBqty').value),unit:$('#fUnit').value,type,prep,hours:prep+nb*.5,confirmed:!!(editing&&editing.confirmed)});
+    Object.assign(b,{product:$('#fProduct').value.trim(),ptype:$('#fPnum').value.trim()?($('#fPtype').value||'CC'):'',pnum:$('#fPnum').value.trim().replace(/\D/g,''),qty:$('#fQty').value===''?null:Number($('#fQty').value),bqty:$('#fBqty').value===''?null:Number($('#fBqty').value),unit:$('#fUnit').value,type,prep,hours:prep+nb*.5,confirmed:!!(editing&&editing.confirmed),tentative:isRequestor?true:!!(editing&&editing.tentative),need_by:$('#fNeedBy').value||null,requested_by:editing?(editing.requested_by||null):(isRequestor&&me?me.id:null)});
     if(!b.product){ $('#fProduct').focus(); return; } }
   else { b.product='Line down'; b.hours=Number(fHours.value); }
   if(!b.date){ $('#fDate').focus(); return; }
   const c=conflict(b.date,b.line,b.start,b.hours,b.id); if(c){ toast(`Overlaps ${describe(c)} (${fmtT(c.start)}–${fmtT(c.start+c.hours)}) on that line`); return; }
-  if(await store.save(b)){ dlg.close(); toast(editing?'Saved':'Added to the board'); }
+  if(b.kind==='job'&&b.need_by&&isLate(b.date,b)){ const go=await lateCheck(b,b.date,'This date'); if(!go) return; }
+  if(await store.save(b)){ dlg.close(); toast(editing?'Saved':(isRequestor?'Request added — tentative until confirmed':'Added to the board')); }
 });
 $('#cancelBtn').onclick=()=>dlg.close();
 $('#confirmBtn').onclick=async()=>{ if(!editing)return; if(await confirmMix(editing,true)) dlg.close(); };
@@ -656,6 +676,7 @@ async function placeHere(e){
   const p=placing; if(!p.lb){ return; }
   if(!p.ok){ const c=conflict(p.lb.dataset.date,p.lb.dataset.line,p.start,p.tpl.hours,p.tpl.id); toast(`That spot overlaps ${c?describe(c):'another chip'}`); return; }
   const nb={...p.tpl,date:p.lb.dataset.date,line:p.lb.dataset.line,start:p.start};
+  if(!(await lateCheck(nb,nb.date,'This spot'))) return;
   stopPlacing(); if(await store.save(nb)) toast(`${describe(nb)} placed at ${fmtT(nb.start)}`);
 }
 
