@@ -459,7 +459,7 @@ const store={mode:'connecting',
     try{
       const [{data:pr},{data:ac}]=await Promise.all([sb.from('mix_products').select('*').order('sort').order('name').order('qty',{ascending:false}), sb.from('mix_product_access').select('*')]);
       products=(pr||[]).map(normProduct); productAccess=ac||[];
-      if(canConfirm){ const {data:us}=await sb.from('mix_users').select('*'); boardUsers=us||[]; }
+      if(canConfirm){ const {data:us}=await sb.rpc('mix_list_users'); boardUsers=us||[]; }
     }catch(e){ console.warn('catalog',e); }
     fillProductSelect();
   },
