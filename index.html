@@ -528,10 +528,18 @@ function applyProduct(){
     $('#prodInfo').textContent=`${p.screen?'Screen '+p.screen+' · ':''}${p.hours!=null?(isBatchType(p.type)?`${p.prep} hr setup + ${p.batches} batch${p.batches===1?'':'es'}`:`${p.hours} hr`):'no timing on file — set the duration'}${lock?' · details set by the catalog':''}`;
   } else $('#prodInfo').textContent='';
   LOCK_IDS.forEach(i=>{ const el=$('#'+i); const timing=['fPrep','fBatches','fHours'].includes(i); el.disabled=lock&&!(timing&&p.hours==null)&&!(i==='fType'&&!p.type)&&!(i==='fLine'&&!p.line); });
+  if(p&&p.line) $('#fLine').disabled=true;   // the catalog decides the line, for everyone
+  syncLineToType();
   $('#fBqty').disabled=lock;
   syncFields(); updateSum();
 }
 $('#fProductSel').addEventListener('change',applyProduct);
+function syncLineToType(){ if($('#fLine').disabled&&$('#fProductSel').value) return; const t=normType($('#fType').value); const ln=$('#fLine'); if(t==='Mix Only'){ ln.value='mix'; } else if(ln.value==='mix'){ ln.value='386'; } [...ln.options].forEach(o=>{ o.disabled=(t==='Mix Only')?o.value!=='mix':o.value==='mix'; }); }
+$('#fType').addEventListener('change',syncLineToType);
+// Which lane a mix may run on: catalog line if the product has one; otherwise Mix Only type ↔ Mix Only lane, blender/screen types ↔ 386/384
+function laneFor(b){ if(b.kind!=='job') return null; const pr=b.product_id?prodById(b.product_id):null; if(pr&&pr.line) return pr.line; const t=normType(b.type); if(t==='Mix Only') return 'mix'; return 'blender'; }
+function laneOk(b,line){ const need=laneFor(b); if(!need) return true; if(need==='blender') return line!=='mix'; return line===need; }
+function laneMsg(b){ const need=laneFor(b); if(need==='blender') return `${describe(b)} is a ${normType(b.type)} mix — it runs on 386 or 384, not the Mix Only line`; const ln=LINES.find(l=>l.id===need); return `${describe(b)} runs on the ${ln?ln.name:need} line`; }
 function describe(b){ return b.kind==='down'?'Line down':(b.product||'mix'); }
 // ---------- undo (this browser session) ----------
 const undoStack=[];
@@ -682,12 +690,13 @@ document.addEventListener('pointercancel',endResize);
 let dragId=null;
 board.addEventListener('dragstart',e=>{ const c=e.target.closest('.card'); if(!c||rs||placing||c.classList.contains('locked')){e.preventDefault();return;} dragId=c.dataset.id; e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',dragId);}catch(x){} });
 function dropStart(lb,e,b){ const r=lb.getBoundingClientRect(); const sh=r.height/SLOTS; let start=H0+Math.floor((e.clientY-r.top)/sh)/2; return Math.max(H0,Math.min(H_END-b.hours,start)); }
-board.addEventListener('dragover',e=>{ const lb=e.target.closest('.lanebody'); if(!lb||!dragId)return; e.preventDefault(); const b=blocks.get(dragId); document.querySelectorAll('.dragover,.dragbad').forEach(x=>{ if(x!==lb) x.classList.remove('dragover','dragbad'); }); const bad=b&&conflict(lb.dataset.date,lb.dataset.line,dropStart(lb,e,b),b.hours,b.id); lb.classList.toggle('dragbad',!!bad); lb.classList.toggle('dragover',!bad); e.dataTransfer.dropEffect=bad?'none':'move'; });
+board.addEventListener('dragover',e=>{ const lb=e.target.closest('.lanebody'); if(!lb||!dragId)return; e.preventDefault(); const b=blocks.get(dragId); document.querySelectorAll('.dragover,.dragbad').forEach(x=>{ if(x!==lb) x.classList.remove('dragover','dragbad'); }); const bad=b&&(!laneOk(b,lb.dataset.line)||conflict(lb.dataset.date,lb.dataset.line,dropStart(lb,e,b),b.hours,b.id)); lb.classList.toggle('dragbad',!!bad); lb.classList.toggle('dragover',!bad); e.dataTransfer.dropEffect=bad?'none':'move'; });
 board.addEventListener('dragleave',e=>{ const lb=e.target.closest('.lanebody'); if(lb&&!lb.contains(e.relatedTarget)) lb.classList.remove('dragover','dragbad'); });
 board.addEventListener('drop',async e=>{ const lb=e.target.closest('.lanebody'); if(!lb||!dragId)return; e.preventDefault(); lb.classList.remove('dragover','dragbad');
   const b=blocks.get(dragId); dragId=null; if(!b)return;
   const start=dropStart(lb,e,b); const date=lb.dataset.date, line=lb.dataset.line;
   if(b.date===date&&b.line===line&&b.start===start) return;
+  if(!laneOk(b,line)){ toast(laneMsg(b)); return; }
   const c=conflict(date,line,start,b.hours,b.id); if(c){ toast(`Can't move there: overlaps ${describe(c)} (${fmtT(c.start)}–${fmtT(c.start+c.hours)})`); return; }
   const ln=LINES.find(l=>l.id===line); const dayName=DAY_NAMES[(fromIso(date).getDay()+6)%7]||date;
   const late=isLate(b,date,start,b.hours)&&!isLate(b);
@@ -761,6 +770,7 @@ form.addEventListener('submit',async e=>{
   if($('#saveBtn').hidden){ $('#placeBtn').click(); return; }
   const b=buildFromForm(); if(!b) return;
   if(!b.date){ $('#fDate').focus(); return; }
+  if(!laneOk(b,b.line)){ toast(laneMsg(b)); $('#fLine').focus(); return; }
   const c=conflict(b.date,b.line,b.start,b.hours,b.id); if(c){ toast(`Overlaps ${describe(c)} (${fmtT(c.start)}–${fmtT(c.start+c.hours)}) on that line`); return; }
   if(b.kind==='job'&&b.need_by&&isLate(b)&&!(editing&&isLate(editing))){ const go=await lateCheck(b,{},'This schedule'); if(!go) return; }
   if(await store.save(b)){ dlg.close(); toast(editing?'Saved':(isRequestor?'Request added — tentative until confirmed':'Added to the board')); }
@@ -792,7 +802,7 @@ document.addEventListener('pointermove',e=>{
   const el=document.elementFromPoint(e.clientX,e.clientY); const lb=el&&el.closest?el.closest('.lanebody'):null;
   if(lb){
     const r=lb.getBoundingClientRect(); const sh=r.height/SLOTS; let start=H0+Math.floor((e.clientY-r.top)/sh)/2; start=Math.max(H0,Math.min(H_END-tpl.hours,start));
-    const ok=!conflict(lb.dataset.date,lb.dataset.line,start,tpl.hours,tpl.id);
+    const ok=laneOk(tpl,lb.dataset.line)&&!conflict(lb.dataset.date,lb.dataset.line,start,tpl.hours,tpl.id);
     Object.assign(placing,{lb,start,ok});
     ghost.style.left=(r.left+3)+'px'; ghost.style.width=(r.width-6)+'px'; ghost.style.top=(r.top+(start-H0)*2*sh+1)+'px';
     ghost.classList.toggle('bad',!ok);
@@ -802,7 +812,7 @@ document.addEventListener('pointermove',e=>{
 });
 async function placeHere(e){
   const p=placing; if(!p.lb){ return; }
-  if(!p.ok){ const c=conflict(p.lb.dataset.date,p.lb.dataset.line,p.start,p.tpl.hours,p.tpl.id); toast(`That spot overlaps ${c?describe(c):'another chip'}`); return; }
+  if(!p.ok){ if(!laneOk(p.tpl,p.lb.dataset.line)){ toast(laneMsg(p.tpl)); return; } const c=conflict(p.lb.dataset.date,p.lb.dataset.line,p.start,p.tpl.hours,p.tpl.id); toast(`That spot overlaps ${c?describe(c):'another chip'}`); return; }
   const nb={...p.tpl,date:p.lb.dataset.date,line:p.lb.dataset.line,start:p.start};
   if(!(await lateCheck(nb,{},'This spot'))) return;
   stopPlacing(); if(await store.save(nb)) toast(`${describe(nb)} placed ${fmtDate(fromIso(nb.date))} at ${fmtT(nb.start)}${nb.tentative?' · tentative until confirmed':''}`);
