@@ -298,7 +298,7 @@ dialog::backdrop{background:rgba(10,14,10,.45)}
           <input id="fPnum" inputmode="numeric" placeholder="5855" autocomplete="off">
         </div>
       </div>
-      <div class="field job-only"><label for="fQty">Quantity</label><input id="fQty" type="number" min="0" step="1" inputmode="numeric" placeholder="50"></div>
+      <div class="field job-only"><label for="fQty">Volume</label><input id="fQty" type="number" min="0.5" step="0.5" inputmode="decimal" placeholder="50" required></div>
       <div class="field job-only"><label for="fUnit">Unit</label>
         <select id="fUnit"><option value="unit">Units (7.5 cubic yards)</option><option value="yd">Yards</option></select></div>
       <div class="field job-only"><label for="fType">Mix type</label>
@@ -717,7 +717,7 @@ for(let h=H0;h<H_END;h+=.5){ const o=document.createElement('option'); o.value=h
 for(let h=.5;h<=4;h+=.5){ const o=document.createElement('option'); o.value=h; o.textContent=h===.5?'30 min':h+' hr'; fPrep.appendChild(o); }
 for(let h=H0+.5;h<=H_END;h+=.5){ const o=document.createElement('option'); o.value=h; o.textContent=fmtTLong(h); $('#fNeedByTime').appendChild(o); }
 for(let h=.5;h<=11;h+=.5){ const o=document.createElement('option'); o.value=h; o.textContent=h===.5?'30 min':h+' hr'; fHours.appendChild(o); }
-function syncFields(){ const k=draft.kind; const batch=(k==='job'&&isBatchType($('#fType').value)); document.querySelectorAll('.job-only').forEach(el=>el.hidden=(k==='down')); document.querySelectorAll('.batch-only').forEach(el=>el.hidden=!batch); document.querySelectorAll('.dur-only').forEach(el=>el.hidden=batch); $('#fHoursLabel').textContent=k==='down'?'Blocked for':'Duration';
+function syncFields(){ const k=draft.kind; const batch=(k==='job'&&isBatchType($('#fType').value)); document.querySelectorAll('.job-only').forEach(el=>el.hidden=(k==='down')); document.querySelectorAll('.batch-only').forEach(el=>el.hidden=!batch); document.querySelectorAll('.dur-only').forEach(el=>el.hidden=batch); $('#fHoursLabel').textContent=k==='down'?'Blocked for':'Duration'; $('#fQty').required=(k==='job');
   const pick=(draft.when==='pick'); document.querySelector('.when-row').hidden=!draft.toolbar; document.querySelectorAll('.loc-field').forEach(el=>el.hidden=pick);
   $('#saveBtn').hidden=pick; $('#placeBtn').classList.toggle('primary',pick); $('#placeBtn').textContent=pick?'Save & place on calendar':'Save & place instead';
   document.querySelectorAll('.whentabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.when===(draft.when||'enter'))); }
@@ -761,7 +761,8 @@ function buildFromForm(){
   if(kind==='job'){ const type=normType($('#fType').value); let prep=Number(fPrep.value), nb=Math.max(0,Math.min(20,Math.round(Number(fBatches.value)||0))); if(!isBatchType(type)){ prep=Number(fHours.value); nb=0; }
     const pid=$('#fProductSel').value||null; const pr=pid?prodById(pid):null;
     Object.assign(b,{product_id:pid,screen:pr?(pr.screen||null):null,product:pr?pr.name:$('#fProduct').value.trim(),ptype:$('#fPnum').value.trim()?($('#fPtype').value||'CC'):'',pnum:$('#fPnum').value.trim().replace(/\D/g,''),qty:$('#fQty').value===''?null:Number($('#fQty').value),bqty:$('#fBqty').value===''?null:Number($('#fBqty').value),unit:$('#fUnit').value,type,prep,hours:prep+nb*.5,confirmed:!!(editing&&editing.confirmed),tentative:isRequestor?true:!!(editing&&editing.tentative),need_by:$('#fNeedBy').value||null,need_by_time:($('#fNeedBy').value&&$('#fNeedByTime').value!=='')?Number($('#fNeedByTime').value):null,requested_by:editing?(editing.requested_by||null):(isRequestor&&me?me.id:null)});
-    if(!b.product){ if(isRequestor){ toast('Choose a mix from the list'); $('#fProductSel').focus(); } else $('#fProduct').focus(); return null; } }
+    if(!b.product){ if(isRequestor){ toast('Choose a mix from the list'); $('#fProductSel').focus(); } else $('#fProduct').focus(); return null; }
+    if(b.qty==null||!(b.qty>0)){ toast('Enter the volume of the mix'); $('#fQty').disabled=false; $('#fQty').focus(); return null; } }
   else { b.product='Line down'; b.hours=Number(fHours.value); }
   return b;
 }
@@ -776,7 +777,7 @@ form.addEventListener('submit',async e=>{
   if(await store.save(b)){ dlg.close(); toast(editing?'Saved':(isRequestor?'Request added — tentative until confirmed':'Added to the board')); }
 });
 // Save & place: build the chip, then drop it on the board by hand (date, line and time come from where you click)
-$('#placeBtn').onclick=()=>{ if(draft.kind==='job'&&!$('#fProductSel').value&&!$('#fProduct').checkValidity()){ $('#fProduct').reportValidity(); return; } const b=buildFromForm(); if(!b) return; dlg.close(); startPlacing(b); };
+$('#placeBtn').onclick=()=>{ if(draft.kind==='job'&&!$('#fProductSel').value&&!$('#fProduct').checkValidity()){ $('#fProduct').reportValidity(); return; } if(draft.kind==='job'&&!(Number($('#fQty').value)>0)){ $('#fQty').reportValidity(); $('#fQty').focus(); return; } const b=buildFromForm(); if(!b) return; dlg.close(); startPlacing(b); };
 $('#cancelBtn').onclick=()=>dlg.close();
 $('#confirmBtn').onclick=async()=>{ if(!editing)return; if(await confirmMix(editing,true)) dlg.close(); };
 $('#unconfirmBtn').onclick=async()=>{ if(!editing)return; if(await confirmMix(editing,false)) dlg.close(); };
