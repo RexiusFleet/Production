@@ -148,6 +148,8 @@ button{cursor:pointer}
 .card .tag.tent{background:var(--surface-2);color:var(--muted);border:1px solid var(--line-strong)}
 .card .tag.need{background:var(--lmix-soft);color:var(--lmix)}
 .card .tag.late{background:var(--danger);color:#fff}
+.card .tag.scr{background:var(--l384-soft);color:var(--l384);border:1px solid var(--l384)}
+.card.job.confirmed .tag.scr{background:rgba(255,255,255,.2);color:var(--confirm-ink);border-color:transparent}
 .card .tag.notef{background:var(--fg);color:var(--bg);padding:1px 4px;font-size:11px}
 .card.job.confirmed .tag.notef{background:var(--confirm-ink);color:var(--confirm-bg)}
 .card.job.confirmed .tag.need{background:rgba(255,255,255,.2);color:var(--confirm-ink)}
@@ -180,6 +182,23 @@ body.placing .slot:hover{background:transparent}
 
 .empty{padding:40px 16px;text-align:center;color:var(--muted)}
 .empty b{display:block;font-family:var(--font-display);font-size:22px;color:var(--fg);margin-bottom:6px}
+
+
+dialog.wide{width:min(960px,calc(100vw - 32px))}
+.prod-body{padding:14px 18px;display:flex;flex-direction:column;gap:14px;max-height:calc(100vh - 140px);overflow:auto}
+.prod-form{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 12px;padding:12px;background:var(--surface-2);border-radius:8px}
+.tablewrap{overflow-x:auto}
+.prodtable{border-collapse:collapse;width:100%;font-size:13px}
+.prodtable th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.prodtable td{padding:6px 8px;border-bottom:1px solid var(--line-soft);white-space:nowrap}
+.prodtable td.name{font-weight:600;white-space:normal}
+.prodtable tr.inactive td{color:var(--muted);text-decoration:line-through}
+.prodtable tr.mine td.name::after{content:" · on your list";color:var(--accent);font-weight:500;font-size:11px}
+.prodtable .btn{padding:4px 8px;font-size:12px}
+.assign h4{margin:0 0 4px;font-family:var(--font-display);font-size:18px}
+.assign-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 14px;margin:10px 0}
+.assign-list label{display:flex;gap:6px;align-items:center;font-size:13px}
+@media (max-width:760px){ .prod-form{grid-template-columns:1fr 1fr} }
 
 /* ---------- dialog ---------- */
 dialog{border:0;border-radius:10px;padding:0;background:var(--surface);color:var(--fg);box-shadow:var(--shadow);width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 32px)}
@@ -234,6 +253,7 @@ dialog::backdrop{background:rgba(10,14,10,.45)}
   <button class="btn primary" id="addBtn">+ Add mix</button>
   <span class="sync" id="sync"><span class="dot"></span><span id="syncText">Connecting…</span></span>
   <span class="who" id="whoami"></span>
+  <button class="btn" id="productsBtn" title="Mix catalog">Products</button>
   <button class="btn" id="signOut" hidden>Sign out</button>
 </header>
 <div class="login" id="login" hidden>
@@ -258,7 +278,7 @@ dialog::backdrop{background:rgba(10,14,10,.45)}
 
 <dialog id="dlg">
   <form method="dialog" id="form">
-    <div class="dlg-head"><h3 id="dlgTitle">Add mix</h3><span class="hint">Drag on the board to pick a time range · drag a chip's bottom edge to extend it</span></div>
+    <div class="dlg-head"><h3 id="dlgTitle">Add mix</h3><span class="hint" id="dlgHint">Drag on the board to pick a time range · drag a chip's bottom edge to extend it</span></div>
     <div class="dlg-body">
       <div class="field full"><label>What goes on the board</label>
         <div class="kindtabs">
@@ -266,9 +286,11 @@ dialog::backdrop{background:rgba(10,14,10,.45)}
           <button type="button" data-kind="down" aria-pressed="false">Line down / blocked</button>
         </div>
       </div>
-      <div class="field job-only"><label for="fProduct">Product / mix</label>
-        <input id="fProduct" list="products" placeholder="Pro Swale, Bagger Top Soil…" autocomplete="off" required>
+      <div class="field job-only full"><label for="fProductSel">Product / mix</label>
+        <select id="fProductSel"></select>
+        <input id="fProduct" list="products" placeholder="Type a one-off product name…" autocomplete="off" required hidden>
         <datalist id="products"></datalist>
+        <div class="hint" id="prodInfo"></div>
       </div>
       <div class="field job-only"><label for="fPnum">Project number</label>
         <div class="proj">
@@ -282,10 +304,15 @@ dialog::backdrop{background:rgba(10,14,10,.45)}
       <div class="field job-only"><label for="fType">Mix type</label>
         <select id="fType"><option value="Mix Only">Mix Only</option><option value="Screen Only">Screen Only</option><option value="Blender Only">Blender Only</option><option value="B/S Mix">B/S Mix</option></select></div>
       <div class="timing">
-        <div class="field"><label for="fLine">Line</label>
+        <div class="field when-row" style="grid-column:1/-1"><label>When</label>
+          <div class="kindtabs whentabs">
+            <button type="button" data-when="pick" aria-pressed="true">Pick a spot on the calendar</button>
+            <button type="button" data-when="enter" aria-pressed="false">Enter date &amp; time</button>
+          </div></div>
+        <div class="field loc-field"><label for="fLine">Line</label>
           <select id="fLine"><option value="386">386 (Organic)</option><option value="384">384</option><option value="mix">Mix Only</option></select></div>
-        <div class="field"><label for="fDate">Date</label><input id="fDate" type="date"></div>
-        <div class="field"><label for="fStart">Start</label><select id="fStart"></select></div>
+        <div class="field loc-field"><label for="fDate">Date</label><input id="fDate" type="date"></div>
+        <div class="field loc-field"><label for="fStart">Start</label><select id="fStart"></select></div>
         <div class="field batch-only"><label for="fPrep">Setup time</label><select id="fPrep"></select></div>
         <div class="field batch-only"><label for="fBatches">30-min batches</label><input id="fBatches" type="number" min="0" max="20" step="1" value="0"></div>
         <div class="field batch-only"><label for="fBqty">Size per batch</label><input id="fBqty" type="number" min="0" step="0.5" inputmode="decimal" placeholder="auto"></div>
@@ -294,7 +321,7 @@ dialog::backdrop{background:rgba(10,14,10,.45)}
       </div>
       <div class="field"><label for="fNeedBy">Need by date <span style="text-transform:none;letter-spacing:0">(optional)</span></label><input id="fNeedBy" type="date"></div>
       <div class="field"><label for="fNeedByTime">Need by time <span style="text-transform:none;letter-spacing:0">(optional · end of day if blank)</span></label><select id="fNeedByTime"><option value="">—</option></select></div>
-      <div class="field"><label>Scheduling</label><div class="hint" id="tentNote" style="padding-top:8px">—</div></div>
+      <div class="field"><label>Status</label><div class="hint" id="tentNote" style="padding-top:8px">—</div></div>
       <div class="field full"><label for="fNotes">Notes <span style="text-transform:none;letter-spacing:0">(customer, recipe tweaks)</span></label><textarea id="fNotes"></textarea></div>
     </div>
     <div class="dlg-foot">
@@ -309,6 +336,34 @@ dialog::backdrop{background:rgba(10,14,10,.45)}
       <button type="submit" class="btn primary" id="saveBtn">Save</button>
     </div>
   </form>
+</dialog>
+
+
+<dialog id="prodDlg" class="wide">
+  <div class="dlg-head"><h3>Mix catalog</h3><span class="hint" id="prodHint"></span><span class="spacer" style="flex:1"></span><button type="button" class="btn" id="prodAddBtn" hidden>+ Add product</button><button type="button" class="btn" id="prodClose">Close</button></div>
+  <div class="prod-body">
+    <form id="prodForm" class="prod-form" hidden>
+      <input type="hidden" id="pfId">
+      <div class="field" style="grid-column:span 2"><label for="pfName">Name</label><input id="pfName" required></div>
+      <div class="field"><label for="pfQty">Total volume</label><input id="pfQty" type="number" step="0.5" min="0" required></div>
+      <div class="field"><label for="pfUnit">Unit</label><select id="pfUnit"><option value="unit">Units (7.5 yd)</option><option value="yd">Yards</option></select></div>
+      <div class="field"><label for="pfType">Mix type</label><select id="pfType"><option value="">—</option><option>Mix Only</option><option>Screen Only</option><option>Blender Only</option><option>B/S Mix</option></select></div>
+      <div class="field"><label for="pfLine">Line (blender)</label><select id="pfLine"><option value="">—</option><option value="386">386</option><option value="384">384</option><option value="mix">Mix Only</option></select></div>
+      <div class="field"><label for="pfScreen">Screen</label><input id="pfScreen" placeholder="305 / 383"></div>
+      <div class="field"><label for="pfPrep">Setup / mix hrs</label><input id="pfPrep" type="number" step="0.5" min="0" placeholder="blank = none"></div>
+      <div class="field"><label for="pfBatches">30-min batches</label><input id="pfBatches" type="number" step="1" min="0" value="0"></div>
+      <div class="field"><label for="pfActive">Active</label><select id="pfActive"><option value="true">Yes</option><option value="false">No (hidden)</option></select></div>
+      <div class="field" style="grid-column:1/-1;flex-direction:row;gap:8px;justify-content:flex-end"><button type="button" class="btn" id="pfCancel">Cancel</button><button type="submit" class="btn primary">Save product</button></div>
+    </form>
+    <div class="tablewrap"><table class="prodtable" id="prodTable"></table></div>
+    <section class="assign" id="assignSec" hidden>
+      <h4>Who can request what</h4>
+      <p class="hint">A person with nothing ticked can request any active product. Tick products to limit them to that list.</p>
+      <div class="field" style="max-width:360px"><label for="assignUser">Person</label><select id="assignUser"></select></div>
+      <div class="assign-list" id="assignList"></div>
+      <div style="display:flex;gap:8px;align-items:center"><button type="button" class="btn primary" id="assignSave">Save list</button><button type="button" class="btn" id="assignClear">Clear (allow all)</button><span class="hint" id="assignNote"></span></div>
+    </section>
+  </div>
 </dialog>
 
 <dialog id="confirmDlg">
@@ -333,6 +388,7 @@ const MIX_TYPES=['Mix Only','Screen Only','Blender Only','B/S Mix'];
 const BATCH_TYPES=['Blender Only','B/S Mix'];
 const isBatchType=t=>BATCH_TYPES.includes(t);
 const normType=t=>{ t=(t||'Mix Only').trim(); if(/^screen/i.test(t)) return 'Screen Only'; if(/^blend/i.test(t)) return 'Blender Only'; if(/b\/s/i.test(t)) return 'B/S Mix'; return MIX_TYPES.includes(t)?t:'Mix Only'; };
+let products=[], productAccess=[], boardUsers=[];
 const DEFAULT_PRODUCTS=['Pro Swale','Pro Mix','Premium Potting','Bagger Top Soil','Dakine 420 Lite','Bi Mart Cactus','Opus Mix #1 (Bagger)','Central Aq. Jungle Mix','Turf Start'];
 
 // ---------- helpers ----------
@@ -369,9 +425,9 @@ let editing=null, draft=null;
 // ---------- storage: shared db with a local fallback ----------
 const CFG=window.MIX_BOARD_CONFIG||{};
 let sb=null, me=null, myProfile=null;
-const ROW_FIELDS=['kind','date','line','start','hours','prep','product','ptype','pnum','qty','bqty','unit','type','notes','confirmed','tentative','need_by','need_by_time','requested_by'];
-function toRow(b){ const r={id:b.id}; ROW_FIELDS.forEach(k=>{ r[k]=(b[k]===undefined?null:b[k]); }); r.ptype=r.ptype||''; r.pnum=r.pnum||''; r.unit=r.unit||'yd'; r.type=normType(r.type); r.notes=r.notes||''; r.product=r.product||(b.kind==='down'?'Line down':''); if(b.kind==='down'){ r.prep=null; r.qty=null; r.bqty=null; r.confirmed=false; r.tentative=false; r.need_by=null; } r.tentative=!!r.tentative; if(!r.need_by){ r.need_by=null; r.need_by_time=null; } if(r.need_by_time==null||r.need_by_time==='') r.need_by_time=null; if(isRequestor){ r.tentative=true; r.requested_by=me?me.id:null; } if(r.confirmed==null) r.confirmed=false; if(r.qty==='') r.qty=null; if(r.bqty==='') r.bqty=null; return r; }
-function fromRow(r){ const b={id:r.id}; ROW_FIELDS.forEach(k=>{ if(r[k]!==null&&r[k]!==undefined) b[k]=r[k]; }); if(b.start!=null) b.start=Number(b.start); if(b.hours!=null) b.hours=Number(b.hours); if(b.prep!=null) b.prep=Number(b.prep); if(b.qty!=null) b.qty=Number(b.qty); if(b.bqty!=null) b.bqty=Number(b.bqty); b.confirmedAt=r.confirmed_at||null; b.confirmedBy=r.confirmed_by||null; b.updatedAt=r.updated_at||null; b.tentative=!!r.tentative; b.need_by=r.need_by||null; b.need_by_time=(r.need_by_time==null?null:Number(r.need_by_time)); b.requested_by=r.requested_by||null; return b; }
+const ROW_FIELDS=['kind','date','line','start','hours','prep','product','ptype','pnum','qty','bqty','unit','type','notes','confirmed','tentative','need_by','need_by_time','requested_by','product_id','screen'];
+function toRow(b){ const r={id:b.id}; ROW_FIELDS.forEach(k=>{ r[k]=(b[k]===undefined?null:b[k]); }); r.ptype=r.ptype||''; r.pnum=r.pnum||''; r.unit=r.unit||'yd'; r.type=normType(r.type); r.notes=r.notes||''; r.product=r.product||(b.kind==='down'?'Line down':''); if(b.kind==='down'){ r.prep=null; r.qty=null; r.bqty=null; r.confirmed=false; r.tentative=false; r.need_by=null; } r.tentative=!!r.tentative; if(!r.need_by){ r.need_by=null; r.need_by_time=null; } if(r.need_by_time==null||r.need_by_time==='') r.need_by_time=null; if(!r.product_id) r.product_id=null; if(!r.screen) r.screen=null; if(isRequestor){ r.tentative=true; r.requested_by=me?me.id:null; } if(r.confirmed==null) r.confirmed=false; if(r.qty==='') r.qty=null; if(r.bqty==='') r.bqty=null; return r; }
+function fromRow(r){ const b={id:r.id}; ROW_FIELDS.forEach(k=>{ if(r[k]!==null&&r[k]!==undefined) b[k]=r[k]; }); if(b.start!=null) b.start=Number(b.start); if(b.hours!=null) b.hours=Number(b.hours); if(b.prep!=null) b.prep=Number(b.prep); if(b.qty!=null) b.qty=Number(b.qty); if(b.bqty!=null) b.bqty=Number(b.bqty); b.confirmedAt=r.confirmed_at||null; b.confirmedBy=r.confirmed_by||null; b.updatedAt=r.updated_at||null; b.tentative=!!r.tentative; b.need_by=r.need_by||null; b.need_by_time=(r.need_by_time==null?null:Number(r.need_by_time)); b.requested_by=r.requested_by||null; b.product_id=r.product_id||null; b.screen=r.screen||null; return b; }
 const store={mode:'connecting',
   async init(){
     if(!CFG.SUPABASE_URL||!CFG.SUPABASE_ANON_KEY||!window.supabase){ this.fallback('No Supabase config · local only'); return; }
@@ -387,7 +443,7 @@ const store={mode:'connecting',
     try{ const {data}=await sb.from('mix_profiles').select('*').eq('user_id',me.id).maybeSingle(); myProfile=data||null; }catch(e){ myProfile=null; }
     myRole=(myProfile&&myProfile.role)||'crew'; canConfirm=(myRole==='manager'); isRequestor=(myRole==='requestor'); canWrite=true;
     $('#whoami').textContent=((myProfile&&myProfile.display_name)||me.email||'')+(canConfirm?' · Manager':isRequestor?' · Requestor':' · Crew'); $('#addBtn').textContent=isRequestor?'+ Request mix':'+ Add mix'; $('#whoami').title=canConfirm?'Production manager · can confirm mixes':(myProfile?'Crew · can add and move mixes, cannot confirm':'No profile row found · ask the admin to run the profile back-fill in the README');
-    await this.loadAll();
+    await this.loadCatalog(); await this.loadAll();
     if(!this.channel){
       this.channel=sb.channel('mix_blocks_live').on('postgres_changes',{event:'*',schema:'public',table:'mix_blocks'},payload=>{
         if(payload.eventType==='DELETE'){ blocks.delete(payload.old.id); } else { const b=normalize(fromRow(payload.new)); blocks.set(b.id,b); }
@@ -398,6 +454,14 @@ const store={mode:'connecting',
       document.addEventListener('visibilitychange',refetch); window.addEventListener('online',refetch); window.addEventListener('focus',refetch);
       setInterval(refetch,60000);
     }
+  },
+  async loadCatalog(){
+    try{
+      const [{data:pr},{data:ac}]=await Promise.all([sb.from('mix_products').select('*').order('sort').order('name').order('qty',{ascending:false}), sb.from('mix_product_access').select('*')]);
+      products=(pr||[]).map(normProduct); productAccess=ac||[];
+      if(canConfirm){ const {data:us}=await sb.from('mix_users').select('*'); boardUsers=us||[]; }
+    }catch(e){ console.warn('catalog',e); }
+    fillProductSelect();
   },
   async loadAll(){
     const {data,error}=await sb.from('mix_blocks').select('*');
@@ -443,6 +507,31 @@ function canTouch(b){ if(!isRequestor) return true; return !!(b.kind==='job'&&b.
 function isLate(b,date,start,hours){ date=date??b.date; start=start??b.start; hours=hours??b.hours; if(!b.need_by) return false; if(date>b.need_by) return true; return date===b.need_by&&b.need_by_time!=null&&(start+hours)>b.need_by_time+1e-9; }
 function fmtNeed(b){ return b.need_by?fmtDate(fromIso(b.need_by))+(b.need_by_time!=null?' '+fmtT(b.need_by_time):''):''; }
 async function lateCheck(b,pos,what){ const date=pos.date??b.date, start=pos.start??b.start, hours=pos.hours??b.hours; if(!isLate(b,date,start,hours)) return true; return confirmBox('⚠ Past the need-by '+(b.need_by_time!=null&&date===b.need_by?'time':'date'),`${describe(b)} is needed by ${fmtNeed(b)}. ${what} has it finishing ${fmtDate(fromIso(date))} at ${fmtT(start+hours)}, after that. Go ahead anyway?`,{danger:true,yes:'Do it anyway'}); }
+function normProduct(r){ return {...r, qty:r.qty==null?null:Number(r.qty), prep:r.prep==null?null:Number(r.prep), hours:r.hours==null?null:Number(r.hours), batches:Number(r.batches)||0}; }
+function myAllowedProducts(){ const act=products.filter(p=>p.active!==false); if(!me) return act; const mine=productAccess.filter(a=>a.user_id===me.id).map(a=>a.product_id); if(!mine.length) return act; return act.filter(p=>mine.includes(p.id)); }
+function prodLabel(p){ return `${p.name} — ${p.qty} ${p.unit==='unit'?'units':'yd'}${p.type?' · '+p.type:''}${p.line?' · '+(LINES.find(l=>l.id===p.line)||{}).short:''}${p.screen?'/'+p.screen:''}`; }
+function prodById(id){ return products.find(p=>p.id===id)||null; }
+function fillProductSelect(){ const sel=$('#fProductSel'); const cur=sel.value; const allowed=myAllowedProducts();
+  let html=isRequestor?'<option value="">Choose a mix…</option>':'<option value="">— One-off / custom —</option>';
+  const groups={}; allowed.forEach(p=>{ (groups[p.name]=groups[p.name]||[]).push(p); });
+  Object.keys(groups).forEach(n=>{ const g=groups[n]; if(g.length===1) html+=`<option value="${g[0].id}">${esc(prodLabel(g[0]))}</option>`; else { html+=`<optgroup label="${esc(n)}">`; g.forEach(p=>html+=`<option value="${p.id}">${esc(prodLabel(p))}</option>`); html+='</optgroup>'; } });
+  sel.innerHTML=html; sel.value=cur;
+}
+const LOCK_IDS=['fQty','fUnit','fType','fLine','fPrep','fBatches','fBqty','fHours'];
+function applyProduct(){
+  const id=$('#fProductSel').value; const p=id?prodById(id):null; const lock=!!p&&!canConfirm;
+  $('#fProduct').hidden=!!p; $('#fProduct').required=!p&&draft.kind==='job';
+  if(p){
+    $('#fQty').value=p.qty; $('#fUnit').value=p.unit; if(p.type) $('#fType').value=p.type; if(p.line) $('#fLine').value=p.line;
+    if(p.hours!=null){ if(isBatchType(p.type)){ fPrep.value=p.prep??1; fBatches.value=p.batches||0; } else { fHours.value=p.hours; } }
+    $('#fBqty').value='';
+    $('#prodInfo').textContent=`${p.screen?'Screen '+p.screen+' · ':''}${p.hours!=null?(isBatchType(p.type)?`${p.prep} hr setup + ${p.batches} batch${p.batches===1?'':'es'}`:`${p.hours} hr`):'no timing on file — set the duration'}${lock?' · details set by the catalog':''}`;
+  } else $('#prodInfo').textContent='';
+  LOCK_IDS.forEach(i=>{ const el=$('#'+i); const timing=['fPrep','fBatches','fHours'].includes(i); el.disabled=lock&&!(timing&&p.hours==null)&&!(i==='fType'&&!p.type)&&!(i==='fLine'&&!p.line); });
+  $('#fBqty').disabled=lock;
+  syncFields(); updateSum();
+}
+$('#fProductSel').addEventListener('change',applyProduct);
 function describe(b){ return b.kind==='down'?'Line down':(b.product||'mix'); }
 // ---------- undo (this browser session) ----------
 const undoStack=[];
@@ -506,7 +595,7 @@ function cardHtml(b){
   let batches='';
   if(nBatch>0){ const bq=batchQty(b,nBatch); const u=b.unit==='unit'?'units':'yd'; batches='<div class="batches">'; for(let i=0;i<nBatch;i++){ const t=b.start+b.prep+i*.5; batches+=`<div class="batch num"><b><span class="bw">batch </span><span class="bh">#</span>${i+1}</b><span class="bl">${fmtT(t)}</span>${bq!=null?`<span class="bq">${bq}<span class="bw"> ${u}</span><span class="bh">${b.unit==='unit'?'un':'yd'}</span></span>`:''}</div>`; } batches+='</div>'; }
   const pl=projLabel(b);
-  const late=isLate(b); const tags=`${b.notes?`<span class="tag notef" title="${esc(b.notes)}">⚑</span>`:''}${b.tentative?'<span class="tag tent">Tentative</span>':''}${b.need_by?`<span class="tag ${late?'late':'need'}" title="Need by ${fmtNeed(b)}">${late?'Late · ':'Need '}${fmtNeed(b)}</span>`:''}`;
+  const late=isLate(b); const tags=`${b.notes?`<span class="tag notef" title="${esc(b.notes)}">⚑</span>`:''}${b.screen?`<span class="tag scr" title="Screen ${esc(b.screen)}">${esc(b.screen)}</span>`:''}${b.tentative?'<span class="tag tent">Tentative</span>':''}${b.need_by?`<span class="tag ${late?'late':'need'}" title="Need by ${fmtNeed(b)}">${late?'Late · ':'Need '}${fmtNeed(b)}</span>`:''}`;
   return `<div class="card job${b.confirmed?' confirmed':''}${b.tentative?' tentative':''}${canTouch(b)?'':' locked'}${prepRows<=2?' short':''}" data-id="${b.id}" data-line="${b.line}" draggable="${canTouch(b)?'true':'false'}" style="${style};--head-h:calc(var(--slot-h) * ${prepRows} - 3px)" title="${esc(b.product)}${pl?' '+pl:''}${b.tentative?' · tentative request':''}${b.need_by?' · need by '+fmtNeed(b):''} — ${esc(b.notes||'')}">
     <div class="head">
       <div class="p">${tags}${pl?`<span class="badge num">${esc(pl)}</span>`:''}${esc(b.product)}</div>
@@ -566,6 +655,7 @@ function startResize(e,card){
   const b=blocks.get(card.dataset.id); if(!b) return;
   if(!canWrite){ toast('You can view this board but not change it.'); return; }
   if(!canTouch(b)){ toast('Requestors can only change their own tentative requests.'); return; }
+  if(b.product_id&&!canConfirm&&prodById(b.product_id)&&prodById(b.product_id).hours!=null){ toast('Duration is set by the product catalog. Only the production manager can change it.'); return; }
   e.preventDefault(); e.stopPropagation();
   const lb=card.parentElement; const sh=lb.getBoundingClientRect().height/SLOTS;
   rs={card,b,sh,hours:b.hours,id:e.pointerId}; card.classList.add('resizing'); card.draggable=false;
@@ -609,7 +699,7 @@ board.addEventListener('dragend',()=>{ dragId=null; document.querySelectorAll('.
 $('#prevWeek').onclick=()=>{ weekStart=addDays(weekStart,-7); render(); };
 $('#nextWeek').onclick=()=>{ weekStart=addDays(weekStart,7); render(); };
 $('#todayBtn').onclick=()=>{ weekStart=mondayOf(new Date()); dayIndex=Math.min(5,(new Date().getDay()+6)%7); render(); };
-$('#addBtn').onclick=()=>openDialog(null,{date:weekDates()[view==='day'?dayIndex:Math.min(5,(new Date().getDay()+6)%7)],line:'mix',start:H0,hours:1});
+$('#addBtn').onclick=()=>openDialog(null,{date:weekDates()[Math.min(5,(new Date().getDay()+6)%7)],line:'mix',start:H0,hours:1,toolbar:true});
 
 // ---------- dialog ----------
 const dlg=$('#dlg'), form=$('#form');
@@ -618,23 +708,30 @@ for(let h=H0;h<H_END;h+=.5){ const o=document.createElement('option'); o.value=h
 for(let h=.5;h<=4;h+=.5){ const o=document.createElement('option'); o.value=h; o.textContent=h===.5?'30 min':h+' hr'; fPrep.appendChild(o); }
 for(let h=H0+.5;h<=H_END;h+=.5){ const o=document.createElement('option'); o.value=h; o.textContent=fmtTLong(h); $('#fNeedByTime').appendChild(o); }
 for(let h=.5;h<=11;h+=.5){ const o=document.createElement('option'); o.value=h; o.textContent=h===.5?'30 min':h+' hr'; fHours.appendChild(o); }
-function syncFields(){ const k=draft.kind; const batch=(k==='job'&&isBatchType($('#fType').value)); document.querySelectorAll('.job-only').forEach(el=>el.hidden=(k==='down')); document.querySelectorAll('.batch-only').forEach(el=>el.hidden=!batch); document.querySelectorAll('.dur-only').forEach(el=>el.hidden=batch); $('#fHoursLabel').textContent=k==='down'?'Blocked for':'Duration'; }
-function setKind(k){ draft.kind=k; document.querySelectorAll('.kindtabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.kind===k)); $('#fProduct').required=(k==='job'); syncFields(); updateSum(); }
+function syncFields(){ const k=draft.kind; const batch=(k==='job'&&isBatchType($('#fType').value)); document.querySelectorAll('.job-only').forEach(el=>el.hidden=(k==='down')); document.querySelectorAll('.batch-only').forEach(el=>el.hidden=!batch); document.querySelectorAll('.dur-only').forEach(el=>el.hidden=batch); $('#fHoursLabel').textContent=k==='down'?'Blocked for':'Duration';
+  const pick=(draft.when==='pick'); document.querySelector('.when-row').hidden=!draft.toolbar; document.querySelectorAll('.loc-field').forEach(el=>el.hidden=pick);
+  $('#saveBtn').hidden=pick; $('#placeBtn').classList.toggle('primary',pick); $('#placeBtn').textContent=pick?'Save & place on calendar':'Save & place instead';
+  document.querySelectorAll('.whentabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.when===(draft.when||'enter'))); }
+function setWhen(w){ draft.when=w; syncFields(); updateSum(); }
+document.querySelectorAll('.whentabs button').forEach(b=>b.onclick=()=>setWhen(b.dataset.when));
+function setKind(k){ draft.kind=k; document.querySelectorAll('.kindtabs:not(.whentabs) button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.kind===k)); $('#fProduct').required=(k==='job'&&!$('#fProductSel').value); syncFields(); updateSum(); }
 $('#fType').addEventListener('change',()=>{ syncFields(); updateSum(); });
-function updateSum(){ const start=Number(fStart.value); let hours; if(draft.kind==='down'){ hours=Number(fHours.value); $('#timingSum').textContent=`Line blocked ${fmtTLong(start)} – ${fmtTLong(start+hours)}`; return; }
+function updateSum(){ if(draft.when==='pick'&&draft.kind!=='down'){ const batch=isBatchType($('#fType').value); const prep=Number(fPrep.value), nb=Math.max(0,Number(fBatches.value)||0); const hours=batch?prep+nb*.5:Number(fHours.value); $('#timingSum').textContent=`${hours} hr${batch&&nb?` · ${nb} batch${nb>1?'es':''}`:''} — date, line and start come from where you click on the calendar`; return; }
+  const start=Number(fStart.value); let hours; if(draft.kind==='down'){ hours=Number(fHours.value); $('#timingSum').textContent=`Line blocked ${fmtTLong(start)} – ${fmtTLong(start+hours)}`; return; }
   if(!isBatchType($('#fType').value)){ hours=Number(fHours.value); $('#timingSum').textContent=`${$('#fType').value} ${fmtTLong(start)} – ${fmtTLong(start+hours)}${start+hours>H_END?' (past the end of the board)':''}`; return; }
   const prep=Number(fPrep.value), nb=Math.max(0,Number(fBatches.value)||0); hours=prep+nb*.5;
   let s=`Setup ${fmtTLong(start)} – ${fmtTLong(start+prep)}`; const q=$('#fQty').value; const auto=(nb&&q!=='')?Math.round(Number(q)/nb*10)/10:null; $('#fBqty').placeholder=auto!=null?`auto: ${auto}`:'auto'; const bq=$('#fBqty').value!==''?Number($('#fBqty').value):auto; if(nb){ s+=`, then ${nb} batch${nb>1?'es':''}${bq!=null?` of ${bq} ${$('#fUnit').value==='unit'?'units':'yd'}`:''} at `+Array.from({length:nb},(_,i)=>fmtT(start+prep+i*.5)).join(', '); } s+=` · ends ${fmtTLong(start+hours)}`; if(start+hours>H_END) s+=' (past the end of the board)'; $('#timingSum').textContent=s; }
 [fStart,fPrep,fHours,fBatches,$('#fQty'),$('#fBqty'),$('#fUnit'),$('#fType')].forEach(el=>el.addEventListener('input',updateSum));
-document.querySelectorAll('.kindtabs button').forEach(b=>b.onclick=()=>setKind(b.dataset.kind));
+document.querySelectorAll('.kindtabs:not(.whentabs) button').forEach(b=>b.onclick=()=>setKind(b.dataset.kind));
 function openDialog(b,slot){
   if(!canWrite){ toast('You can view this board but not change it.'); return; }
   editing=b||null; draft={kind:b?b.kind:'job'};
   $('#dlgTitle').textContent=b?(b.kind==='down'?'Line down':(b.tentative?'Edit request':'Edit mix')):(isRequestor?'Request mix':'Add mix');
   $('#fNeedBy').value=b&&b.need_by?b.need_by:''; $('#fNeedByTime').value=b&&b.need_by_time!=null?String(b.need_by_time):'';
   document.querySelector('.kindtabs').parentElement.hidden=isRequestor;
-  $('#tentNote').textContent=isRequestor?'Saved as a tentative request. Mike confirms it to lock it in.':(b&&b.tentative?'Tentative request — confirming it makes it a scheduled mix.':(b&&b.confirmed?'Confirmed and scheduled.':'Scheduled, awaiting confirmation.'));
+  $('#tentNote').textContent=isRequestor?'Saved as a tentative request (dashed chip). The production manager confirms it to lock it in.':(b&&b.tentative?'Tentative request — confirming it makes it a scheduled mix.':(b&&b.confirmed?'Confirmed (green).':'Goes on the board as scheduled (black) until the production manager confirms it.'));
   $('#fProduct').value=b?(b.product||''):''; $('#fPtype').value=b?(b.ptype||''):''; $('#fPnum').value=b?(b.pnum||''):'';
+  fillProductSelect(); $('#fProductSel').value=b&&b.product_id?b.product_id:''; LOCK_IDS.forEach(i=>$('#'+i).disabled=false); $('#fBqty').disabled=false;
   $('#fQty').value=b&&b.qty!=null?b.qty:''; $('#fBqty').value=b&&b.bqty!=null?b.bqty:''; $('#fUnit').value=b?(b.unit||'unit'):'unit'; $('#fType').value=b?normType(b.type):'Mix Only';
   const conf=!!(b&&b.kind==='job'&&b.confirmed); $('#confirmBtn').hidden=!(b&&b.kind==='job'&&!conf&&canConfirm); $('#unconfirmBtn').hidden=!(conf&&canConfirm); $('#confirmedNote').hidden=!conf; if(conf) $('#confirmedNote').textContent='✓ Confirmed'+(b.confirmedAt?' '+new Date(b.confirmedAt).toLocaleDateString(undefined,{month:'short',day:'numeric'}):'');
   $('#fLine').value=b?b.line:slot.line; $('#fDate').value=b?b.date:slot.date; fStart.value=b?b.start:slot.start; $('#fNotes').value=b?(b.notes||''):'';
@@ -643,17 +740,19 @@ function openDialog(b,slot){
   fHours.value=Math.max(.5,hours);
   $('#delBtn').hidden=!b; $('#dupBtn').hidden=!b||isRequestor; $('#placeBtn').hidden=!!b;
   // requestors place new requests on the board by hand; plain Save stays for edits
-  const placeOnly=(!b&&isRequestor); $('#saveBtn').hidden=placeOnly; $('#placeBtn').classList.toggle('primary',placeOnly); $('#placeBtn').textContent=placeOnly?'Save & place on calendar':'Save & place on board';
+  draft.toolbar=!b&&!!(slot&&slot.toolbar); draft.when=b?'enter':(draft.toolbar?'pick':'enter');   // from the board: slot is prefilled; from the toolbar: default to picking a spot
   setKind(isRequestor?'job':draft.kind);
-  dlg.showModal(); if(draft.kind==='job') $('#fProduct').focus();
+  applyProduct();
+  dlg.showModal(); if(draft.kind==='job'){ if($('#fProductSel').value||isRequestor) $('#fProductSel').focus(); else $('#fProduct').focus(); }
 }
 $('#fPnum').addEventListener('input',()=>{ const v=$('#fPnum').value; const m=v.match(/^\s*(cc|rc)\s*#?\s*(\d+)/i); if(m){ $('#fPtype').value=m[1].toUpperCase(); $('#fPnum').value=m[2]; } if($('#fPnum').value&&!$('#fPtype').value) $('#fPtype').value='CC'; });
 function buildFromForm(){
   const kind=draft.kind; const start=Number(fStart.value);
   const b={id:editing?editing.id:uid(),kind,date:$('#fDate').value,line:$('#fLine').value,start,notes:$('#fNotes').value.trim()};
   if(kind==='job'){ const type=normType($('#fType').value); let prep=Number(fPrep.value), nb=Math.max(0,Math.min(20,Math.round(Number(fBatches.value)||0))); if(!isBatchType(type)){ prep=Number(fHours.value); nb=0; }
-    Object.assign(b,{product:$('#fProduct').value.trim(),ptype:$('#fPnum').value.trim()?($('#fPtype').value||'CC'):'',pnum:$('#fPnum').value.trim().replace(/\D/g,''),qty:$('#fQty').value===''?null:Number($('#fQty').value),bqty:$('#fBqty').value===''?null:Number($('#fBqty').value),unit:$('#fUnit').value,type,prep,hours:prep+nb*.5,confirmed:!!(editing&&editing.confirmed),tentative:isRequestor?true:!!(editing&&editing.tentative),need_by:$('#fNeedBy').value||null,need_by_time:($('#fNeedBy').value&&$('#fNeedByTime').value!=='')?Number($('#fNeedByTime').value):null,requested_by:editing?(editing.requested_by||null):(isRequestor&&me?me.id:null)});
-    if(!b.product){ $('#fProduct').focus(); return null; } }
+    const pid=$('#fProductSel').value||null; const pr=pid?prodById(pid):null;
+    Object.assign(b,{product_id:pid,screen:pr?(pr.screen||null):null,product:pr?pr.name:$('#fProduct').value.trim(),ptype:$('#fPnum').value.trim()?($('#fPtype').value||'CC'):'',pnum:$('#fPnum').value.trim().replace(/\D/g,''),qty:$('#fQty').value===''?null:Number($('#fQty').value),bqty:$('#fBqty').value===''?null:Number($('#fBqty').value),unit:$('#fUnit').value,type,prep,hours:prep+nb*.5,confirmed:!!(editing&&editing.confirmed),tentative:isRequestor?true:!!(editing&&editing.tentative),need_by:$('#fNeedBy').value||null,need_by_time:($('#fNeedBy').value&&$('#fNeedByTime').value!=='')?Number($('#fNeedByTime').value):null,requested_by:editing?(editing.requested_by||null):(isRequestor&&me?me.id:null)});
+    if(!b.product){ if(isRequestor){ toast('Choose a mix from the list'); $('#fProductSel').focus(); } else $('#fProduct').focus(); return null; } }
   else { b.product='Line down'; b.hours=Number(fHours.value); }
   return b;
 }
@@ -667,7 +766,7 @@ form.addEventListener('submit',async e=>{
   if(await store.save(b)){ dlg.close(); toast(editing?'Saved':(isRequestor?'Request added — tentative until confirmed':'Added to the board')); }
 });
 // Save & place: build the chip, then drop it on the board by hand (date, line and time come from where you click)
-$('#placeBtn').onclick=()=>{ if(!$('#fProduct').checkValidity()&&draft.kind==='job'){ $('#fProduct').reportValidity(); return; } const b=buildFromForm(); if(!b) return; dlg.close(); startPlacing(b); };
+$('#placeBtn').onclick=()=>{ if(draft.kind==='job'&&!$('#fProductSel').value&&!$('#fProduct').checkValidity()){ $('#fProduct').reportValidity(); return; } const b=buildFromForm(); if(!b) return; dlg.close(); startPlacing(b); };
 $('#cancelBtn').onclick=()=>dlg.close();
 $('#confirmBtn').onclick=async()=>{ if(!editing)return; if(await confirmMix(editing,true)) dlg.close(); };
 $('#unconfirmBtn').onclick=async()=>{ if(!editing)return; if(await confirmMix(editing,false)) dlg.close(); };
@@ -708,6 +807,43 @@ async function placeHere(e){
   if(!(await lateCheck(nb,{},'This spot'))) return;
   stopPlacing(); if(await store.save(nb)) toast(`${describe(nb)} placed ${fmtDate(fromIso(nb.date))} at ${fmtT(nb.start)}${nb.tentative?' · tentative until confirmed':''}`);
 }
+
+
+// ---------- products dialog ----------
+const prodDlg=$('#prodDlg');
+$('#productsBtn').onclick=async()=>{ if(store.mode==='live') await store.loadCatalog(); renderProducts(); prodDlg.showModal(); };
+$('#prodClose').onclick=()=>prodDlg.close();
+function fmtProdTiming(p){ if(p.hours==null) return '—'; return isBatchType(p.type)?`${p.prep} hr + ${p.batches} × 30 min = ${p.hours} hr`:`${p.hours} hr`; }
+function renderProducts(){
+  const mgr=canConfirm; $('#prodAddBtn').hidden=!mgr; $('#assignSec').hidden=!mgr;
+  $('#prodHint').textContent=mgr?`${products.length} products · you can add, edit and assign`:(isRequestor?'Products you can request are marked':'Read-only · the production manager maintains this list');
+  const mine=me?productAccess.filter(a=>a.user_id===me.id).map(a=>a.product_id):[];
+  let h='<thead><tr><th>Product</th><th>Size</th><th>Type</th><th>Line / screen</th><th>Timing</th>'+(mgr?'<th></th>':'')+'</tr></thead><tbody>';
+  const list=mgr?products:products.filter(p=>p.active!==false);
+  list.forEach(p=>{ h+=`<tr class="${p.active===false?'inactive':''}${mine.includes(p.id)?' mine':''}"><td class="name">${esc(p.name)}</td><td class="num">${p.qty} ${p.unit==='unit'?'units':'yd'}</td><td>${esc(p.type||'—')}</td><td>${p.line?((LINES.find(l=>l.id===p.line)||{}).name||p.line):'—'}${p.screen?' / '+esc(p.screen):''}</td><td class="num">${fmtProdTiming(p)}</td>${mgr?`<td><button type="button" class="btn" data-edit="${p.id}">Edit</button></td>`:''}</tr>`; });
+  $('#prodTable').innerHTML=h+'</tbody>';
+  if(mgr){ const sel=$('#assignUser'); const cur=sel.value; sel.innerHTML='<option value="">Choose a person…</option>'+boardUsers.map(u=>`<option value="${u.user_id}">${esc(u.display_name||u.email)} · ${esc(u.role||'crew')}</option>`).join(''); sel.value=cur; renderAssign(); }
+}
+$('#prodTable').addEventListener('click',e=>{ const b=e.target.closest('[data-edit]'); if(b) openProdForm(prodById(b.dataset.edit)); });
+$('#prodAddBtn').onclick=()=>openProdForm(null);
+$('#pfCancel').onclick=()=>{ $('#prodForm').hidden=true; };
+function openProdForm(p){ $('#prodForm').hidden=false; $('#pfId').value=p?p.id:''; $('#pfName').value=p?p.name:''; $('#pfQty').value=p?p.qty:''; $('#pfUnit').value=p?p.unit:'unit'; $('#pfType').value=p?(p.type||''):''; $('#pfLine').value=p?(p.line||''):''; $('#pfScreen').value=p?(p.screen||''):''; $('#pfPrep').value=p&&p.prep!=null?p.prep:''; $('#pfBatches').value=p?(p.batches||0):0; $('#pfActive').value=p?String(p.active!==false):'true'; $('#pfName').focus(); }
+$('#prodForm').addEventListener('submit',async e=>{
+  e.preventDefault(); if(!sb) return;
+  const prep=$('#pfPrep').value===''?null:Number($('#pfPrep').value); const nb=Math.max(0,Math.round(Number($('#pfBatches').value)||0)); const type=$('#pfType').value||null;
+  const row={name:$('#pfName').value.trim(),qty:Number($('#pfQty').value),unit:$('#pfUnit').value,type,line:$('#pfLine').value||null,screen:$('#pfScreen').value.trim()||null,prep,batches:isBatchType(type)?nb:0,hours:prep==null?null:(isBatchType(type)?prep+nb*.5:prep),active:$('#pfActive').value==='true'};
+  if($('#pfId').value) row.id=$('#pfId').value;
+  const {error}=await sb.from('mix_products').upsert(row); if(error){ toast('Could not save product: '+error.message); return; }
+  $('#prodForm').hidden=true; await store.loadCatalog(); renderProducts(); toast('Product saved');
+});
+$('#assignUser').addEventListener('change',renderAssign);
+function renderAssign(){ const uid=$('#assignUser').value; const list=$('#assignList'); if(!uid){ list.innerHTML=''; $('#assignNote').textContent=''; return; } const mine=productAccess.filter(a=>a.user_id===uid).map(a=>a.product_id);
+  list.innerHTML=products.filter(p=>p.active!==false).map(p=>`<label><input type="checkbox" value="${p.id}" ${mine.includes(p.id)?'checked':''}> ${esc(p.name)} — ${p.qty} ${p.unit==='unit'?'units':'yd'}</label>`).join('');
+  $('#assignNote').textContent=mine.length?`${mine.length} product${mine.length===1?'':'s'} allowed`:'No restriction (can request any product)'; }
+$('#assignSave').onclick=async()=>{ const uid=$('#assignUser').value; if(!uid||!sb) return; const ids=[...$('#assignList').querySelectorAll('input:checked')].map(i=>i.value);
+  let {error}=await sb.from('mix_product_access').delete().eq('user_id',uid); if(!error&&ids.length){ ({error}=await sb.from('mix_product_access').insert(ids.map(id=>({product_id:id,user_id:uid})))); }
+  if(error){ toast('Could not save: '+error.message); return; } await store.loadCatalog(); renderAssign(); toast('List saved'); };
+$('#assignClear').onclick=async()=>{ const uid=$('#assignUser').value; if(!uid||!sb) return; const {error}=await sb.from('mix_product_access').delete().eq('user_id',uid); if(error){ toast('Could not save: '+error.message); return; } await store.loadCatalog(); renderAssign(); toast('Restriction removed'); };
 
 // ---------- boot ----------
 render();
