@@ -2,7 +2,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <style>
 /* Layout: sticky yard header + tab rail; each view is a working surface — bins as walled bays, queues as dense rows. */
 :root{
@@ -285,8 +285,8 @@ td.n{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-num
    - Demo mode (no config): sample data in this browser only.
    - Live mode: set SUPABASE_URL + SUPABASE_ANON_KEY below, or in Setup.
    ============================================================= */
-const SUPABASE_URL = 'https://wcdimjnqfmsudhiccvib.supabase.co';       // e.g. https://abcd1234.supabase.co
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndjZGltam5xZm1zdWRoaWNjdmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI2ODM1NTgsImV4cCI6MjEwODI1OTU1OH0.cBWn9QN8vlF9N0S6W6eP6fKSExPIZsEcnXYRWzElJTA';  // Project Settings → API → anon public key
+const SUPABASE_URL = 'https://wcdimjnqfmsudhiccvib.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndjZGltam5xZm1zdWRoaWNjdmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI2ODM1NTgsImV4cCI6MjEwODI1OTU1OH0.cBWn9QN8vlF9N0S6W6eP6fKSExPIZsEcnXYRWzElJTA';  // anon public key (safe in the browser; access is controlled by row level security)
 
 const ROLES = {
   inventory:{label:'Inventory', tabs:['yard','pulls','backfill','hauls','ledger','setup']},
@@ -1027,7 +1027,7 @@ VIEWS.setup={
           <label class="field full"><span>Supabase URL</span><input id="cf-url" name="url" value="${esc(cfg.url||SUPABASE_URL)}" placeholder="https://xxxx.supabase.co"></label>
           <label class="field full"><span>Anon public key</span><input id="cf-key" name="key" value="${esc(cfg.key||SUPABASE_ANON_KEY)}"></label>
           <div class="form-actions full"><button class="btn primary">Save and connect</button>
-            ${A.mode==='demo'?confirmBtn('resetDemo','Reset demo data','',''):confirmBtn('disconnect','Disconnect','','ghost')}</div>
+            ${A.mode==='demo'?confirmBtn('resetDemo','Reset demo data','','')+(store.get('ryt-force-demo',false)?'<button type="button" class="btn" data-act="goLive">Use live data</button>':''):confirmBtn('disconnect','Disconnect','','ghost')}</div>
         </form></div>
     </div></section>`;
   },
@@ -1050,7 +1050,7 @@ function header(){
       <div class="brand"><h1>Retail Yard</h1><span>Rexius · inventory · pulls · hauling</span></div>
       <span class="mode">${A.mode==='demo'?'Demo':'Live'}</span>${who}
     </div><div class="wrap"><nav class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" aria-selected="${UI.tab===t}" data-act="tab" data-tab="${t}">${TAB_LABELS[t]}${badge(t)}</button>`).join('')}</nav></div></header>
-    ${A.mode==='demo'?`<div class="demo-note"><div class="wrap"><b>Demo mode.</b><span>Bins, products and orders here are examples, not live yard figures. Switch people in the top bar to see each role.</span></div></div>`:''}`;
+    ${A.mode==='demo'?`<div class="demo-note"><div class="wrap"><b>Demo mode.</b>${window.__offlineNote?'<span>Couldn\'t reach the live Supabase database from here, so this is showing example data.</span>':''}<span>Bins, products and orders here are examples, not live yard figures. Switch people in the top bar to see each role.</span></div></div>`:''}`;
 }
 function render(){
   if(!tabsFor().includes(UI.tab)) UI.tab=tabsFor()[0];
@@ -1147,7 +1147,8 @@ const ACT={
   editBin(d){ UI.editBin=d.id||null; render(); },
   editProduct(d){ UI.editProduct=d.id||null; render(); },
   resetDemo(){ A.reset(); reload({shell:true}).then(()=>toast('Demo data reset.')); },
-  disconnect(){ store.del('ryt-config'); location.reload(); },
+  disconnect(){ store.set('ryt-force-demo',true); location.reload(); },
+  goLive(){ store.del('ryt-force-demo'); location.reload(); },
   async signOut(){ await A.signOut(); location.reload(); },
 };
 function truckOf(fd){ const v=fd.get('truck_sel'); return v==='other'?String(fd.get('truck_other')||'').trim():String(v||'').trim(); }
@@ -1298,7 +1299,7 @@ const FORM={
   async config(fd){
     const url=fd.get('url').trim(), key=fd.get('key').trim();
     if(!url||!key){ toast('Enter both the project URL and the anon key.',true); return; }
-    store.set('ryt-config',{url,key}); location.reload();
+    store.set('ryt-config',{url,key}); store.del('ryt-force-demo'); location.reload();
   },
 };
 document.addEventListener('submit',e=>{
@@ -1326,7 +1327,7 @@ function signInScreen(){
     try{
       if(!sent){ await A.sendCode(email); sent=true; $('#si-code-wrap').hidden=false; $('#si-btn').textContent='Sign in'; hint.textContent='Code sent to '+email+'.'; $('#si-code').focus(); }
       else { await A.verify(email,$('#si-code').value.trim()); await start(); }
-    }catch(err){ hint.textContent=err.message; hint.classList.add('warn'); }
+    }catch(err){ hint.textContent=/database error|signups not allowed/i.test(err.message||'')?'Use your @rexius.com email address.':(err.message||'Something went wrong. Try again.'); hint.classList.add('warn'); }
   });
 }
 async function start(){
@@ -1343,10 +1344,28 @@ async function start(){
       <button class="btn" data-act="disconnect">Switch to demo data</button></div>`;
   }
 }
-(function boot(){
+async function reachable(url,key){
+  try{
+    const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(),6000);
+    const r=await fetch(url.replace(/\/$/,'')+'/auth/v1/health',{headers:{apikey:key},signal:ctl.signal}); clearTimeout(t);
+    return r.ok||r.status<500;
+  }catch{ return false; }
+}
+(async function boot(){
   const cfg=store.get('ryt-config',null);
   const url=cfg?.url||SUPABASE_URL, key=cfg?.key||SUPABASE_ANON_KEY;
-  A = (url&&key&&window.supabase) ? LiveAdapter({url,key}) : DemoAdapter();
+  const forceDemo=store.get('ryt-force-demo',false);
+  if(url&&key&&!forceDemo){
+    if(!window.supabase){
+      $('#app').innerHTML=`<div class="signin panel sec"><h2>Couldn't load the sign-in library</h2>
+        <p>The page couldn't download the Supabase library from cdn.jsdelivr.net, so it can't connect to the yard database.</p>
+        <p class="muted">Check the internet connection or a network filter blocking cdn.jsdelivr.net, then reload.</p>
+        <div class="form-actions"><button class="btn primary" onclick="location.reload()">Reload</button><button class="btn ghost" data-act="disconnect">Use demo data</button></div></div>`;
+      return;
+    }
+    if(await reachable(url,key)){ A=LiveAdapter({url,key}); return start(); }
+    A=DemoAdapter(); window.__offlineNote=true;
+  } else A=DemoAdapter();
   start();
 })();
 </script>
