@@ -419,6 +419,7 @@ table.grid.me{width:100%}
 .set-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:440px;gap:16px}
 .set-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;display:flex;flex-direction:column;gap:12px;min-height:0}
 .set-body{flex:1;min-height:0;overflow:auto;display:grid;gap:12px;align-content:start}
+.crew .crew-name{display:block;padding:7px 2px;font-weight:600}
 .crew .crew-x{width:36px;text-align:right}
 .crew th.c,.crew td.c{text-align:center;width:110px}
 .crew td input[type=text]{width:100%}
@@ -2341,10 +2342,10 @@ function renderSettings(){
   $('#settingsSec').innerHTML=`
   <div class="set-grid">
     <div class="set-card">
-      <div class="set-h"><h2>Crew</h2><button class="btn icon" id="addCrew" aria-label="Add crew member" title="Add crew member">+</button></div>
+      <div class="set-h"><h2>Crew</h2><button class="btn" id="addCrew">Add crew</button></div>
       <div class="set-body">
         <table class="lines crew"><thead><tr><th>Name</th><th class="c">Biochar sheet</th><th class="c">Dryer sheet</th><th class="crew-x"></th></tr></thead><tbody>
-        ${S.crew.map((c,i)=>`<tr><td><input type="text" data-crew="${i}" data-f="name" value="${esc(c.name)}" placeholder="Name" aria-label="Crew member name"></td>
+        ${S.crew.map((c,i)=>`<tr><td>${c.id?`<span class="crew-name">${esc(c.name)}</span>`:`<input type="text" data-crew="${i}" data-f="name" value="${esc(c.name)}" placeholder="Name" aria-label="Crew member name">`}</td>
           <td class="c"><input type="checkbox" data-crew="${i}" data-f="biochar" ${c.biochar?'checked':''} aria-label="Show ${esc(c.name)} on the biochar sheet"></td>
           <td class="c"><input type="checkbox" data-crew="${i}" data-f="orchid" ${c.orchid?'checked':''} aria-label="Show ${esc(c.name)} on the dryer sheet"></td>
           <td class="crew-x"><button type="button" class="btn icon ghost" data-rmcrew="${i}" aria-label="Delete ${esc(c.name||'crew member')}" title="Delete">✕</button></td></tr>`).join('')}
@@ -2390,7 +2391,8 @@ function saveSettings(msg){store.set('settings',SETTINGS);if(msg)toast(msg)}
 $('#settingsSec').addEventListener('change',e=>{
   const t=e.target,S=SETTINGS;
   if(t.dataset.crew!=null){const c=S.crew[+t.dataset.crew];
-    if(t.dataset.f==='name'){const v=t.value.trim();if(!v){t.value=c.name;return toast('Names can’t be blank')}c.name=v}else c[t.dataset.f]=t.checked;
+    if(t.dataset.f==='name'){if(c.id)return;const v=t.value.trim();if(!v){t.value=c.name;return toast('Names can’t be blank')}
+      if(S.crew.some(x=>x!==c&&x.name.toLowerCase()===v.toLowerCase())){t.value='';return toast(`${v} is already on the crew`)}c.name=v}else c[t.dataset.f]=t.checked;
     saveSettings('Crew updated');return}
   if(t.dataset.ratio){S.ratio[t.dataset.ratio]=Math.min(100,Math.max(0,+t.value||0))/100;saveSettings('Ratio updated');return}
   if(t.dataset.set){S[t.dataset.set]=Math.max(0,+t.value||0);saveSettings('Saved');renderSettings()}
@@ -2767,6 +2769,7 @@ Live.sync=async function(){
         await must(q)}
       await Live.syncSettings();
       Live.base=Live.snap();
+      if(UI.line==='settings'&&[...document.querySelectorAll('#settingsSec [data-crew][data-f=name]')].some(el=>(SETTINGS.crew[+el.dataset.crew]||{}).id))renderSettings();
     }while(Live.again);
   }catch(e){
     console.error(e);toast('⚠ Couldn’t save: '+(e.message||e)+'. Reloading from the database.');
