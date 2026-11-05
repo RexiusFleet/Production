@@ -8,6 +8,8 @@
 --   picker_runs.small/medium/lost_pct the % used for that run
 -- Existing runs get profile 1 with today's % for their material.
 -- picker_estimates uses the run's own % (falls back to Settings if empty).
+-- Also: orchid inventory gets a middle section with Jumbo Orchid and a new
+-- NW Bark bin (both show on the inventory and can be purchased).
 --
 -- HOW TO RUN: paste into the Supabase SQL Editor and Run. Safe to re-run.
 -- Pure ASCII. Paste the check result back.
@@ -29,6 +31,11 @@ update dept14.picker_runs p
  where m.id = p.material_bin_id and s.key = 'orchid' and p.small_pct is null;
 alter table dept14.picker_runs enable trigger picker_runs_log;
 
+insert into dept14.bins (name, kind, unit, sort, is_core, on_map, purchasable)
+values ('NW Bark', 'material', 'yd', 95, true, true, true)
+on conflict (name) do nothing;
+update dept14.bins set on_map = true, purchasable = true where name in ('Jumbo Orchid', 'NW Bark');
+
 create or replace view dept14.picker_estimates with (security_invoker = true) as
   with s as (select coalesce((value ->> 'yards_per_unit')::numeric, 7.5) as ypu, value -> 'ratios' as ratios
              from dept14.settings where key = 'orchid')
@@ -47,4 +54,6 @@ commit;
 select 'columns' as what, (select string_agg(column_name, ', ' order by column_name) from information_schema.columns
   where table_schema = 'dept14' and table_name = 'picker_runs' and column_name in ('grate_profile','small_pct','medium_pct','lost_pct')) as detail
 union all select 'runs with grates', (select count(*) filter (where small_pct is not null) || ' of ' || count(*) from dept14.picker_runs)
+union all select 'material bins', (select string_agg(name || case when on_map and purchasable then '' else ' (hidden)' end, ', ' order by sort)
+  from dept14.bins where kind = 'material')
 union all select 'estimate check', (select round(sum(small_green), 2) || ' small / ' || round(sum(medium_green), 2) || ' medium yd' from dept14.picker_estimates);

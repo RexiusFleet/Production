@@ -348,6 +348,9 @@ table.eom-t{width:100%;border-collapse:collapse;table-layout:fixed}
 .ratio-row input{width:64px;margin:0 3px}
 .binmap-wrap{overflow-x:auto;padding:16px 18px}
 .binmap-wrap+.binmap-wrap{padding-top:0}
+.inv-div{border:0;border-top:1px solid var(--line-strong);margin:4px 18px}
+.binmap .bh.material{background:#6B4E2E}
+.binmap.mat{width:auto}
 .binmap{border-collapse:collapse;font-size:.88rem;min-width:100%}
 .binmap th,.binmap td{border:1px solid var(--line);padding:6px 10px;text-align:right;vertical-align:top}
 .binmap .lbl{text-align:left;font:600 .78rem var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);white-space:nowrap;background:var(--sunken);width:1%}
@@ -1358,7 +1361,7 @@ function openCounts(sec,focusKey){
    - Completed sales take product out.
    ============================================================= */
 const ORC_PICK=['Jumbo Orchid','#1 Medium Green'];
-const ORC_PURCHASED=['XS Idaho Green','PAC Fibre Large','PAC Fibre Medium','Cypress Mulch','#1 Small Green','#1 Medium Green'];
+const ORC_PURCHASED=['XS Idaho Green','PAC Fibre Large','PAC Fibre Medium','Cypress Mulch','#1 Small Green','#1 Medium Green','Jumbo Orchid','NW Bark'];
 const ORC_SECTIONS=[
   {key:'ogreen',title:'Green',code:'',acc:'wash',unit:'yd',fixed:['#1 Medium Green','#1 Small Green','XS Idaho Green','PAC Fibre Large','PAC Fibre Medium','Cypress Mulch'].map(n=>['O:'+n,n,'yd'])},
   {key:'odried',title:'Dried bins',code:'',acc:'bag',unit:'yd',fixed:['#1 Medium Dried','#2 Medium Dried','Small Dried'].map(n=>['O:'+n,n,'yd'])},
@@ -1410,7 +1413,6 @@ const orcSalesFlat=()=>(DB.orders||[]).filter(o=>o.line==='orchid').flatMap(o=>o
 const BIN_CORE=[
   {name:'#1 Medium Green',kind:'green',note:'Turns into #1 Medium Dried'},
   {name:'#1 Small Green',kind:'green',note:'Turns into Small Dried'},
-  {divider:true},
   {name:'XS Idaho Green',kind:'green',note:'Purchased'},
   {name:'PAC Fibre Large',kind:'green',note:'Turns into #2 Medium Dried'},
   {name:'PAC Fibre Medium',kind:'green',note:'Turns into “#2 Small Dried Toted” immediately'},
@@ -1418,6 +1420,8 @@ const BIN_CORE=[
   {name:'Small Dried',kind:'dried',note:''},
   {name:'#2 Medium Dried',kind:'dried',note:''},
   {name:'#1 Medium Dried',kind:'dried',note:''},
+  {name:'Jumbo Orchid',kind:'material',note:''},
+  {name:'NW Bark',kind:'material',note:''},
 ];
 /* Bins the manager adds (Inventory → + Add bin). Stored in SETTINGS.orc.extraBins.
    New green bins go after the last green bin, new dried bins at the end. Only added bins can be deleted;
@@ -1427,7 +1431,8 @@ function binMap(){
   const ex=extraBins().map(b=>({...b,added:true}));
   const firstDried=BIN_CORE.findIndex(c=>c.kind==='dried');
   const N=SETTINGS.orc.binNotes||{};
-  return [...BIN_CORE.slice(0,firstDried),...ex.filter(b=>b.kind==='green'),...BIN_CORE.slice(firstDried),...ex.filter(b=>b.kind==='dried')]
+  const core=k=>BIN_CORE.filter(c=>c.kind===k);
+  return [...core('green'),...ex.filter(b=>b.kind==='green'),...core('dried'),...ex.filter(b=>b.kind==='dried'),...core('material')]
     .map(c=>c.divider||N[c.name]===undefined?c:{...c,note:N[c.name]});
 }
 /* bin notes are typed straight into the bin map, like a spreadsheet cell */
@@ -1488,14 +1493,17 @@ function renderOrcInventory(){
   const cols=binMap();
   const val=(q,u)=>`<span class="num ${q<0?'neg':''}">${fmtN(q,2)}<small>${u}</small></span>`;
   const two=(q,o,u)=>{const af=q-(o||0);return `<span class="bm-two">${val(q,u)}<span class="bm-after"><span class="num ${af<-1e-9?'neg':''}">${fmtN(af,2)}<small>${u}</small></span><span class="bm-lab">after sales</span></span></span>`};
-  $('#gridWrap').innerHTML=orcActiveOrders()+`<div class="binmap-wrap"><table class="binmap">
+  const W6=Math.max(6,binMap().filter(c=>c.kind==='green').length);
+  const tbl=cols=>`<div class="binmap-wrap"><table class="binmap" style="min-width:0;width:${Math.min(100,cols.length/W6*100)}%">
     <thead><tr>${cols.map(c=>c.divider?'<th class="div" aria-hidden="true"></th>':`<th class="bh ${c.kind} ${c.added?'added':''}"><button data-otile="obins" data-key="${esc('O:'+c.name)}">${esc(c.name.toUpperCase())}</button>${c.added?`<button class="bm-del" data-delbin="${esc(c.name)}" title="Delete this bin" aria-label="Delete ${esc(c.name)}">✕</button>`:''}</th>`).join('')}</tr></thead>
     <tbody>
       <tr class="onhand">${cols.map(c=>{if(c.divider)return '<td class="div"></td>';const k='O:'+c.name,q=h[k]||0,cn=DB.counts[k],o=oo[k];
         return `<td><button data-otile="obins" data-key="${esc(k)}">${two(show(q),show(o||0),uLbl)}</button></td>`}).join('')}</tr>
       <tr class="note">${cols.map(c=>c.divider?'<td class="div"></td>':`<td class="bm-note" contenteditable="plaintext-only" spellcheck="false" data-binnote="${esc(c.name)}" aria-label="Note for ${esc(c.name)}">${esc(c.note||'')}</td>`).join('')}</tr>
-    </tbody></table></div>
-    <div class="binmap-wrap"><table class="binmap bagmap">
+    </tbody></table></div>`;
+  const of=k=>cols.filter(c=>c.kind===k);
+  $('#gridWrap').innerHTML=orcActiveOrders()+`<div class="inv-block">${tbl(of('green'))}${tbl(of('dried'))}</div><hr class="inv-div"><div class="inv-block">${tbl(of('material'))}</div><hr class="inv-div">
+    <div class="binmap-wrap"><table class="binmap bagmap" style="min-width:0;width:min(100%,calc(${bagMap().length/W6*100}% + 96px))">
       <thead><tr>${bagMap().map(([k,n,,added])=>`<th class="bh bagged ${added?'added':''}"><button data-otile="obagged" data-key="${esc('O:'+k)}">${esc(n)}</button>${added?`<button class="bm-del" data-delbin="${esc(k)}" title="Delete" aria-label="Delete ${esc(k)}">✕</button>`:''}</th>`).join('')}<th class="bm-addcol"><button class="btn" data-addbag aria-label="Add a bagged or tote product">Add +</button></th></tr></thead>
       <tbody><tr class="onhand">${bagMap().map(([k,,u])=>{const q=h['O:'+k]||0;return `<td><button data-otile="obagged" data-key="${esc('O:'+k)}">${two(q,oo['O:'+k],u)}</button></td>`}).join('')}<td class="bm-addcol"></td></tr></tbody>
     </table></div>`;
