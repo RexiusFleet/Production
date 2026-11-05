@@ -221,7 +221,7 @@ function render(){
       if(SHEET.questions.includes('orders'))h+=q('orders','Orders filled',`<input type="text" data-k="orders" value="${esc(F.orders)}" autocomplete="off">`);
     }
     if(j==='sock'||j==='bag')h+=q('photos','Photos',`<div class="ph-grid">${F.photos.map((p,i)=>`<div class="ph"><img src="${p.url}" alt="Photo ${i+1}"><button type="button" class="ph-x" data-rmphoto="${i}" aria-label="Remove photo ${i+1}">✕</button></div>`).join('')}
-      ${F.photos.length<12?`<label class="ph-add">Add photos +<input type="file" accept="image/*" multiple id="phInput" hidden></label>`:''}</div>`);
+      ${F.photos.length<12?`<label class="ph-add">Take photo<input type="file" accept="image/*" capture="environment" class="phInput" hidden></label><label class="ph-add">Camera roll<input type="file" accept="image/*" multiple class="phInput" hidden></label>`:''}</div>${PH_ERR?`<div class="err">${esc(PH_ERR)}</div>`:''}`);
     if(SHEET.questions.includes('notes'))h+=q('notes','Notes',`<textarea data-k="notes">${esc(F.notes)}</textarea>`);
     h+=`<div class="formerr" id="formerr">${Object.keys(errors).length?'Fix the highlighted questions above.':''}</div>
     <button type="button" class="submit" id="submit">Submit</button>`;
@@ -242,9 +242,11 @@ function clearErr(path){const k=errFor[path.split('.')[0]];if(k&&errors[k]){dele
 
 $('#app').addEventListener('input',e=>{const k=e.target.dataset.k;if(!k)return;
   const v=e.target.type==='number'?(e.target.value===''?'':+e.target.value):e.target.value;setPath(k,v);clearErr(k);if(k.endsWith('.blend'))render();else if(/^wash/.test(k))updYards()});
-$('#app').addEventListener('change',async e=>{if(e.target.id!=='phInput')return;
-  const files=[...e.target.files].slice(0,12-F.photos.length);e.target.value='';
-  for(const f of files){const p=await shrink(f);if(p)F.photos.push(p)}render()});
+let PH_ERR='';
+$('#app').addEventListener('change',async e=>{if(!e.target.classList.contains('phInput'))return;
+  const files=[...e.target.files].slice(0,12-F.photos.length);e.target.value='';let bad=0;
+  for(const f of files){const p=await shrink(f);if(p)F.photos.push(p);else bad++}
+  PH_ERR=bad?`${bad} photo${bad===1?'':'s'} couldn’t be opened`:'';render()});
 $('#app').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
   if(b.dataset.inc||b.dataset.dec){const k=b.dataset.inc||b.dataset.dec,st=+b.dataset.step;const cur=+getPath(k)||0;
@@ -253,7 +255,7 @@ $('#app').addEventListener('click',e=>{
   if(b.dataset.chip){const g=b.dataset.chip,v=b.dataset.v;
     if(g==='crew'){const i=F.crew.indexOf(v);i<0?F.crew.push(v):F.crew.splice(i,1);b.setAttribute('aria-pressed',i<0);clearErr('crew');return}
     F[g]=v;clearErr(g);render();return}
-  if(b.dataset.rmphoto!=null){const p=F.photos.splice(+b.dataset.rmphoto,1)[0];if(p)URL.revokeObjectURL(p.url);render();return}
+  if(b.dataset.rmphoto!=null){PH_ERR='';const p=F.photos.splice(+b.dataset.rmphoto,1)[0];if(p)URL.revokeObjectURL(p.url);render();return}
   if(b.id==='retryPhotos'){sendPhotos();return}
   if(b.id==='addWashCustom'){F.washCustom.push({name:'',totes:'',size:defSize(null)});render();const ins=document.querySelectorAll('[data-k$=".name"]');ins[ins.length-1]?.focus();return}
   if(b.dataset.rmwash!=null){F.washCustom.splice(+b.dataset.rmwash,1);render();return}
