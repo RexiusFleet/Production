@@ -132,6 +132,7 @@ main{padding:20px 20px 60px;display:grid;gap:20px}
 .cal-l.c-dry b{color:#C4761E}.cal-l.c-pick b{color:#4E8F3A}.cal-l.c-bag b{color:#5E8F4A}
 .cal-o{font-size:.7rem;border-radius:4px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:color-mix(in srgb,#E3A94B 22%,transparent)}
 .cal-o.ship{background:var(--accent-soft)}
+.cal-plan{font-size:.72rem;font-weight:600;background:color-mix(in srgb,var(--accent) 16%,transparent);border-left:3px solid var(--accent);border-radius:3px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cal-note{font-size:.7rem;font-style:italic;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cal-off{font:600 .62rem/1 var(--f-mono);text-transform:uppercase;color:var(--muted);margin-left:6px}
 .sect{font:600 .78rem var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-top:4px}
@@ -182,7 +183,7 @@ main{padding:20px 20px 60px;display:grid;gap:20px}
   main{padding:14px 12px 50px}
   .toolbar input[type=search]{flex:1 1 140px;width:auto;min-width:0}
   .cal{padding:12px 10px}.cal-h h3{min-width:0;font-size:1rem}.cal-w span{padding:0 2px;font-size:.62rem}
-  .cal-d{min-height:54px}.cal-l,.cal-o,.cal-note{display:none}.cal-d.has::after{content:'';width:6px;height:6px;border-radius:99px;background:var(--accent);margin-top:2px}
+  .cal-d{min-height:54px}.cal-l,.cal-o,.cal-note,.cal-plan{display:none}.cal-d.has::after{content:'';width:6px;height:6px;border-radius:99px;background:var(--accent);margin-top:2px}
   .scrim{padding:8px 6px}.modal-b{padding:12px}.modal-b>table{display:block;overflow-x:auto;max-width:100%}.modal-h,.modal-f{padding-left:12px;padding-right:12px}
 }
 @media (max-width:520px){.in-form{grid-template-columns:1fr}}
@@ -317,12 +318,13 @@ function renderCal(){
     if(x.dryer.length)L.push(['dry',`Dryer`,`${fmtN(x.dryer.reduce((a,r)=>a+r.yin,0),1)} → ${fmtN(x.dryer.reduce((a,r)=>a+r.yout,0),1)} yd`]);
     if(x.picker.length)L.push(['pick','Picker',`${fmtN(x.picker.reduce((a,r)=>a+r.units,0),1)} units`]);
     if(x.bagging.length)L.push(['bag','Bagging',`${fmtN(x.bagging.reduce((a,r)=>a+r.pallets,0),0)} pallets`]);
-    const has=L.length||x.placed.length||x.shipping.length;
+    const has=L.length||x.placed.length||x.shipping.length||x.notes.some(n=>n.note);
     const off=x.notes.filter(n=>n.off).map(n=>({dryer:'Dryer',pick:'Picker',bag:'Bagging'})[n.kind]);
     cells+=`<button type="button" class="cal-d ${inM?'':'out'} ${we?'we':''} ${ds===t?'today':''} ${has?'has':''}" data-day="${ds}" aria-label="${d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}">
       <span class="cal-n">${d.getDate()}${off.length&&!L.length?'<span class="cal-off">Off</span>':''}</span>
       ${L.map(([c,a,b])=>`<span class="cal-l c-${c}"><b>${a}</b> ${esc(b)}</span>`).join('')}
-      ${x.notes.filter(n=>n.note).map(n=>`<span class="cal-note">${esc(n.note)}</span>`).join('')}
+      ${x.notes.filter(n=>n.note&&n.kind==='orc').map(n=>`<span class="cal-plan">${esc(n.note)}</span>`).join('')}
+      ${x.notes.filter(n=>n.note&&n.kind!=='orc').map(n=>`<span class="cal-note">${esc(n.note)}</span>`).join('')}
       ${x.shipping.map(o=>`<span class="cal-o ship">Ships · ${esc(o.customer)}</span>`).join('')}
       ${x.placed.map(o=>`<span class="cal-o">Order · ${esc(o.customer)}</span>`).join('')}
     </button>`}
@@ -333,14 +335,16 @@ function renderCal(){
 function openDay(ds){
   const x=dayData(ds),t=(head,rows)=>`<table class="grid"><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
   const sec=(title,body)=>`<div class="sect">${title}</div>${body}`;
-  const KN={dryer:'Dryer',pick:'Picker',bag:'Bagging'};
+  const KN={orc:'Plan',dryer:'Dryer',pick:'Picker',bag:'Bagging'};
   let b='';
   if(x.dryer.length)b+=sec('Dryer',t(['Product','In','Out','Went to'],x.dryer.map(r=>`<tr><td>${esc(r.product)}</td><td class="num">${fmtN(r.yin,1)} yd</td><td class="num">${fmtN(r.yout,1)} yd</td><td>${esc(r.dest==='bin'?r.bin:'Totes'+(r.totes?' · '+fmtN(r.totes,2):''))}</td></tr>`)));
   if(x.picker.length)b+=sec('Picker',t(['Material','Units','Yards','Small (est.)','Medium (est.)'],x.picker.map(r=>`<tr><td>${esc(r.material)}</td><td class="num">${fmtN(r.units,1)}</td><td class="num">${fmtN(r.yards,1)}</td><td class="num">${fmtN(r.small,1)}</td><td class="num">${fmtN(r.medium,1)}</td></tr>`)));
   if(x.bagging.length)b+=sec('Bagging',t(['Bagged from','Yards','Pallets'],x.bagging.map(r=>`<tr><td>${esc(r.from)}</td><td class="num">${fmtN(r.yards,1)}</td><td class="num">${fmtN(r.pallets,0)}</td></tr>`)));
   if(x.shipping.length)b+=sec('Shipping',t(['Customer','Products','Carrier','Status'],x.shipping.map(o=>`<tr data-order="${esc(o.id)}"><td>${esc(o.customer)}</td><td>${esc(summary(o))}</td><td>${esc(o.carrier)}</td><td>${statusTag(o)}</td></tr>`)));
   if(x.placed.length)b+=sec('Orders placed',t(['Customer','Products','Status'],x.placed.map(o=>`<tr data-order="${esc(o.id)}"><td>${esc(o.customer)}</td><td>${esc(summary(o))}</td><td>${statusTag(o)}</td></tr>`)));
-  if(x.notes.length)b+=sec('Notes',`<div class="ro"><dl>${x.notes.map(n=>`<dt>${KN[n.kind]||''}</dt><dd>${n.off?'Off':''}${n.off&&n.note?' · ':''}${esc(n.note||'')}</dd>`).join('')}</dl></div>`);
+  const plan=x.notes.find(n=>n.kind==='orc'&&n.note);if(plan)b=sec('Plan',`<div class="ro">${esc(plan.note)}</div>`)+b;
+  const others=x.notes.filter(n=>n.kind!=='orc');
+  if(others.length)b+=sec('Notes',`<div class="ro"><dl>${others.map(n=>`<dt>${KN[n.kind]||''}</dt><dd>${n.off?'Off':''}${n.off&&n.note?' · ':''}${esc(n.note||'')}</dd>`).join('')}</dl></div>`);
   modal(new Date(ds+'T12:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}),b||'<div class="muted">No entries.</div>','<button class="btn" data-close>Close</button>','wide');
 }
 
