@@ -455,12 +455,10 @@ table.grid.me{width:100%}
 .field>span{font:500 .72rem/1.2 var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .field.full{grid-column:1/-1}
 .chk{display:flex;flex-wrap:wrap;gap:6px}
-.sl-list{display:grid;border:1px solid var(--line);border-radius:8px;max-height:220px;overflow:auto}
-.sl-row{display:flex;align-items:center;gap:4px;padding:2px 6px;border-top:1px solid var(--line)}
-.sl-row:first-child{border-top:0}
-.sl-row label{flex:1;display:flex;gap:8px;align-items:center;padding:6px 0;cursor:pointer}
-.sl-row .btn.icon{width:30px;height:30px}
-.sheet-ed{grid-template-columns:1fr}
+.sheet-modal{width:min(640px,100%)}
+.sheet-modal a.btn{text-decoration:none;color:inherit}
+.sheet-modal .modal-b{padding:0;display:block}
+.sheet-frame{display:block;width:100%;height:min(720px,calc(100vh - 190px));border:0;background:var(--bg)}
 .chk label{display:flex;gap:6px;align-items:center;border:1px solid var(--line-strong);border-radius:99px;padding:4px 10px;font-size:.88rem;cursor:pointer}
 .chk input:checked+span{font-weight:600}
 .sect{font:600 .95rem var(--f-display);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-top:1px solid var(--line);padding-top:12px}
@@ -2395,49 +2393,32 @@ function renderSettings(){
   </div>`;
   ['char','dryer'].forEach(k=>{const el=$('#qr-'+k);if(window.QRCode){new QRCode(el,{text:formUrl(k),width:150,height:150,correctLevel:QRCode.CorrectLevel.M})}else el.innerHTML='<div class="muted" style="font-size:.8rem;padding:20px">QR code didn’t load</div>'});
 }
-/* Customize sheet: what each crew sheet shows. Saved to settings sheet_char / sheet_dryer; the sheets read it through form_options. */
+/* Customize sheet: a window onto the real crew sheet (?edit view). The manager hides, orders and adds right on the sheet;
+   Save stores the layout in settings sheet_char / sheet_dryer, which the open sheets read through form_options.
+   Added blends, sock sizes, products and bins are real catalog entries and save straight away. */
 function openSheetEditor(k){
-  const L=JSON.parse(JSON.stringify(SETTINGS.sheets[k])),char=k==='char';
-  const ordered=(all,order)=>{const o=(order||[]).map(String);const at=x=>{const i=o.indexOf(String(x));return i<0?1e6+all.indexOf(x):i};return [...all].sort((a,b)=>at(a)-at(b))};
-  const lists=char?{blends:{all:()=>[...BLENDS],hid:'hiddenBlends',ord:'blendOrder'},socks:{all:()=>[...SOCK_SIZES],hid:'hiddenSocks',fmt:x=>x+' ft'}}
-    :{products:{all:()=>(Live.bins||[]).filter(b=>b.active&&b.dryer_input).map(b=>b.name),hid:'hiddenProducts',ord:'productOrder'},
-      bins:{all:()=>(Live.bins||[]).filter(b=>b.active&&b.kind==='dried').map(b=>b.name),hid:'hiddenBins',ord:'binOrder'}};
-  Object.values(lists).forEach(x=>{L[x.hid]=L[x.hid]||[];if(x.ord)L[x.ord]=ordered(x.all(),L[x.ord]).map(String)});
-  const list=(key,label)=>{const x=lists[key],items=x.ord?ordered(x.all(),L[x.ord]):x.all();
-    return `<div class="field full"><span>${label}</span><div class="sl-list">${items.map((v,i)=>`<div class="sl-row">
-      <label><input type="checkbox" data-sl="${key}" value="${esc(v)}" ${L[x.hid].map(String).includes(String(v))?'':'checked'}><span>${esc(x.fmt?x.fmt(v):v)}</span></label>
-      ${x.ord?`<button class="btn ghost icon" data-slmove="${key}" data-i="${i}" data-d="-1" aria-label="Move ${esc(v)} up" ${i?'':'disabled'}>↑</button><button class="btn ghost icon" data-slmove="${key}" data-i="${i}" data-d="1" aria-label="Move ${esc(v)} down" ${i<items.length-1?'':'disabled'}>↓</button>`:''}</div>`).join('')}</div></div>`};
-  const box=(group,v,label,on)=>`<label><input type="checkbox" data-sq="${group}" value="${v}" ${on?'checked':''}><span>${label}</span></label>`;
-  const Q=L.questions||(L.questions={});
-  const body=()=>`<div class="fields sheet-ed">
-      <label class="field full"><span>Title</span><input type="text" id="slTitle" maxlength="60" value="${esc(L.title||'')}"></label>
-      ${char?`<div class="field full"><span>Jobs</span><div class="chk">${['wash','sock','bag'].map(j=>box('jobs',j,j[0].toUpperCase()+j.slice(1),(L.jobs||[]).includes(j))).join('')}</div></div>
-        ${list('blends','Blends')}${list('socks','Sock sizes')}
-        <div class="field full"><span>Questions</span><div class="chk">${[['totes','Blank white totes used'],['pallets','Pallets wrapped'],['orders','Orders filled'],['customBlend','Custom blend'],['customSock','Custom sock size'],['notes','Notes']].map(([q,l])=>box('q',q,l,Q[q]!==false)).join('')}</div></div>`
-      :`${list('products','Products into the dryer')}${list('bins','Dried bins')}
-        <div class="field full"><span>Where did it go?</span><div class="chk">${['Totes','Bin'].map(d=>box('dest',d,d,(L.dest||[]).includes(d))).join('')}</div></div>
-        <div class="field full"><span>Questions</span><div class="chk">${box('q','notes','Notes',Q.notes!==false)}</div></div>`}
-    </div><div class="err" id="formErr"></div>`;
-  modal(`Customize ${FORM_NAME[k].toLowerCase()}`,body(),
-    `<a class="btn" href="${esc(formUrl(k))}" target="_blank" rel="noopener" style="margin-right:auto">Open sheet</a><button class="btn" data-close>Cancel</button><button class="btn primary" id="slSave">Save</button>`);
-  const root=$('#modalRoot');
-  const redraw=()=>{L.title=$('#slTitle').value;root.querySelector('.modal-b').innerHTML=body()};
-  root.onchange=e=>{const t=e.target;
-    if(t.dataset.sl){const x=lists[t.dataset.sl],v=String(t.value);L[x.hid]=L[x.hid].map(String).filter(h=>h!==v);if(!t.checked)L[x.hid].push(v)}
-    if(t.dataset.sq==='q')Q[t.value]=t.checked;
-    if(t.dataset.sq==='jobs'||t.dataset.sq==='dest'){const key=t.dataset.sq,all=key==='jobs'?['wash','sock','bag']:['Totes','Bin'];
-      const cur=new Set(L[key]||[]);t.checked?cur.add(t.value):cur.delete(t.value);L[key]=all.filter(x=>cur.has(x))}};
-  root.onclick=e=>{const m=e.target.closest('[data-slmove]');if(m){const x=lists[m.dataset.slmove],o=L[x.ord],i=+m.dataset.i,j=i+ +m.dataset.d;
-      if(j<0||j>=o.length)return;[o[i],o[j]]=[o[j],o[i]];redraw();root.querySelector(`[data-slmove="${m.dataset.slmove}"][data-i="${j}"][data-d="${m.dataset.d}"]`)?.focus();return}
-    if(e.target.id!=='slSave')return;
-    L.title=$('#slTitle').value.trim().replace(/\s+/g,' ');const err=t=>{$('#formErr').textContent=t};
-    if(!L.title)return err('Type a title.');
-    const shown=key=>lists[key].all().filter(v=>!L[lists[key].hid].map(String).includes(String(v))).length;
-    if(char){if(!(L.jobs||[]).length)return err('Pick at least one job.');if(!shown('blends'))return err('Show at least one blend.');
-      if((L.jobs||[]).includes('sock')&&!shown('socks')&&Q.customSock===false)return err('Show at least one sock size.')}
-    else{if(!shown('products'))return err('Show at least one product.');if(!(L.dest||[]).length)return err('Pick Totes, Bin or both.');
-      if(L.dest.includes('Bin')&&!shown('bins'))return err('Show at least one dried bin.')}
-    SETTINGS.sheets[k]=L;root.onchange=root.onclick=null;closeModal();saveSettings(`${L.title} saved`)};
+  window.SheetEdit={k,L:JSON.parse(JSON.stringify(SETTINGS.sheets[k])),check:null,
+    add(kind,raw){
+      const name=String(raw||'').trim().replace(/\s+/g,' ');
+      if(kind==='blend'||kind==='sock'){
+        const sec=INV_SECTIONS.find(x=>x.key===(kind==='blend'?'washed':'socks'));
+        const val=kind==='sock'?+name:name;
+        if(kind==='sock'?!(val>0):!val)return kind==='sock'?'Enter a size in feet.':'Type a name.';
+        const list=sec.list();if(list.some(v=>String(v).toLowerCase()===String(val).toLowerCase()))return 'That one is already on the list.';
+        list.push(val);if(kind==='sock')list.sort((x,y)=>x-y);delete HIDDEN()[sec.prefix+val];
+      }else{
+        if(!name)return 'Type a name.';
+        if([...allBinNames(),...bagMap().map(x=>x[0]),...ORC_SALE_PRODUCTS,...ORC_PICK].some(n=>n.toLowerCase()===name.toLowerCase()))return 'There’s already a bin or product with that name.';
+        extraBins().push({name,kind,note:''});
+      }
+      store.set('settings',SETTINGS);toast(`${kind==='sock'?name+' ft':name} added`);return '';
+    }};
+  modal(`Customize ${FORM_NAME[k].toLowerCase()}`,`<iframe class="sheet-frame" src="${FORM_PATH[k]}/?edit" title="${esc(FORM_NAME[k])}"></iframe>`,
+    `<a class="btn" href="${esc(formUrl(k))}" target="_blank" rel="noopener">Open sheet</a><span class="err" id="formErr" style="margin:0 auto 0 8px"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="slSave">Save</button>`);
+  $('#modalRoot .modal').classList.add('sheet-modal');
+  $('#slSave').onclick=()=>{const E=window.SheetEdit;if(!E||!E.check)return;
+    const e=E.check();if(e){$('#formErr').textContent=e;return}
+    E.L.title=String(E.L.title).trim();SETTINGS.sheets[k]=E.L;closeModal();render();saveSettings(`${E.L.title} saved`)};
 }
 function saveSettings(msg){store.set('settings',SETTINGS);if(msg)toast(msg)}
 $('#settingsSec').addEventListener('change',e=>{

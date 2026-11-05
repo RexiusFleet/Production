@@ -93,6 +93,20 @@ select{width:100%;background:var(--surface);border:1.5px solid var(--line-strong
 .summary div{display:flex;justify-content:space-between;gap:12px}
 .summary span:first-child{color:var(--muted)}
 .ghostbtn{background:var(--surface);border:1.5px solid var(--line-strong);border-radius:var(--r);min-height:54px;font-weight:600;cursor:pointer}
+/* edit view (opened from the dashboard's Customize sheet) */
+.edb{border:1px solid var(--line-strong);background:var(--surface);border-radius:6px;font:600 .72rem/1 var(--f-mono);text-transform:uppercase;letter-spacing:.04em;padding:0 9px;min-height:32px;cursor:pointer;color:var(--muted)}
+.edb.tog[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.edb:disabled{opacity:.3;cursor:default}
+.ed{display:flex;gap:4px;margin-left:auto;align-items:center}
+.off{opacity:.45}
+.edl{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.edjobs{margin-top:-2px}
+.edjobs .edb{min-height:30px}
+.edline{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.addrow{display:flex;gap:8px;align-items:center}
+.addrow input{flex:1;min-height:44px;background:var(--surface);border:1.5px solid var(--line-strong);border-radius:8px;padding:8px 12px}
+.adderr{color:var(--bad);font-size:.9rem;font-weight:500}
+h1[contenteditable]{outline:1px dashed rgba(255,255,255,.35);outline-offset:4px;border-radius:2px;cursor:text}
 </style>
 </head>
 <body>
@@ -131,13 +145,39 @@ async function loadSheet(){
   CAT.items=data.items||[];
   SHEET.blends=CAT.items.filter(i=>i.kind==='blend'&&!i.is_custom).map(i=>i.blend);
   SHEET.sockSizes=CAT.items.filter(i=>i.kind==='sock'&&!i.is_custom).map(i=>+(i.name.match(/[\d.]+/)||[0])[0]).filter(Boolean);
-  const L=data.sheet||{};
-  if(L.title&&String(L.title).trim())SHEET.title=String(L.title).trim();
-  const jobs=(L.jobs||[]).filter(j=>['wash','sock','bag'].includes(j));if(jobs.length)SHEET.jobs=jobs;
-  SHEET.blends=arrange(SHEET.blends,L.hiddenBlends,L.blendOrder);
-  SHEET.sockSizes=arrange(SHEET.sockSizes,L.hiddenSocks,[]);
-  Object.keys(SHEET.ask).forEach(k=>{if(L.questions&&L.questions[k]===false)SHEET.ask[k]=false});
+  FULL.blends=SHEET.blends;FULL.socks=SHEET.sockSizes;
+  LAY=EDIT?EDIT.L:(data.sheet||{});
+  applyLayout();
 }
+/* Edit view: the dashboard opens this page in its Customize sheet window with ?edit and hands over the layout it's editing.
+   Everything shows (hidden things dimmed) with Shown/Hidden, up/down and Add + controls. */
+const EDIT=(()=>{try{return new URLSearchParams(location.search).has('edit')&&window.parent!==window&&window.parent.SheetEdit&&window.parent.SheetEdit.k==='char'?window.parent.SheetEdit:null}catch(e){return null}})();
+const FULL={blends:[],socks:[]};let LAY={};
+const JOBS=['wash','sock','bag'],HK={blends:'hiddenBlends',socks:'hiddenSocks'};
+const off=(list,v)=>(LAY[HK[list]]||[]).map(String).includes(String(v));
+const qOn=k=>!(LAY.questions&&LAY.questions[k]===false);
+function applyLayout(){
+  const L=LAY;
+  SHEET.title=L.title&&String(L.title).trim()?String(L.title).trim():'Biochar production sheet';
+  const jobs=(L.jobs||[]).filter(j=>JOBS.includes(j));
+  SHEET.jobs=EDIT?JOBS.slice():jobs.length?jobs:JOBS.slice();
+  SHEET.blends=arrange(FULL.blends,EDIT?[]:L.hiddenBlends,L.blendOrder);
+  SHEET.sockSizes=arrange([...FULL.socks].sort((a,b)=>a-b),EDIT?[]:L.hiddenSocks,[]);
+  Object.keys(SHEET.ask).forEach(k=>SHEET.ask[k]=EDIT?true:qOn(k));
+}
+let ADDING='',ADDERR='';
+const ctl=(list,v,i,n)=>!EDIT?'':`<span class="ed">${list==='blends'?`<button type="button" class="edb" data-mv="${list}" data-i="${i}" data-d="-1" ${i?'':'disabled'} aria-label="Move ${esc(v)} up">↑</button><button type="button" class="edb" data-mv="${list}" data-i="${i}" data-d="1" ${i<n-1?'':'disabled'} aria-label="Move ${esc(v)} down">↓</button>`:''}<button type="button" class="edb tog" data-hide="${list}" data-v="${esc(v)}" aria-pressed="${!off(list,v)}">${off(list,v)?'Hidden':'Shown'}</button></span>`;
+const qtog=k=>!EDIT?'':`<button type="button" class="edb tog" data-q="${k}" aria-pressed="${qOn(k)}">${qOn(k)?'Shown':'Hidden'}</button>`;
+const addRow=(list,num)=>!EDIT?'':ADDING===list?`<div class="addrow"><input type="${num?'number':'text'}" id="addVal" ${num?'min="0.5" step="0.5" inputmode="decimal"':'maxlength="40"'} autocomplete="off" aria-label="${list==='blends'?'Blend name':'Size in feet'}"><button type="button" class="edb" id="addGo">Add</button><button type="button" class="edb" id="addX" aria-label="Cancel">✕</button></div>${ADDERR?`<div class="adderr">${esc(ADDERR)}</div>`:''}`
+  :`<button type="button" class="link" data-add="${list}">Add +</button>`;
+if(EDIT)EDIT.check=()=>{
+  const L=LAY,jobs=(L.jobs||[]).filter(j=>JOBS.includes(j));
+  if(!String(L.title||'').trim())return 'Type a title.';
+  if(!jobs.length)return 'Show at least one job.';
+  if(!FULL.blends.some(b=>!off('blends',b)))return 'Show at least one blend.';
+  if(jobs.includes('sock')&&!FULL.socks.some(z=>!off('socks',z))&&!qOn('customSock'))return 'Show at least one sock size.';
+  return '';
+};
 /* catalog lookups → item ids */
 const itemOf=(kind,blend)=>CAT.items.find(i=>i.kind===kind&&!i.is_custom&&i.blend===blend);
 const customOf=kind=>CAT.items.find(i=>i.kind===kind&&i.is_custom);
@@ -157,24 +197,25 @@ let F=fresh(), errors={};
 /* ---------- small builders ---------- */
 const stepper=(key,val,step=1,unit='',label='')=>`<div class="step"><button type="button" data-dec="${key}" data-step="${step}" aria-label="Less ${esc(label)}">−</button><input type="number" inputmode="decimal" min="0" step="${step}" data-k="${key}" value="${val??''}" aria-label="${esc(label)}" placeholder="0"><button type="button" data-inc="${key}" data-step="${step}" aria-label="More ${esc(label)}">+</button></div><span class="unit">${unit}</span>`;
 const chips=(group,opts,selected,multi)=>`<div class="chips" role="group">${opts.map(o=>`<button type="button" class="chip" data-chip="${group}" data-v="${esc(o)}" aria-pressed="${multi?selected.includes(o):selected===o}">${esc(o)}</button>`).join('')}</div>`;
-const q=(id,label,body,hint='')=>`<div class="q ${errors[id]?'bad':''}" id="q-${id}"><div class="lbl">${label}</div>${hint?`<div class="hint">${hint}</div>`:''}${body}${errors[id]?`<div class="err">${esc(errors[id])}</div>`:''}</div>`;
+const QK={totes:'totes',ship:'pallets',orders:'orders',notes:'notes'};
+const q=(id,label,body,hint='')=>`<div class="q ${errors[id]?'bad':''} ${EDIT&&QK[id]&&!qOn(QK[id])?'off':''}" id="q-${id}"><div class="lbl ${EDIT&&QK[id]?'edl':''}">${label}${EDIT&&QK[id]?qtog(QK[id]):''}</div>${hint?`<div class="hint">${hint}</div>`:''}${body}${errors[id]?`<div class="err">${esc(errors[id])}</div>`:''}</div>`;
 
 function render(){
-  $('#title').textContent=SHEET.title;document.title=SHEET.title;
+  if(!EDIT||document.activeElement!==$('#title'))$('#title').textContent=EDIT?(LAY.title??SHEET.title):SHEET.title;document.title=SHEET.title;
   const j=F.job;
   let h=`
   ${q('date','Production date',`<input type="date" data-k="date" value="${F.date}" max="${today()}">`)}
   ${q('crew','Who worked on it?',chips('crew',SHEET.crew,F.crew,true))}
   ${q('hours','How many hours did it take?',`<div class="row"><span></span><div style="display:flex;align-items:center;gap:8px">${stepper('hours',F.hours,.5,'h','hours')}</div></div>`)}
-  ${q('job','What did you do?',`<div class="jobs" style="grid-template-columns:repeat(${SHEET.jobs.length},1fr)">${SHEET.jobs.map(x=>`<button type="button" class="chip" data-chip="job" data-v="${x}" aria-pressed="${j===x}">${cap(x)}</button>`).join('')}</div>`)}`;
+  ${q('job','What did you do?',`<div class="jobs" style="grid-template-columns:repeat(${SHEET.jobs.length},1fr)">${SHEET.jobs.map(x=>`<button type="button" class="chip ${EDIT&&!(LAY.jobs||[]).includes(x)?'off':''}" data-chip="job" data-v="${x}" aria-pressed="${j===x}">${cap(x)}</button>`).join('')}</div>${EDIT?`<div class="jobs edjobs">${JOBS.map(x=>{const on=(LAY.jobs||[]).includes(x);return `<button type="button" class="edb tog" data-job="${x}" aria-pressed="${on}" aria-label="${cap(x)} ${on?'shown':'hidden'}">${on?'Shown':'Hidden'}</button>`}).join('')}</div>`:''}`)}`;
 
   if(j==='wash'){h+=`<div class="sect">Wash</div>
     ${q('raw','Raw biochar used',`<div class="row"><span class="name">Yards of unwashed used</span><div style="display:flex;align-items:center;gap:8px">${stepper('raw',F.raw,.5,'yd','raw yards')}</div></div>`)}
     ${!SHEET.ask.totes?'':q('totes','Blank white totes used',`<div class="row"><span class="name">Totes</span><div style="display:flex;align-items:center;gap:8px">${stepper('totes',F.totes,1,'','blank white totes')}</div></div>`)}
-    ${q('washOut','Washed char made',`<div class="rows">${SHEET.blends.map(b=>`<div class="row"><span class="name">${b}</span><div style="display:flex;align-items:center;gap:8px">${stepper('washOut.'+b,F.washOut[b],.5,'yd',b+' yards made')}</div></div>`).join('')}
+    ${q('washOut','Washed char made',`<div class="rows">${SHEET.blends.map((b,i,a)=>`<div class="row ${EDIT&&off('blends',b)?'off':''}"><span class="name">${esc(b)}</span>${ctl('blends',b,i,a.length)}<div style="display:flex;align-items:center;gap:8px">${stepper('washOut.'+b,F.washOut[b],.5,'yd',b+' yards made')}</div></div>`).join('')}${addRow('blends')}
       ${F.washCustom.map((c,i)=>`<div class="charrow"><div class="charhead"><input type="text" data-k="washCustom.${i}.name" value="${esc(c.name)}" placeholder="What did you make?" aria-label="Custom blend name" autocomplete="off"><button type="button" class="rm" data-rmwash="${i}" aria-label="Remove custom blend">✕</button></div>
         <div class="row"><span class="name">Yards made</span><div style="display:flex;align-items:center;gap:8px">${stepper(`washCustom.${i}.yd`,c.yd,.5,'yd','custom blend yards made')}</div></div></div>`).join('')}</div>
-      ${SHEET.ask.customBlend?'<button type="button" class="link" id="addWashCustom">+ Add a custom blend</button>':''}`)}`}
+      ${!SHEET.ask.customBlend?'':EDIT?`<div class="edline ${qOn('customBlend')?'':'off'}"><button type="button" class="link" id="addWashCustom">+ Add a custom blend</button>${qtog('customBlend')}</div>`:'<button type="button" class="link" id="addWashCustom">+ Add a custom blend</button>'}`)}`}
 
   if(j==='sock'||j==='bag'){
     const taken=i=>F.inputs.filter((x,k)=>k!==i).map(x=>x.blend);
@@ -188,9 +229,9 @@ function render(){
     ${F.inputs.length<8?'<button type="button" class="link" id="addInput">+ Add another char type</button>':''}`);
   }
 
-  if(j==='sock'){h+=q('socks','Socks made',`<div class="rows">${SHEET.sockSizes.map(s=>`<div class="row"><span class="name">${s} ft</span><div style="display:flex;align-items:center;gap:8px">${stepper('socks.'+s,F.socks[s],1,'',s+' foot socks')}</div></div>`).join('')}
+  if(j==='sock'){h+=q('socks','Socks made',`<div class="rows">${SHEET.sockSizes.map((s,i,a)=>`<div class="row ${EDIT&&off('socks',s)?'off':''}"><span class="name">${s} ft</span>${ctl('socks',s,i,a.length)}<div style="display:flex;align-items:center;gap:8px">${stepper('socks.'+s,F.socks[s],1,'',s+' foot socks')}</div></div>`).join('')}
       ${F.custom.map((c,i)=>`<div class="custom"><div class="pair"><span class="name">Custom</span>${stepper('custom.'+i+'.len',c.len,.5,'ft','custom length in feet')}<span>×</span>${stepper('custom.'+i+'.qty',c.qty,1,'','custom sock count')}</div><button type="button" class="rm" data-rmcustom="${i}" aria-label="Remove custom size">✕</button></div>`).join('')}</div>
-      ${SHEET.ask.customSock?'<button type="button" class="link" id="addCustom">+ Add a custom size</button>':''}`)}
+      ${addRow('socks',true)}${!SHEET.ask.customSock?'':EDIT?`<div class="edline ${qOn('customSock')?'':'off'}"><button type="button" class="link" id="addCustom">+ Add a custom size</button>${qtog('customSock')}</div>`:'<button type="button" class="link" id="addCustom">+ Add a custom size</button>'}`)}
 
   if(j){
     if(j==='sock'&&(SHEET.ask.pallets||SHEET.ask.orders)){
@@ -200,10 +241,31 @@ function render(){
       if(SHEET.ask.orders)h+=q('orders','Orders filled',`<input type="text" data-k="orders" value="${esc(F.orders)}" autocomplete="off">`);
     }
     if(SHEET.ask.notes)h+=q('notes','Notes',`<textarea data-k="notes">${esc(F.notes)}</textarea>`);
-    h+=`<div class="formerr" id="formerr">${Object.keys(errors).length?'Fix the highlighted questions above.':''}</div>
+    if(!EDIT)h+=`<div class="formerr" id="formerr">${Object.keys(errors).length?'Fix the highlighted questions above.':''}</div>
     <button type="button" class="submit" id="submit">Submit</button>`;
   }
   $('#app').innerHTML=h;
+  if(ADDING)$('#addVal')?.focus();
+}
+/* edit view controls */
+function editClick(b){
+  const L=LAY;
+  if(b.dataset.hide){const k=HK[b.dataset.hide],v=String(b.dataset.v);L[k]=(L[k]||[]).map(String).filter(x=>x!==v);if(b.getAttribute('aria-pressed')==='true')L[k].push(v);
+    if(b.dataset.hide==='socks')L[k]=L[k].map(Number);return true}
+  if(b.dataset.mv){const o=SHEET.blends.map(String),i=+b.dataset.i,j=i+ +b.dataset.d;if(j<0||j>=o.length)return true;[o[i],o[j]]=[o[j],o[i]];L.blendOrder=o;return true}
+  if(b.dataset.q){L.questions=L.questions||{};L.questions[b.dataset.q]=!qOn(b.dataset.q);return true}
+  if(b.dataset.job){const cur=new Set(L.jobs||[]);cur.has(b.dataset.job)?cur.delete(b.dataset.job):cur.add(b.dataset.job);L.jobs=JOBS.filter(x=>cur.has(x));return true}
+  if(b.dataset.add){ADDING=b.dataset.add;ADDERR='';return true}
+  if(b.id==='addX'){ADDING='';ADDERR='';return true}
+  if(b.id==='addGo'){addEntry();return true}
+  return false;
+}
+function addEntry(){
+  const raw=$('#addVal').value.trim();
+  const e=EDIT.add(ADDING==='blends'?'blend':'sock',raw);
+  if(e){ADDERR=e;render();return}
+  if(ADDING==='blends')FULL.blends.push(raw.replace(/\s+/g,' '));else FULL.socks.push(+raw);
+  ADDING='';ADDERR='';applyLayout();render();
 }
 
 /* ---------- state updates ---------- */
@@ -217,10 +279,12 @@ function getPath(path){const p=path.split('.');if(Array.isArray(F[p[0]]))return 
 const errFor={date:'date',crew:'crew',hours:'hours',job:'job',raw:'raw',washOut:'washOut',washCustom:'washOut',inputs:'inputs',socks:'socks',custom:'socks'};
 function clearErr(path){const k=errFor[path.split('.')[0]];if(k&&errors[k]){delete errors[k];const el=$('#q-'+k);if(el){el.classList.remove('bad');el.querySelector('.err')?.remove()}if(!Object.keys(errors).length&&$('#formerr'))$('#formerr').textContent=''}}
 
+$('#app').addEventListener('keydown',e=>{if(EDIT&&e.target.id==='addVal'){if(e.key==='Enter'){e.preventDefault();addEntry()}if(e.key==='Escape'){ADDING='';ADDERR='';render()}}});
 $('#app').addEventListener('input',e=>{const k=e.target.dataset.k;if(!k)return;
   const v=e.target.type==='number'?(e.target.value===''?'':+e.target.value):e.target.value;setPath(k,v);clearErr(k);if(k.endsWith('.blend'))render()});
 $('#app').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
+  if(EDIT&&editClick(b)){applyLayout();render();return}
   if(b.dataset.inc||b.dataset.dec){const k=b.dataset.inc||b.dataset.dec,st=+b.dataset.step;const cur=+getPath(k)||0;
     const nv=Math.max(0,Math.round((cur+(b.dataset.inc?st:-st))*100)/100);setPath(k,nv||'');
     const inp=b.parentElement.querySelector('input');inp.value=nv||'';clearErr(k);return}
@@ -294,7 +358,10 @@ async function submit(){
   </div>`;
   scrollTo(0,0);
 }
-loadSheet().then(()=>{F=fresh();render()}).catch(()=>{
+if(EDIT){const t=$('#title');t.contentEditable='plaintext-only';t.spellcheck=false;
+  t.addEventListener('input',()=>{LAY.title=t.textContent.replace(/\s+/g,' ').trim()});
+  t.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();t.blur()}})}
+loadSheet().then(()=>{F=fresh();if(EDIT)F.job=SHEET.jobs[0];render()}).catch(()=>{
   $('#app').innerHTML=`<div class="loading">Couldn’t load the sheet. Check your signal and reload the page.</div>`});
 </script>
 </body>
