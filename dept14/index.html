@@ -408,6 +408,31 @@ table.eom-t{width:100%;border-collapse:collapse;table-layout:fixed}
 .run-ph .ph-x{position:absolute;top:4px;right:4px;width:26px;height:26px;border:0;border-radius:99px;background:rgba(0,0,0,.6);color:#fff;cursor:pointer}
 .ao.ct{background:color-mix(in srgb,#E3A94B 10%,transparent)}
 .ct-t td{vertical-align:middle}
+.cal{padding:14px 18px 16px;border-bottom:1px solid var(--line);display:grid;gap:8px}
+.cal-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cal-h h3{margin:0 4px;min-width:150px;text-align:center;font-size:1.1rem;text-transform:uppercase;letter-spacing:.05em}
+.cal-stats{margin-left:auto;display:flex;gap:16px;flex-wrap:wrap;font-size:.85rem;color:var(--muted)}
+.cal-stats b{color:var(--ink);font-size:1rem}
+.cal-w,.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cal-w span{font:600 .72rem var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:0 6px}
+.cal-d{all:unset;box-sizing:border-box;cursor:pointer;min-height:92px;border:1px solid var(--line);border-radius:6px;padding:5px 7px;display:flex;flex-direction:column;gap:1px;background:var(--surface);font-size:.78rem;line-height:1.3;overflow:hidden;min-width:0}
+.cal-d:hover,.cal-d:focus-visible{border-color:var(--accent)}
+.cal-d.out{opacity:.4}
+.cal-d.we{background:var(--sunken)}
+.cal-d.miss{background:color-mix(in srgb,var(--bad) 16%,var(--surface));border-color:color-mix(in srgb,var(--bad) 55%,transparent)}
+.cal-d.today{box-shadow:inset 0 0 0 2px var(--accent)}
+.cal-n{font:700 .85rem/1.2 var(--f-mono);margin-bottom:2px}
+.cal-d.miss .cal-n{color:var(--bad)}
+.cal-l{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-l.c-wash{color:#2C8FA3}.cal-l.c-sock{color:#6A5BC2}.cal-l.c-bag{color:#C07A3A}
+.cal-l.c-h,.cal-l.c-g{color:var(--muted)}
+.cal-crew{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.72rem}
+.cal-o{margin-top:auto;font-size:.7rem;background:color-mix(in srgb,#E3A94B 22%,transparent);border-radius:4px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-o.done{opacity:.55}
+.cal-t tbody tr{cursor:pointer}
+.cal-t tbody tr:hover td{background:var(--accent-soft)}
+.cal-gr{display:flex;gap:12px;flex-wrap:wrap}
+@media (max-width:760px){.cal-d{min-height:54px}.cal-l,.cal-crew,.cal-o{display:none}.cal-d.has::after{content:'';width:6px;height:6px;border-radius:99px;background:var(--accent);margin-top:2px}}
 .t-two{display:grid;grid-template-columns:1fr 1fr;align-items:start}
 .t-after{display:grid;justify-items:end;text-align:right;border-left:1px solid color-mix(in srgb,var(--ink) 14%,transparent);padding-left:10px}
 .inv-tile .t-two .t-val{font-size:1.9rem;white-space:nowrap}
@@ -845,7 +870,7 @@ const tags=a=>(a||[]).map(t=>`<span class="pill">${esc(t)}</span>`).join('');
 const TABLES={
   biochar:{
     inventory:{label:'Inventory',view:'inventory',cols:[],groups:{},rows:()=>[]},
-    runs:{label:'Production log',rows:()=>DB.bio,addable:true,canVoid:true,
+    runs:{label:'Production log',rows:()=>DB.bio,addable:true,canVoid:true,pre:()=>calHTML('bio'),
       groups:{'':'None',job:'Job type',month:'Month',crew:'Crew'},
       cols:[
         {k:'date',l:'Date',t:'📅',get:r=>r.date,fmt:v=>fmtDate(v)},
@@ -869,7 +894,7 @@ const TABLES={
     monthend:{label:'Reports',report:true,cols:[],groups:{},rows:()=>[]},
   },
   orchid:{
-    dryer:{label:'Dryer log',rows:()=>DB.orc,addable:true,canVoid:true,
+    dryer:{label:'Dryer log',rows:()=>DB.orc,addable:true,canVoid:true,pre:()=>calHTML('dryer'),
       groups:{'':'None',product:'Product in',dest:'Destination',month:'Month',crew:'Crew'},
       cols:[
         {k:'date',l:'Date',t:'📅',get:r=>r.date,fmt:v=>fmtDate(v)},
@@ -884,7 +909,7 @@ const TABLES={
         {k:'crew',l:'Crew',t:'👥',get:r=>r.crew.join(', '),fmt:(v,r)=>tags(r.crew)},
         {k:'notes',l:'Notes',t:'¶',get:r=>r.notes},
       ]},
-    picker:{label:'Picker log',simple:true,rows:()=>DB.oin.filter(e=>e.type==='pick'),addable:true,addLabel:'+ Add',onAdd:()=>openInputForm(null,'pick'),
+    picker:{label:'Picker log',simple:true,rows:()=>DB.oin.filter(e=>e.type==='pick'),addable:true,addLabel:'+ Add',onAdd:()=>openInputForm(null,'pick'),pre:()=>calHTML('pick'),
       groups:{},
       cols:[
         {k:'date',l:'Date',get:r=>r.date,fmt:v=>fmtDate(v)},
@@ -898,7 +923,7 @@ const TABLES={
         {k:'hours',l:'Hours',num:1,get:r=>r.hours||'',sum:1},
         {k:'notes',l:'Notes',get:r=>r.notes||''},
       ]},
-    bagging:{label:'Bagging log',simple:true,rows:()=>DB.oin.filter(e=>e.type==='bag'),addable:true,addLabel:'+ Add',onAdd:()=>openInputForm(null,'bag'),
+    bagging:{label:'Bagging log',simple:true,rows:()=>DB.oin.filter(e=>e.type==='bag'),addable:true,addLabel:'+ Add',onAdd:()=>openInputForm(null,'bag'),pre:()=>calHTML('bag'),
       groups:{},
       cols:[
         {k:'date',l:'Date',get:r=>r.date,fmt:v=>fmtDate(v)},
@@ -2376,6 +2401,99 @@ function renderExport(){
 
 /* Dryer run editor: adds a run, or (clicking a row) edits every field of an existing one,
    like the biochar production sheet editor. Runs are voided, not deleted. */
+/* =============================================================
+   Calendars (above the Production, Dryer, Picker and Bagging logs).
+   A month grid like Google Calendar. Each day shows that day's totals,
+   hours and crew. A past weekday with nothing entered is red (from the
+   first entry in that log on). Click a day to see its entries, open one,
+   or add one for that day. Picker days can switch grate profile, and the
+   picker month shows its averages. Sales orders show on their order
+   date (display only; shipping dates come later).
+   ============================================================= */
+const CAL={bio:{line:'biochar',rows:()=>active(DB.bio)},dryer:{line:'orchid',rows:()=>active(DB.orc)},
+  pick:{line:'orchid',rows:()=>DB.oin.filter(e=>e.type==='pick')},bag:{line:'orchid',rows:()=>DB.oin.filter(e=>e.type==='bag')}};
+UI.cal=UI.cal||{};
+const calMonth=k=>UI.cal[k]||(UI.cal[k]=iso(TODAY).slice(0,7));
+const ymShift=(ym,n)=>{const [y,m]=ym.split('-').map(Number);const d=new Date(y,m-1+n,1,12);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`};
+const crewOf=rs=>[...new Set(rs.flatMap(r=>r.crew||[]))];
+function calDay(k,rs){
+  const hrs=rs.reduce((a,r)=>a+(+r.hours||0),0),L=[];
+  if(k==='bio'){const by=j=>rs.filter(r=>r.job===j);
+    const w=by('wash').reduce((a,r)=>a+linesSum(r,'out',l=>l.item.startsWith('CC1')),0),so=by('sock').reduce((a,r)=>a+sockQty(r),0),ba=by('bag').reduce((a,r)=>a+linesSum(r,'out',l=>l.item.startsWith('BAG')),0);
+    if(w)L.push(['wash',`Wash ${fmtN(w,1)} yd`]);if(so)L.push(['sock',`Sock ${fmtN(so,0)}`]);if(ba)L.push(['bag',`Bag ${fmtN(ba,0)}`]);
+    rs.filter(r=>!['wash','sock','bag'].includes(r.job)).forEach(r=>L.push(['',cap(r.job)]))}
+  else if(k==='dryer'){const i=rs.reduce((a,r)=>a+r.yardsIn,0),o=rs.reduce((a,r)=>a+r.yardsOut,0);L.push(['',`In ${fmtN(i,1)} yd`],['',`Out ${fmtN(o,1)} yd`])}
+  else if(k==='pick'){const u=rs.reduce((a,r)=>a+(+r.units||0),0),y=rs.reduce((a,r)=>a+inputCalc(r).yards,0);L.push(['',`${fmtN(u,1)} units`],['',`${fmtN(y,1)} yd`]);
+    const g=[...new Set(rs.map(r=>r.grate).filter(Boolean))];if(g.length)L.push(['g',g.map(x=>'P'+x).join(' / ')])}
+  else{const pa=rs.reduce((a,r)=>a+(+r.pallets||0),0),y=rs.reduce((a,r)=>a+(+r.yards||0),0);L.push(['',`${fmtN(pa,0)} pallets`],['',`${fmtN(y,1)} yd`])}
+  if(hrs)L.push(['h',`${fmtN(hrs,1)} hours`]);
+  return L;
+}
+function calHTML(k){
+  const C=CAL[k],ym=calMonth(k),[y,m]=ym.split('-').map(Number),rows=C.rows();
+  const by={};rows.forEach(r=>{(by[r.date]=by[r.date]||[]).push(r)});
+  const first=rows.reduce((a,r)=>!a||r.date<a?r.date:a,''),today=iso(TODAY);
+  const ords={};if(k==='bio'||k==='dryer')(DB.orders||[]).filter(o=>o.line===C.line).forEach(o=>{(ords[o.date]=ords[o.date]||[]).push(o)});
+  const start=new Date(y,m-1,1,12);start.setDate(1-start.getDay());
+  let cells='';
+  for(let i=0;i<42;i++){const d=new Date(start);d.setDate(start.getDate()+i);const ds=iso(d),inM=d.getMonth()===m-1;
+    if(i===35&&!inM)break;
+    const rs=by[ds]||[],we=d.getDay()===0||d.getDay()===6,miss=inM&&!rs.length&&!we&&ds<today&&first&&ds>=first;
+    const os=ords[ds]||[];
+    cells+=`<button type="button" class="cal-d ${inM?'':'out'} ${miss?'miss':''} ${we?'we':''} ${ds===today?'today':''} ${rs.length?'has':''}" data-calday="${ds}" aria-label="${d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}${rs.length?', '+rs.length+' entries':miss?', no entry':''}">
+      <span class="cal-n">${d.getDate()}</span>
+      ${rs.length?calDay(k,rs).map(([c,t])=>`<span class="cal-l ${c?'c-'+c:''}">${esc(t)}</span>`).join('')+(crewOf(rs).length?`<span class="cal-crew">${esc(crewOf(rs).join(', '))}</span>`:''):''}
+      ${os.map(o=>`<span class="cal-o ${o.done?'done':''}">${esc(o.line==='biochar'?(o.notes||'Order'):(o.customer||'Order'))}</span>`).join('')}
+    </button>`}
+  const mt=new Date(y,m-1,15).toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  return `<section class="cal" data-cal="${k}">
+    <div class="cal-h"><button type="button" class="btn icon" data-calnav="-1" aria-label="Previous month">‹</button><h3>${mt}</h3><button type="button" class="btn icon" data-calnav="1" aria-label="Next month">›</button>
+      <button type="button" class="btn" data-calnav="0">Today</button>${k==='pick'?pickMonthStats(rows,ym):''}</div>
+    <div class="cal-w">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(w=>`<span>${w}</span>`).join('')}</div>
+    <div class="cal-grid">${cells}</div></section>`;
+}
+/* picker month: totals, per-day averages, and the yards-weighted grate split */
+function pickMonthStats(rows,ym){
+  const rs=rows.filter(r=>r.date.startsWith(ym));if(!rs.length)return '';
+  const days=new Set(rs.map(r=>r.date)).size,u=rs.reduce((a,r)=>a+(+r.units||0),0);
+  const c=rs.map(inputCalc),y=c.reduce((a,x)=>a+x.yards,0),sm=c.reduce((a,x)=>a+x.small,0),md=c.reduce((a,x)=>a+x.medium,0),lo=c.reduce((a,x)=>a+x.lost,0);
+  const pc=v=>y?fmtN(v/y*100,1)+'%':'—';
+  return `<div class="cal-stats">
+    <span><b class="num">${days}</b> days</span><span><b class="num">${fmtN(u/days,1)}</b> units / day</span><span><b class="num">${fmtN(y/days,1)}</b> yd / day</span>
+    <span>Small <b class="num">${pc(sm)}</b></span><span>Medium <b class="num">${pc(md)}</b></span><span>Lost <b class="num">${pc(lo)}</b></span></div>`;
+}
+$('#gridWrap').addEventListener('click',e=>{
+  const nav=e.target.closest('[data-calnav]');
+  if(nav){const k=nav.closest('[data-cal]').dataset.cal,n=+nav.dataset.calnav;UI.cal[k]=n?ymShift(calMonth(k),n):iso(TODAY).slice(0,7);renderGrid();return}
+  const d=e.target.closest('[data-calday]');if(d)openCalDay(d.closest('[data-cal]').dataset.cal,d.dataset.calday);
+});
+/* a day: its entries (click to open), Add for that day, and on the picker the day's grate profile */
+function openCalDay(k,ds){
+  const rs=CAL[k].rows().filter(r=>r.date===ds);
+  const os=(k==='bio'||k==='dryer')?(DB.orders||[]).filter(o=>o.line===CAL[k].line&&o.date===ds):[];
+  const title=dOf(ds).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  const head={bio:['Job','Used','Made','Hours','Crew'],dryer:['Product','In','Out','Went to','Hours','Crew'],pick:['Material','Grates','Units','Yards','Hours'],bag:['Bagged from','Yards','Pallets','Hours']}[k];
+  const row=r=>({bio:()=>[jobPill(r.job),esc(summary(r,'in')),esc(summary(r,'out')),fmtN(r.hours,1),esc((r.crew||[]).join(', '))],
+    dryer:()=>[esc(r.product),fmtN(r.yardsIn,1),fmtN(r.yardsOut,1),esc(r.dest==='Bin'?r.bin:`Totes${r.totes?' · '+fmtN(r.totes,2):''}`),fmtN(r.hours,1),esc((r.crew||[]).join(', '))],
+    pick:()=>[esc(r.material),r.grate?`Profile ${r.grate}`:'',fmtN(r.units,1),fmtN(inputCalc(r).yards,1),fmtN(r.hours,1)],
+    bag:()=>[esc(r.material),fmtN(r.yards,1),fmtN(r.pallets,0),fmtN(r.hours,1)]}[k]());
+  let grates='';
+  if(k==='pick'&&rs.length){const mats=[...new Set(rs.map(r=>r.material))];
+    grates=`<div class="cal-gr">${mats.map(mt=>{const g=[...new Set(rs.filter(r=>r.material===mt).map(r=>r.grate||1))],P=SETTINGS.orc.profiles[mt]||[];
+      return `<label class="field"><span>${esc(mt)} grates</span><select data-daygrate="${esc(mt)}">${g.length>1?'<option value="">Mixed</option>':''}${P.map((p,i)=>`<option value="${i+1}" ${g.length===1&&g[0]===i+1?'selected':''}>Profile ${i+1} · ${p.small}/${p.medium}/${p.lost}</option>`).join('')}</select></label>`}).join('')}</div>`}
+  modal(title,`${grates}
+    ${rs.length?`<table class="grid cal-t"><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rs.map(r=>`<tr data-calrec="${esc(r.id)}">${row(r).map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`:'<div class="muted">No entries.</div>'}
+    ${os.length?`<div class="sect">Orders</div><table class="grid cal-t"><tbody>${os.map(o=>`<tr data-calord="${esc(o.id)}"><td>${esc(o.line==='biochar'?(o.notes||'Order'):o.customer)}</td><td>${esc(orderSummary(o))}</td><td>${o.done?'Completed':'Open'}</td></tr>`).join('')}</tbody></table>`:''}`,
+    `<button class="btn" data-close>Close</button><button class="btn primary" id="calAdd">Add +</button>`);
+  const m=$('#modalRoot');
+  m.querySelectorAll('[data-calrec]').forEach(tr=>tr.onclick=()=>{const r=rs.find(x=>x.id===tr.dataset.calrec);closeModal();
+    if(k==='bio')openRunEditor(r);else if(k==='dryer')openOrchidForm(r);else openInputForm(r)});
+  m.querySelectorAll('[data-calord]').forEach(tr=>tr.onclick=()=>{const o=os.find(x=>x.id===tr.dataset.calord);closeModal();openOrderForm(o)});
+  m.querySelectorAll('[data-daygrate]').forEach(sel=>sel.onchange=()=>{const mt=sel.dataset.daygrate,g=+sel.value;if(!g)return;const p=(SETTINGS.orc.profiles[mt]||[])[g-1];if(!p)return;
+    rs.filter(r=>r.material===mt).forEach(r=>{r.grate=g;r.pct={small:p.small,medium:p.medium,lost:p.lost}});saveDB();render();openCalDay(k,ds);toast(`${mt}: Profile ${g} on ${fmtDate(ds)}`)});
+  $('#calAdd').onclick=()=>{closeModal();if(k==='bio')openRunEditor(null);else if(k==='dryer')openOrchidForm(null);else openInputForm(null,k);
+    const f=$('#modalRoot [name=date]');if(f)f.value=ds};
+}
 function openOrchidForm(rec){
   const isNew=!rec;
   const d=isNew?{date:iso(TODAY),product:ORCHID_IN[0],yardsIn:'',yardsOut:'',hours:'',dest:'Totes',bin:'',totes:'',crew:[],notes:'',status:'active',voidReason:''}:{...rec,crew:[...(rec.crew||[])]};
