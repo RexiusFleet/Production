@@ -223,8 +223,12 @@ nav.subtabs .tab-action:hover{background:var(--sunken)}
 .bd-range{font-size:.88rem}
 .eom-tools{display:flex;gap:8px;align-items:center}
 .eom.bill{margin-top:16px}
-.cust-new{display:flex;gap:8px;margin-top:8px}
-.cust-new input{flex:1}
+.combo{position:relative}
+.combo input{width:100%}
+.combo-list{position:absolute;left:0;right:0;top:calc(100% + 2px);z-index:50;list-style:none;margin:0;padding:4px;background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;box-shadow:0 8px 24px rgb(0 0 0 / .25);max-height:260px;overflow:auto}
+.combo-list li{padding:7px 10px;border-radius:5px;cursor:pointer;font-size:.92rem}
+.combo-list li:hover,.combo-list li.on{background:var(--accent-soft)}
+.combo-list li.add{color:var(--accent);font-weight:600}
 .bill-t tr.bill-first td{border-top:2px solid var(--line-strong)}
 .bill-t tbody tr{cursor:default}
 @media (max-width:760px){.bd-grid{grid-template-columns:1fr}.bd-row{grid-template-columns:minmax(70px,110px) minmax(0,1fr) auto}.bd-pct{display:none}}
@@ -688,6 +692,39 @@ gratesInit();
 SETTINGS.toteSizes=SETTINGS.toteSizes||[{name:'1 yd',yd:1},{name:'2 yd',yd:2,blends:['Washed']}];
 /* biochar customers for the order dropdown; the manager adds more from the order window */
 SETTINGS.bioCustomers=SETTINGS.bioCustomers||['Biological Carbon','Stormwater Biochar'];
+SETTINGS.orcCustomers=SETTINGS.orcCustomers||[];
+const custList=L=>L==='biochar'?SETTINGS.bioCustomers:SETTINGS.orcCustomers;
+/* Type-ahead box: typing fills in the best match and lists matches; a new name gets "Add". */
+function combo(input,getList,onAdd){
+  const wrap=document.createElement('div');wrap.className='combo';input.parentNode.insertBefore(wrap,input);wrap.appendChild(input);
+  const ul=document.createElement('ul');ul.className='combo-list';ul.setAttribute('role','listbox');ul.hidden=true;wrap.appendChild(ul);
+  input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','both');input.setAttribute('aria-expanded','false');input.autocomplete='off';
+  let items=[],hi=-1;
+  const norm=x=>x.toLowerCase().replace(/\s+/g,' ').trim();
+  const close=()=>{ul.hidden=true;input.setAttribute('aria-expanded','false');hi=-1};
+  const pick=v=>{input.value=v;close();input.dispatchEvent(new Event('change',{bubbles:true}))};
+  const draw=(q)=>{const list=getList(),n=norm(q);
+    const starts=list.filter(x=>norm(x).startsWith(n)),has=list.filter(x=>!norm(x).startsWith(n)&&norm(x).includes(n));
+    items=(n?[...starts,...has]:list).slice(0,8).map(v=>({v}));
+    if(n&&!starts.length&&!list.some(x=>norm(x)===n))items.push({v:q.trim(),add:true});
+    ul.innerHTML=items.map((it,i)=>`<li role="option" data-i="${i}" class="${i===hi?'on':''} ${it.add?'add':''}">${it.add?`Add “${esc(it.v)}”`:esc(it.v)}</li>`).join('');
+    ul.hidden=!items.length;input.setAttribute('aria-expanded',String(!ul.hidden))};
+  input.addEventListener('input',e=>{hi=-1;const q=input.value;
+    if(e.inputType&&e.inputType.startsWith('insert')&&q){const m=getList().find(x=>norm(x).startsWith(norm(q)));
+      if(m&&m.length>q.length){input.value=m;input.setSelectionRange(q.length,m.length)}}
+    draw(q)});
+  input.addEventListener('focus',()=>draw(input.value));
+  input.addEventListener('blur',()=>setTimeout(()=>{if(document.activeElement!==input)close()},120));
+  input.addEventListener('keydown',e=>{
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(ul.hidden)draw(input.value);if(!items.length)return;
+      hi=Math.max(0,Math.min(items.length-1,hi+(e.key==='ArrowDown'?1:-1)));
+      ul.querySelectorAll('li').forEach((li,i)=>li.classList.toggle('on',i===hi));ul.children[hi]?.scrollIntoView({block:'nearest'});return}
+    if(e.key==='Enter'&&!ul.hidden){e.preventDefault();e.stopPropagation();const it=items[hi>=0?hi:0];if(!it)return;if(it.add){onAdd&&onAdd(it.v)}pick(it.v);return}
+    if(e.key==='Escape'&&!ul.hidden){e.stopPropagation();close()}
+  });
+  ul.addEventListener('mousedown',e=>{e.preventDefault();const li=e.target.closest('li');if(!li)return;const it=items[+li.dataset.i];if(it.add&&onAdd)onAdd(it.v);pick(it.v)});
+}
+
 SETTINGS.catalog=Object.assign({blends:CORE_BLENDS.slice(),bagTypes:['Basic','Washed','Peat'],sockSizes:CORE_SOCKS.slice(),materials:['Pallets','Blank white totes'],hidden:{}},SETTINGS.catalog||{});
 const BLENDS=SETTINGS.catalog.blends,SOCK_SIZES=SETTINGS.catalog.sockSizes,BAG_TYPES=SETTINGS.catalog.bagTypes; // bags have their own list (a subset of the blends that get bagged)
 const CORE_BAGS=['Basic','Washed','Peat'];
@@ -1702,9 +1739,7 @@ function openOrderForm(rec,line){
   modal(isNew?'Sales input':L==='biochar'?`Order · ${fmtDate(d.date)}`:`Order · ${d.customer||''}`,`
     ${isNew?`<div class="seg in-type" role="group" aria-label="Line">${[['biochar','Biochar'],['orchid','Orchid bark']].map(([k,l])=>`<button type="button" data-oline="${k}" aria-pressed="${L===k}">${l}</button>`).join('')}</div>`:''}
     <div class="in-form">
-      ${L==='biochar'?`<div class="field full"><span>Customer</span><select name="customer" aria-label="Customer"><option value="">Pick a customer</option>${[...new Set([...SETTINGS.bioCustomers,d.customer].filter(Boolean))].map(c=>`<option ${c===d.customer?'selected':''}>${esc(c)}</option>`).join('')}<option value="__new">Add customer +</option></select>
-        <div class="cust-new" id="custNew" hidden><input type="text" id="custNewName" maxlength="60" autocomplete="off" aria-label="New customer name"><button type="button" class="btn" id="custNewAdd">Add</button></div></div>`
-      :`<label class="field full"><span>Customer</span><input type="text" name="customer" list="custList" value="${esc(d.customer)}" autocomplete="off"><datalist id="custList">${customers.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label>`}
+      <label class="field full"><span>Customer</span><input type="text" name="customer" value="${esc(d.customer)}" maxlength="80"></label>
       <label class="field"><span>Order date</span><input type="date" name="date" value="${d.date}"></label>
       ${L==='orchid'?`<label class="field"><span>Sales order #</span><input type="text" name="so" value="${esc(d.so||'')}" autocomplete="off"></label>
       <label class="field"><span>PO</span><input type="text" name="po" value="${esc(d.po||'')}" autocomplete="off"></label>`:''}
@@ -1726,23 +1761,17 @@ function openOrderForm(rec,line){
     tb.querySelectorAll('tr[data-i]').forEach(tr=>{const l=d.lines[+tr.dataset.i];tr.querySelectorAll('[data-f]').forEach(el=>{l[el.dataset.f]=el.value})})};
   const redraw=()=>{tb.innerHTML=d.lines.map(lineRow).join('')};
   tb.addEventListener('change',e=>{if(e.target.dataset.f==='key'){grab();redraw()}});
-  /* biochar: "Add customer +" opens a name box; Add puts the name on the list (saved in Settings) and selects it */
-  const cs=L==='biochar'?val('customer'):null;
-  if(cs){let prev=cs.value;
-    cs.onchange=()=>{if(cs.value==='__new'){$('#custNew').hidden=false;$('#custNewName').focus();cs.value=prev}else{prev=cs.value;$('#custNew').hidden=true}};
-    const addC=()=>{const n=$('#custNewName').value.trim().replace(/\s+/g,' ');if(!n)return $('#custNewName').focus();
-      const have=SETTINGS.bioCustomers.find(c=>c.toLowerCase()===n.toLowerCase());
-      if(!have){SETTINGS.bioCustomers.push(n);saveSettings(`${n} added`)}
-      const name=have||n;if(![...cs.options].some(o=>o.value===name)){const o=new Option(name,name);cs.add(o,cs.options[cs.options.length-1])}
-      cs.value=name;prev=name;$('#custNewName').value='';$('#custNew').hidden=true};
-    $('#custNewAdd').onclick=addC;$('#custNewName').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();addC()}}}
+  /* customer: type-ahead from the line's list; a new name goes on the list */
+  const addCust=n=>{const list=custList(L),name=String(n).trim().replace(/\s+/g,' ');if(name&&!list.some(c=>c.toLowerCase()===name.toLowerCase())){list.push(name);list.sort((x,y)=>x.localeCompare(y));saveSettings(`${name} added to customers`)}};
+  combo(val('customer'),()=>custList(L),addCust);
   tb.addEventListener('click',e=>{const b=e.target.closest('[data-rmline]');if(b){grab();d.lines.splice(+b.dataset.rmline,1);redraw()}});
   $('#addLine').onclick=()=>{grab();d.lines.push({key:'',qty:'',load:''});redraw();tb.querySelector('tr:last-child select')?.focus()};
   const del=$('#delOrder');if(del)del.onclick=()=>{if(!confirm('Delete this order? If it was completed, its products go back into inventory. You can undo it with ⌘Z.'))return;
     DB.orders=DB.orders.filter(x=>x.id!==rec.id);saveDB();closeModal();render();toast('Order deleted')};
   $('#saveOrder').onclick=()=>{grab();const err=t=>{const e=$('#formErr');e.textContent=t;e.hidden=false};
     if(!d.date)return err('Pick the order date.');
-    if(!String(d.customer||'').trim())return err(L==='biochar'?'Pick a customer.':'Enter the customer.');
+    if(!String(d.customer||'').trim())return err('Enter the customer.');
+    {const n=String(d.customer).trim(),hit=custList(L).find(c=>c.toLowerCase()===n.toLowerCase());if(hit)d.customer=hit;else addCust(n)}
     const lines=d.lines.filter(l=>l.key||+l.qty);
     if(!lines.length)return err('Add at least one product.');
     if(lines.some(l=>!l.key))return err('Pick a product for each line.');
@@ -3195,6 +3224,7 @@ Live.load=async function(){
   if(S.orchid){SETTINGS.orc={...SETTINGS.orc,yardsPerUnit:+S.orchid.yards_per_unit,ratios:S.orchid.ratios,profiles:S.orchid.profiles,active:S.orchid.active,extraBins:[]};gratesInit()}
   if(Array.isArray(S.tote_sizes))SETTINGS.toteSizes=S.tote_sizes;
   if(Array.isArray(S.biochar_customers))SETTINGS.bioCustomers=S.biochar_customers;
+  if(Array.isArray(S.orchid_customers))SETTINGS.orcCustomers=S.orchid_customers;
   Live.photoRuns=new Set();
   try{for(let off=0;;off+=1000){const {data,error}=await sb.storage.from('dept14-photos').list('runs',{limit:1000,offset:off});if(error||!data)break;data.forEach(f=>Live.photoRuns.add(f.name));if(data.length<1000)break}}catch(e){}
   if(S.dashboard){const D=S.dashboard;if(D.siteUrl)SETTINGS.siteUrl=D.siteUrl;if(D.forms)SETTINGS.forms=D.forms;if(D.hidden)SETTINGS.catalog.hidden=D.hidden}
@@ -3224,7 +3254,7 @@ const COLS=['bio','orc','oin','orders','purch','adj','cal'];
 Live.snap=()=>{const o={};COLS.forEach(c=>{o[c]=new Map((DB[c]||[]).map(r=>[r.id,JSON.stringify(r)]))});o.counts=JSON.stringify(DB.counts||{});return o};
 Live.ssnap=()=>JSON.stringify({ratio:{wash:SETTINGS.ratio.wash,sock:SETTINGS.ratio.sock,bag:SETTINGS.ratio.bag},bonus:[SETTINGS.bonusPerYardIn,SETTINGS.bonusPerTote,SETTINGS.bonusYdPerTote],
   orc:{y:SETTINGS.orc.yardsPerUnit,r:SETTINGS.orc.ratios,p:SETTINGS.orc.profiles,a:SETTINGS.orc.active},binNotes:SETTINGS.orc.binNotes||{},crew:SETTINGS.crew,blends:[...BLENDS],bags:[...BAG_TYPES],socks:[...SOCK_SIZES],bins:SETTINGS.orc.extraBins||[],reports:SETTINGS.reports||[],
-  dash:{siteUrl:SETTINGS.siteUrl,forms:SETTINGS.forms,hidden:SETTINGS.catalog.hidden},totes:SETTINGS.toteSizes,bioCust:SETTINGS.bioCustomers});
+  dash:{siteUrl:SETTINGS.siteUrl,forms:SETTINGS.forms,hidden:SETTINGS.catalog.hidden},totes:SETTINGS.toteSizes,bioCust:SETTINGS.bioCustomers,orcCust:SETTINGS.orcCustomers});
 
 /* ---- dashboard record → table row ---- */
 const ROW={
@@ -3316,6 +3346,7 @@ Live.syncSettings=async function(){
   if(JSON.stringify(old.dash)!==JSON.stringify(cur.dash))await up('dashboard',cur.dash);
   if(JSON.stringify(old.totes)!==JSON.stringify(cur.totes))await up('tote_sizes',cur.totes);
   if(JSON.stringify(old.bioCust)!==JSON.stringify(cur.bioCust))await up('biochar_customers',cur.bioCust);
+  if(JSON.stringify(old.orcCust)!==JSON.stringify(cur.orcCust))await up('orchid_customers',cur.orcCust);
   /* crew */
   for(const c of SETTINGS.crew){if(!c.name)continue;
     const row={name:c.name,on_biochar_sheet:!!c.biochar,on_dryer_sheet:!!c.orchid,active:true};

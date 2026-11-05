@@ -165,6 +165,12 @@ main{padding:20px 20px 60px;display:grid;gap:20px}
 .ord-lines td:nth-child(2),.ord-lines th:nth-child(2){width:130px}
 .ord-lines td.ord-load,.ord-lines th:nth-child(3){width:110px}
 .ord-lines td:last-child{width:36px;padding-right:0}
+.combo{position:relative}
+.combo input{width:100%}
+.combo-list{position:absolute;left:0;right:0;top:calc(100% + 2px);z-index:50;list-style:none;margin:0;padding:4px;background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;box-shadow:0 8px 24px rgb(0 0 0 / .25);max-height:260px;overflow:auto}
+.combo-list li{padding:7px 10px;border-radius:5px;cursor:pointer;font-size:.92rem}
+.combo-list li:hover,.combo-list li.on{background:var(--accent-soft)}
+.combo-list li.add{color:var(--accent);font-weight:600}
 .in-err{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad);border-radius:6px;padding:8px 12px;font-weight:600}
 .ro{font-size:.92rem}
 .ro dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0}
@@ -241,7 +247,38 @@ const must=async p=>{const r=await p;if(r.error)throw r.error;return r.data};
 async function all(table,select='*',filter){const out=[];for(let f=0;;f+=1000){let q=sb.from(table).select(select).range(f,f+999);if(filter)q=filter(q);const d=await must(q);out.push(...d);if(d.length<1000)break}return out}
 
 /* ---------- data ---------- */
-const D={bins:[],onhand:{},orders:[],dryer:[],picker:[],bagging:[],cal:[],loadedAt:0};
+const D={bins:[],onhand:{},orders:[],dryer:[],picker:[],bagging:[],cal:[],customers:[],loadedAt:0};
+/* Type-ahead box: typing fills in the best match and lists matches; a new name gets "Add". */
+function combo(input,getList,onAdd){
+  const wrap=document.createElement('div');wrap.className='combo';input.parentNode.insertBefore(wrap,input);wrap.appendChild(input);
+  const ul=document.createElement('ul');ul.className='combo-list';ul.setAttribute('role','listbox');ul.hidden=true;wrap.appendChild(ul);
+  input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','both');input.setAttribute('aria-expanded','false');input.autocomplete='off';
+  let items=[],hi=-1;
+  const norm=x=>x.toLowerCase().replace(/\s+/g,' ').trim();
+  const close=()=>{ul.hidden=true;input.setAttribute('aria-expanded','false');hi=-1};
+  const pick=v=>{input.value=v;close();input.dispatchEvent(new Event('change',{bubbles:true}))};
+  const draw=(q)=>{const list=getList(),n=norm(q);
+    const starts=list.filter(x=>norm(x).startsWith(n)),has=list.filter(x=>!norm(x).startsWith(n)&&norm(x).includes(n));
+    items=(n?[...starts,...has]:list).slice(0,8).map(v=>({v}));
+    if(n&&!starts.length&&!list.some(x=>norm(x)===n))items.push({v:q.trim(),add:true});
+    ul.innerHTML=items.map((it,i)=>`<li role="option" data-i="${i}" class="${i===hi?'on':''} ${it.add?'add':''}">${it.add?`Add “${esc(it.v)}”`:esc(it.v)}</li>`).join('');
+    ul.hidden=!items.length;input.setAttribute('aria-expanded',String(!ul.hidden))};
+  input.addEventListener('input',e=>{hi=-1;const q=input.value;
+    if(e.inputType&&e.inputType.startsWith('insert')&&q){const m=getList().find(x=>norm(x).startsWith(norm(q)));
+      if(m&&m.length>q.length){input.value=m;input.setSelectionRange(q.length,m.length)}}
+    draw(q)});
+  input.addEventListener('focus',()=>draw(input.value));
+  input.addEventListener('blur',()=>setTimeout(()=>{if(document.activeElement!==input)close()},120));
+  input.addEventListener('keydown',e=>{
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(ul.hidden)draw(input.value);if(!items.length)return;
+      hi=Math.max(0,Math.min(items.length-1,hi+(e.key==='ArrowDown'?1:-1)));
+      ul.querySelectorAll('li').forEach((li,i)=>li.classList.toggle('on',i===hi));ul.children[hi]?.scrollIntoView({block:'nearest'});return}
+    if(e.key==='Enter'&&!ul.hidden){e.preventDefault();e.stopPropagation();const it=items[hi>=0?hi:0];if(!it)return;if(it.add){onAdd&&onAdd(it.v)}pick(it.v);return}
+    if(e.key==='Escape'&&!ul.hidden){e.stopPropagation();close()}
+  });
+  ul.addEventListener('mousedown',e=>{e.preventDefault();const li=e.target.closest('li');if(!li)return;const it=items[+li.dataset.i];if(it.add&&onAdd)onAdd(it.v);pick(it.v)});
+}
+
 const binName=id=>(D.bins.find(b=>b.id===id)||{}).name||'';
 const binOf=name=>D.bins.find(b=>b.name===name)||{};
 const unitOf=name=>({pallets:'pallets',totes:'totes'})[binOf(name).unit]||'yd';
@@ -259,6 +296,7 @@ async function load(){
   D.picker=picker.map(r=>({date:r.production_date,material:r.material,units:+r.units,yards:+r.yards,small:+r.small_green,medium:+r.medium_green,hours:+r.hours}));
   D.bagging=bagging.map(r=>({date:r.production_date,from:binName(r.from_bin_id),yards:+r.yards_used,pallets:+r.pallets,hours:+r.hours}));
   try{D.cal=await all('calendar_days')}catch(e){D.cal=[]}
+  try{const c=await must(sb.from('settings').select('value').eq('key','orchid_customers').maybeSingle());D.customers=Array.isArray(c&&c.value)?c.value:[]}catch(e){D.customers=[]}
   D.loadedAt=Date.now();
 }
 const shipped=o=>o.done||(o.shipDate&&o.shipDate<today());
@@ -361,7 +399,7 @@ function openOrder(o){
     <td>${d.lines.length>1?`<button type="button" class="btn icon" data-rm="${i}" aria-label="Remove line">✕</button>`:''}</td></tr>`;
   modal(isNew?'Sales input':`Order · ${o.customer}`,`
     <div class="in-form">
-      <label class="field full"><span>Customer</span><input type="text" name="customer" list="custList" value="${esc(d.customer)}" autocomplete="off"><datalist id="custList">${customers.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label>
+      <label class="field full"><span>Customer</span><input type="text" name="customer" value="${esc(d.customer)}" maxlength="80"></label>
       <label class="field"><span>Order date</span><input type="date" name="date" value="${d.date}"></label>
       <label class="field"><span>Sales order #</span><input type="text" name="so" value="${esc(d.so)}" autocomplete="off"></label>
       <label class="field"><span>PO</span><input type="text" name="po" value="${esc(d.po)}" autocomplete="off"></label>
@@ -377,6 +415,7 @@ function openOrder(o){
     <div class="in-err" id="formErr" role="alert" hidden></div>`,
     `${isNew?'':'<button class="btn danger" id="delOrder" style="margin-right:auto">Cancel order</button>'}<button class="btn" data-close>Close</button><button class="btn primary" id="saveOrder">${isNew?'Save':'Save changes'}</button>`);
   const m=$('#modalRoot'),tb=$('#ordLines'),v=n=>m.querySelector(`[name=${n}]`);
+  combo(v('customer'),()=>D.customers,()=>{});
   const grab=()=>{['date','customer','so','po','notes','carrier','shipDate','freight'].forEach(n=>d[n]=v(n).value);
     tb.querySelectorAll('tr[data-i]').forEach(tr=>{const l=d.lines[+tr.dataset.i];tr.querySelectorAll('[data-f]').forEach(el=>l[el.dataset.f]=el.value)})};
   const redraw=()=>{tb.innerHTML=d.lines.map(lineRow).join('')};
@@ -395,6 +434,9 @@ function openOrder(o){
     if(lines.some(l=>!(+l.qty>0)))return err('Enter a quantity for each line.');
     if(d.freight!==''&&!(+d.freight>=0))return err('Freight cost must be a number.');
     const btn=$('#saveOrder');btn.disabled=true;
+    {const n=String(d.customer).trim().replace(/\s+/g,' '),hit=D.customers.find(c=>c.toLowerCase()===n.toLowerCase());d.customer=hit||n;
+      if(!hit){try{const cur=await must(sb.from('settings').select('value').eq('key','orchid_customers').maybeSingle());const list=Array.isArray(cur&&cur.value)?cur.value:[];
+        if(!list.some(c=>c.toLowerCase()===n.toLowerCase())){list.push(n);list.sort((x,y)=>x.localeCompare(y));await must(sb.from('settings').upsert({key:'orchid_customers',value:list}))}D.customers=list}catch(e){}}}
     const id=isNew?crypto.randomUUID():o.id;
     const row={id,line:'orchid',order_date:d.date,customer:String(d.customer).trim(),sales_order_no:d.so.trim()||null,po:d.po.trim()||null,notes:d.notes.trim()||null,
       carrier:d.carrier.trim()||null,ship_date:d.shipDate||null,freight_cost:d.freight===''?null:+d.freight};
