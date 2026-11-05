@@ -145,6 +145,8 @@ main{padding:20px 20px 60px;max-width:1500px;margin:0 auto;display:grid;gap:20px
 .btn{background:var(--surface);border:1px solid var(--line-strong);border-radius:6px;padding:6px 11px;font-size:.88rem;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .btn:hover{border-color:var(--ink)}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 55%,var(--line-strong))}
+.btn.danger:hover{background:color-mix(in srgb,var(--bad) 10%,transparent)}
 .btn.ghost{background:transparent;border-color:transparent}
 .btn.ghost:hover{background:var(--sunken)}
 .btn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
@@ -196,6 +198,30 @@ table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width
 .inv-sec{display:grid;gap:12px;padding:18px 18px 20px 20px;border-top:1px solid var(--line);border-left:5px solid var(--acc);background:linear-gradient(90deg,color-mix(in srgb,var(--acc) 6%,transparent),transparent 40%)}
 .inv-sec:first-child{border-top:0}
 .subtabs{display:flex;gap:4px}
+.grid-wrap:has(.bd){max-height:none;overflow:visible}
+nav.subtabs .tab-action{margin-left:auto;align-self:center;text-transform:none;letter-spacing:0;font:600 .88rem/1 var(--f-body);color:var(--ink);background:var(--surface);border:1px solid var(--line-strong);border-radius:6px;padding:7px 12px;margin-bottom:6px}
+nav.subtabs .tab-action:hover{background:var(--sunken)}
+.bd-pick{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.bd-pick select,.bd-pick input[type=date]{height:32px}
+.bd-wk{min-width:150px;text-align:center;font-size:.88rem}
+.bd{display:grid;gap:4px}
+.bd-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:16px 18px 4px}
+.bd-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:grid;gap:10px;align-content:start;min-width:0}
+.bd-card h3{font-size:1.05rem;text-transform:uppercase;letter-spacing:.05em;margin:0}
+.bd-wide{grid-column:1/-1}
+.bd-bars{display:grid;gap:8px}
+.bd-row{display:grid;grid-template-columns:minmax(90px,170px) minmax(0,1fr) auto 44px;gap:10px;align-items:center;font-size:.9rem}
+.bd-lab{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bd-track{height:12px;background:var(--sunken);border-radius:99px;overflow:hidden}
+.bd-fill{display:block;height:100%;background:var(--s-one);border-radius:99px}
+.bd-val{text-align:right;white-space:nowrap;font-weight:600}.bd-val small{font-weight:400;color:var(--muted)}
+.bd-pct{text-align:right;color:var(--muted);font-size:.82rem}
+.bd-empty{color:var(--muted);font-size:.88rem}
+.bd-sub{font:600 1.05rem/1 var(--f-display);text-transform:uppercase;letter-spacing:.05em}
+.bd-chart{width:100%;height:auto;display:block}.bd-chart .gl{stroke:var(--line)}.bd-chart .ax{fill:var(--muted);font:11px var(--f-mono)}
+.bd-range{font-size:.88rem}
+.eom-tools{display:flex;gap:8px;align-items:center}
+@media (max-width:760px){.bd-grid{grid-template-columns:1fr}.bd-row{grid-template-columns:minmax(70px,110px) minmax(0,1fr) auto}.bd-pct{display:none}}
 .eom-wrap{padding:20px;display:flex;justify-content:center;background:var(--bg)}
 .eom{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:22px 24px;width:100%;max-width:960px;display:grid;gap:16px}
 .eom-wrap{overflow-x:auto}
@@ -317,6 +343,8 @@ table.eom-t{width:100%;border-collapse:collapse;table-layout:fixed}
 .binmap .bh button,.binmap .onhand button{all:unset;display:block;cursor:pointer;width:100%;box-sizing:border-box}
 .binmap .bh button{padding:9px 10px;font:700 .82rem/1.2 var(--f-mono);letter-spacing:.05em;color:#fff;text-align:center}
 .binmap .bh{position:relative}
+.binmap .bm-addcol{border:0;background:none;padding:0 0 0 10px;vertical-align:middle;width:1%}
+.binmap .bm-addcol .btn{white-space:nowrap}
 .binmap .bh .bm-del{position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:99px;border:0;background:rgba(0,0,0,.35);color:#fff;font-size:10px;line-height:18px;padding:0;cursor:pointer;opacity:.7}
 .binmap .bh .bm-del:hover{opacity:1;background:#C0392B}
 .binmap .bh.added button[data-otile]{padding-right:24px}
@@ -328,6 +356,9 @@ table.eom-t{width:100%;border-collapse:collapse;table-layout:fixed}
 .binmap .onhand .num{display:block;font:700 1.6rem/1.1 var(--f-display)}
 .binmap .onhand .num.neg{color:#C0392B}
 .binmap .onhand .num small{font:500 .78rem var(--f-body);color:var(--muted);margin-left:4px}
+.binmap td.bm-note{cursor:text;outline:none;white-space:normal;min-height:1.4em}
+.binmap td.bm-note:hover{box-shadow:inset 0 0 0 1px var(--line-strong)}
+.binmap td.bm-note:focus{box-shadow:inset 0 0 0 2px var(--accent);background:var(--surface);color:var(--ink);font-style:normal}
 .binmap .bm-meta{display:block;font-size:.72rem;color:var(--muted);margin-top:2px}
 .binmap .onhand button:hover{background:var(--accent-soft)}
 .binmap .note td{font-size:.75rem;color:var(--muted);text-align:left;font-style:italic}
@@ -507,8 +538,9 @@ const SETTINGS=Object.assign({ratio:{wash:.85,sock:.2,bag:.2},bonusPerYardIn:.5,
 });
 const CORE_BLENDS=['Basic','Washed','Peat','Zapt','Revd'],CORE_SOCKS=[3,6,10]; // top three, then the two custom blends; odd mixes are typed in as custom
 SETTINGS.orc=Object.assign({yardsPerUnit:7.5,ratios:{'Jumbo Orchid':{small:60,medium:30,lost:10},'#1 Medium Green':{small:75,medium:15,lost:10}}},SETTINGS.orc||{});
-SETTINGS.catalog=Object.assign({blends:CORE_BLENDS.slice(),sockSizes:CORE_SOCKS.slice(),materials:['Pallets','Blank white totes'],hidden:{}},SETTINGS.catalog||{});
-const BLENDS=SETTINGS.catalog.blends,SOCK_SIZES=SETTINGS.catalog.sockSizes,BAG_TYPES=BLENDS; // a bag is always the type of char it's filled with
+SETTINGS.catalog=Object.assign({blends:CORE_BLENDS.slice(),bagTypes:['Basic','Washed','Peat'],sockSizes:CORE_SOCKS.slice(),materials:['Pallets','Blank white totes'],hidden:{}},SETTINGS.catalog||{});
+const BLENDS=SETTINGS.catalog.blends,SOCK_SIZES=SETTINGS.catalog.sockSizes,BAG_TYPES=SETTINGS.catalog.bagTypes; // bags have their own list (a subset of the blends that get bagged)
+const CORE_BAGS=['Basic','Washed','Peat'];
 const crewFor=(line,keep=[])=>[...new Set([...SETTINGS.crew.filter(c=>c.name&&c[line]).map(c=>c.name),...keep])];
 
 /* ---------- demo data generator (deterministic) ---------- */
@@ -644,6 +676,7 @@ let CARDS=store.get('cards',DEFAULT_CARDS);
 
 /* ---------- cards ---------- */
 function rowsFor(line){return active(line==='biochar'?DB.bio:DB.orc)}
+const orcRows=job=>job==='picker'?DB.oin.filter(e=>e.type==='pick'):job==='bag'?DB.oin.filter(e=>e.type==='bag'):active(DB.orc);
 function weekly(line,metric,weeks=12){
   const out=[];const end=new Date(TODAY);
   for(let i=weeks-1;i>=0;i--){const b=new Date(end);b.setDate(b.getDate()-7*i);const a=new Date(b);a.setDate(a.getDate()-6);out.push(metric.calc(inRange(rowsFor(line),[iso(a),iso(b)])))}
@@ -670,6 +703,12 @@ const TOP_CARDS={
   bag:[{label:'Hours',unit:'h',calc:hoursOf,sub:'Bag hours',split:'bag'},
        {label:'Product in',unit:'yd',calc:sumIn(l=>l.item.startsWith('CC1')),sub:'Washed char · 14-14-CC1'},
        {label:'Product out',unit:'bags',calc:sumOut(l=>l.item.startsWith('BAG')),sub:'1.5cf bags · 07-86-15W'}],
+  opicker:[{label:'Hours',unit:'h',calc:rs=>rs.reduce((a,r)=>a+(+r.hours||0),0),sub:'Picker labor hours'},
+          {label:'Product in',unit:'yd',calc:rs=>rs.reduce((a,r)=>a+inputCalc(r).yards,0),sub:'Into the picker'},
+          {label:'Product out',unit:'yd',calc:rs=>rs.reduce((a,r)=>{const c=inputCalc(r);return a+c.small+c.medium},0),sub:'Small + medium green (est.)'}],
+  obag:[{label:'Hours',unit:'h',calc:rs=>rs.reduce((a,r)=>a+(+r.hours||0),0),sub:'Bagging hours'},
+        {label:'Product in',unit:'yd',calc:rs=>rs.reduce((a,r)=>a+(+r.yards||0),0),sub:'Dried yards bagged'},
+        {label:'Product out',unit:'pallets',calc:rs=>rs.reduce((a,r)=>a+(+r.pallets||0),0),sub:'Pallets bagged'}],
   orchid:[{label:'Hours',unit:'h',calc:hoursOf,sub:'Dryer hours'},
           {label:'Product in',unit:'yd',calc:rs=>rs.reduce((a,r)=>a+r.yardsIn,0),sub:'Yards into the dryer'},
           {label:'Product out',unit:'yd',calc:rs=>rs.reduce((a,r)=>a+r.yardsOut,0),sub:'Yards out of the dryer'}],
@@ -699,17 +738,18 @@ function weekSpark(vals){
 function renderCards(){
   const line=UI.line,all=store.get('topcards',{});
   const H=UI.top=UI.top||{};H[line]=H[line]||all[line]||{job:'wash',period:'week'};const S=H[line];
-  const job=line==='biochar'?S.job:'orchid';
-  const rs=rowsFor(line).filter(r=>line!=='biochar'||r.job===job);
+  if(line==='orchid'&&!['dryer','picker','bag'].includes(S.job))S.job='dryer';
+  const job=line==='biochar'?S.job:S.job==='dryer'?'orchid':'o'+S.job;
+  const rs=line==='biochar'?rowsFor(line).filter(r=>r.job===S.job):orcRows(S.job);
   const R=topRange(S);
   const fmtD=s=>dOf(s).toLocaleDateString('en-US',{month:'short',day:'numeric'});
   $('#hlTitle').textContent=line==='biochar'?'Biochar':'Orchid bark';
   $('#customize').outerHTML=`<div id="customize" class="hl-ctl">
-    ${line==='biochar'?`<div class="seg" role="group" aria-label="Production type">${['wash','sock','bag'].map(j=>`<button type="button" data-job="${j}" aria-pressed="${S.job===j}">${cap(j)}</button>`).join('')}</div>`:''}
+    <div class="seg" role="group" aria-label="Production type">${(line==='biochar'?[['wash','Wash'],['sock','Sock'],['bag','Bag']]:[['dryer','Dryer'],['picker','Picker'],['bag','Bagging']]).map(([j,l])=>`<button type="button" data-job="${j}" aria-pressed="${S.job===j}">${l}</button>`).join('')}</div>
     <select id="hlPeriod" aria-label="Date range">${Object.entries(RANGE_PRESETS).map(([k,l])=>`<option value="${k}" ${S.period===k?'selected':''}>${l}</option>`).join('')}</select>
     ${S.period==='custom'?`<input type="date" id="hlFrom" value="${R.now[0]}" max="${iso(TODAY)}" aria-label="From"><span class="muted">to</span><input type="date" id="hlTo" value="${R.now[1]}" max="${iso(TODAY)}" aria-label="To">`:''}
   </div>`;
-  const save=()=>{all[line]=S;store.set('topcards',all);renderCards()};
+  const save=()=>{all[line]=S;store.set('topcards',all);renderCards();if(line==='biochar'&&UI.table.biochar==='monthend')renderBioDash();if(line==='orchid'&&UI.table.orchid==='reports')renderOrcDash()};
   document.querySelectorAll('#customize [data-job]').forEach(b=>b.onclick=()=>{S.job=b.dataset.job;save()});
   $('#hlPeriod').onchange=e=>{S.period=e.target.value;if(S.period==='custom'&&!S.from){S.from=iso(addDays(TODAY,-13));S.to=iso(TODAY)}save()};
   const f=$('#hlFrom'),t=$('#hlTo');
@@ -717,21 +757,14 @@ function renderCards(){
   if(t)t.onchange=e=>{if(e.target.value){S.to=e.target.value;save()}};
   const mon=mondayOf(TODAY);
   $('#cards').innerHTML=TOP_CARDS[job].map(m=>{
-    const v=m.calc(inRange(rs,R.now)),pv=m.calc(inRange(rs,R.cmp));
-    let status,cls='flat';
-    if(pv>0){const pct=(v-pv)/pv*100;
-      if(Math.abs(pct)<5)status='● On pace';else if(pct>0){status=`▲ Up ${fmtN(pct,0)}%`;cls='up'}else{status=`▼ Down ${fmtN(-pct,0)}%`;cls='down'}}
-    else status=v>0?'▲ Up from zero':'No data yet';
-    const weeks=[];for(let i=11;i>=0;i--){const a=addDays(mon,-7*i),b=i===0?TODAY:addDays(a,6);weeks.push(m.calc(inRange(rs,[iso(a),iso(b)])))}
+    /* just the number for the range (no trend bars, no up/down/pace) */
+    const v=m.calc(inRange(rs,R.now));
     return `<div class="card">
       <div class="k">${m.label}</div>
       <div class="v num" style="font-family:var(--f-display)">${fmtN(v,1)}<small>${m.unit}</small></div>
-      <div class="s"><span class="pace ${cls}">${status}</span></div>
-      <div class="s">Compared with ${R.cmpLabel}: ${fmtN(pv,1)} ${m.unit}</div>
       ${m.split?(()=>{const r=SETTINGS.ratio[m.split],eq=v*r,lab=v-eq;return `<div class="hsplit" role="img" aria-label="Labor ${fmtN(lab,1)} hours, equipment ${fmtN(eq,1)} hours"><span class="hs-lab" style="flex:${Math.max(lab,0.0001)}"></span><span class="hs-eq" style="flex:${Math.max(eq,0.0001)}"></span></div>
       <div class="hs-key"><span><i class="hs-lab"></i>Labor <b class="num">${fmtN(lab,1)} h</b></span><span><i class="hs-eq"></i>Labor w/ equip <b class="num">${fmtN(eq,1)} h</b></span></div>`})():''}
-      ${weekSpark(weeks)}
-      <div class="s" style="font-size:.75rem">${m.sub} · ${fmtD(R.now[0])} – ${fmtD(R.now[1])} · bars = last 12 weeks</div>
+      <div class="s" style="font-size:.75rem">${m.sub} · ${fmtD(R.now[0])} – ${fmtD(R.now[1])}</div>
     </div>`}).join('');
 }
 
@@ -839,12 +872,13 @@ function tkey(){return UI.line+'.'+UI.table[UI.line]}
 function renderTabs(){
   document.querySelectorAll('#lines button').forEach(b=>b.setAttribute('aria-selected',b.dataset.line===UI.line));
   curTable();const ent=Object.entries(TABLES[UI.line]);$('#ttabs').hidden=ent.length<2;
-  $('#ttabs').innerHTML=ent.map(([k,t])=>`<button role="tab" data-t="${k}" aria-selected="${UI.table[UI.line]===k}">${t.label}</button>`).join('');
+  $('#ttabs').innerHTML=ent.map(([k,t])=>`<button role="tab" data-t="${k}" aria-selected="${UI.table[UI.line]===k}">${t.label}</button>`).join('')
+    +((UI.line==='biochar'&&UI.table.biochar==='monthend')||(UI.line==='orchid'&&UI.table.orchid==='reports')?'<button type="button" class="tab-action" id="exportData">Export Data</button>':'');
 }
 $('#lines').onclick=e=>{const b=e.target.closest('button[data-line]');if(!b)return;UI.line=b.dataset.line;if(UI.line!=='settings')store.set('line',UI.line);UI.q='';UI.filterJob='';UI.editCards=false;render()};
-$('#ttabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;UI.table[UI.line]=b.dataset.t;UI.q='';UI.filterJob='';UI.openPop=null;showCards();renderTabs();renderGrid()};
+$('#ttabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.id==='exportData'){UI.line==='orchid'?odExport():bdExport();return}if(!b.dataset.t)return;UI.table[UI.line]=b.dataset.t;UI.q='';UI.filterJob='';UI.openPop=null;showCards();renderTabs();renderGrid()};
 /* The Hours · In · Out cards: Orchid shows them on the Dryer tab only; Biochar (with Wash/Sock/Bag) on Reports only, above Month-end. */
-function showCards(){const on=UI.line==='orchid'?UI.table.orchid==='dryer':UI.line==='biochar'?UI.table.biochar==='monthend':false;$('#hlSec').hidden=!on;if(on)renderCards()}
+function showCards(){const on=UI.line==='orchid'?UI.table.orchid==='reports':UI.line==='biochar'?UI.table.biochar==='monthend':false;$('#hlSec').hidden=!on;if(on)renderCards()}
 
 function renderToolbar(){
   const T=curTable(),k=tkey(),hidden=UI.hidden[k]||[],grp=UI.group[k]||'',sort=UI.sort[k];
@@ -1008,8 +1042,10 @@ function openRunEditor(run){
     </div>
     ${isNew?'':`<div class="muted" style="font-size:.82rem">${d.source==='manager'?'Added by manager':'Submitted from crew form'}${d.editedAt?` · last edited ${new Date(d.editedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}`:''}</div>`}
     <div class="err" id="formErr"></div>`,
-    `<button class="btn" data-close>Cancel</button><button class="btn primary" id="saveRun">${isNew?'Add run':'Save changes'}</button>`);
+    `${isNew?'':'<button class="btn danger" id="delRun" style="margin-right:auto">Delete</button>'}<button class="btn" data-close>Cancel</button><button class="btn primary" id="saveRun">${isNew?'Add run':'Save changes'}</button>`);
   const m=$('#modalRoot'),lb=$('#lb');
+  const delBtn=$('#delRun');if(delBtn)delBtn.onclick=()=>{if(!confirm(`Delete this ${run.job} sheet from ${fmtDate(run.date)}? It's removed from every total. You can undo it with ⌘Z.`))return;
+    DB.bio=DB.bio.filter(x=>x.id!==run.id);saveDB();closeModal();render();toast('Production sheet deleted')};
   const drawLines=()=>{lb.innerHTML=lines.length?lines.map(lineRow).join(''):''};
   drawLines();
   lb.addEventListener('input',e=>{const tr=e.target.closest('tr[data-i]');if(!tr)return;const l=lines[+tr.dataset.i],f=e.target.dataset.f;
@@ -1068,15 +1104,15 @@ function openItemHistory(r){
    new standard ones (new blends and sock sizes also go onto the crew sheet). */
 const INV_SECTIONS=[
   {key:'raw',title:'Raw biochar',code:'14-14-CB2',acc:'raw',fixed:[['CB2','Bulk bin','yd'],['CB2:tote','Toted','totes']]},
-  {key:'washed',title:'Washed',code:'14-14-CC1',acc:'wash',unit:'yd',prefix:'CC1:',list:()=>BLENDS,core:CORE_BLENDS,add:'New blend name'},
-  {key:'bags',title:'Bags',code:'07-86-15W',acc:'bag',unit:'ea',prefix:'BAG:',list:()=>BAG_TYPES,core:CORE_BLENDS},
-  {key:'socks',title:'Socks',code:'14-14-SO1',acc:'sock',unit:'ea',prefix:'SO1:',list:()=>SOCK_SIZES,core:CORE_SOCKS,add:'New sock size (ft)',numeric:true},
+  {key:'washed',title:'Washed',code:'14-14-CC1',acc:'wash',unit:'yd',prefix:'CC1:',list:()=>BLENDS,core:CORE_BLENDS,add:'Blend name',addTitle:'Add a blend'},
+  {key:'bags',title:'Bags',code:'07-86-15W',acc:'bag',unit:'ea',prefix:'BAG:',list:()=>BAG_TYPES,core:CORE_BAGS,add:'Bag type',addTitle:'Add a bag type'},
+  {key:'socks',title:'Socks',code:'14-14-SO1',acc:'sock',unit:'ea',prefix:'SO1:',list:()=>SOCK_SIZES,core:CORE_SOCKS,add:'Size (ft)',addTitle:'Add a sock size',numeric:true},
 ];
 const HIDDEN=()=>SETTINGS.catalog.hidden;
 function lastUse(k){let d='';active(DB.bio).forEach(r=>r.lines.forEach(l=>{const key=l.item==='SO1:custom'?`SO1:custom:${l.size}`:l.item;if(key===k&&r.date>d)d=r.date}));return d}
 function secItems(sec,h){
   if(sec.fixed)return sec.fixed.map(([key,name,unit])=>({key,name,unit,deletable:false,custom:false}));
-  const std=sec.list().map(v=>({key:sec.prefix+v,name:sec.key==='socks'?`${v} ft`:String(v),unit:sec.unit,deletable:sec.key!=='bags'&&!sec.core.includes(v),custom:false,val:v}));
+  const std=sec.list().map(v=>({key:sec.prefix+v,name:sec.key==='socks'?`${v} ft`:String(v),unit:sec.unit,deletable:!sec.core.includes(v),custom:false,val:v}));
   const stdKeys=new Set(std.map(x=>x.key));
   const isExtra=k=>sec.key==='socks'?k.startsWith('SO1:custom:'):k.startsWith(sec.prefix)&&!stdKeys.has(k);
   const extra=Object.keys(h).filter(k=>isExtra(k)&&(Math.abs(h[k])>1e-9||DB.counts[k]))
@@ -1092,8 +1128,8 @@ function renderInventory(){
     const units=[...new Set(items.map(x=>x.unit))];const tot=items.reduce((a,x)=>a+(h[x.key]||0),0);
     return `<section class="inv-sec acc-${sec.acc}">
       <div class="inv-h"><span class="inv-dot" aria-hidden="true"></span><h3>${sec.title}</h3>${sec.code?`<span class="muted num">${sec.code}</span>`:''}
-        ${units.length===1?`<span class="inv-tot num">${fmtN(tot,1)} ${units[0]}</span>`:'<span class="inv-tot"></span>'}
-        <button class="btn" data-count="${sec.key}">Enter counts</button></div>
+        <span class="inv-tot"></span>
+        ${sec.add?`<button class="btn" data-addprod="${sec.key}" aria-label="${sec.addTitle}">Add +</button>`:''}<button class="btn" data-count="${sec.key}">Enter counts</button></div>
       <div class="inv-tiles">${items.map(x=>{const q=h[x.key]||0,c=DB.counts[x.key];return `<button class="inv-tile ${x.custom?'custom':''}" data-tile="${sec.key}" data-key="${esc(x.key)}">
         <span class="t-name">${esc(x.name)}</span>
         <span class="t-val num ${q<0?'neg':''}">${fmtN(q,1)}<small>${x.unit}</small></span>
@@ -1104,13 +1140,28 @@ function renderInventory(){
 }
 $('#gridWrap').addEventListener('click',e=>{
   if(!(UI.line==='biochar'&&UI.table.biochar==='inventory'))return;
-  const t=e.target.closest('[data-tile]'),cb=e.target.closest('[data-count]');
+  const t=e.target.closest('[data-tile]'),cb=e.target.closest('[data-count]'),ap=e.target.closest('[data-addprod]');
+  if(ap){openAddProduct(INV_SECTIONS.find(s=>s.key===ap.dataset.addprod));return}
   if(t){openCounts(INV_SECTIONS.find(s=>s.key===t.dataset.tile),t.dataset.key);return}
   if(cb)openCounts(INV_SECTIONS.find(s=>s.key===cb.dataset.count));
 });
+/* + on a section: add a blend, bag type or sock size. It shows up in inventory and on the crew sheet. */
+function openAddProduct(sec){
+  modal(sec.addTitle,`<label class="field"><span>${sec.add}</span><input type="${sec.numeric?'number':'text'}" id="newItem" ${sec.numeric?'min="0.5" step="0.5" inputmode="decimal"':'maxlength="40" autocomplete="off"'}></label><div class="err" id="formErr"></div>`,
+    `<button class="btn" data-close>Cancel</button><button class="btn primary" id="addItem">Add</button>`);
+  const inp=$('#newItem');inp.focus();
+  const go=()=>{const raw=inp.value.trim(),err=t=>$('#formErr').textContent=t;
+    if(!raw)return err(sec.numeric?'Enter a size in feet.':'Type a name.');
+    const val=sec.numeric?+raw:raw.replace(/\s+/g,' ');if(sec.numeric&&!(val>0))return err('Enter a size in feet.');
+    const list=sec.list();if(list.some(v=>String(v).toLowerCase()===String(val).toLowerCase()))return err('That one is already on the list.');
+    list.push(val);if(sec.numeric)list.sort((a,b)=>a-b);
+    delete HIDDEN()[sec.prefix+val];
+    store.set('settings',SETTINGS);closeModal();render();toast(`${sec.numeric?val+' ft':val} added`)};
+  $('#addItem').onclick=go;inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();go()}};
+}
 function removeItem(sec,x){
   if(!x.custom){const list=sec.list();const i=list.findIndex(v=>String(v)===String(x.val));if(i>=0)list.splice(i,1)}
-  HIDDEN()[x.key]=iso(TODAY);if(sec.key==='washed')HIDDEN()['BAG:'+(x.val??x.name)]=iso(TODAY);
+  HIDDEN()[x.key]=iso(TODAY);
   delete DB.counts[x.key];
   store.set('settings',SETTINGS);saveDB();
 }
@@ -1122,7 +1173,6 @@ function openCounts(sec,focusKey){
       <td><div style="display:flex;gap:6px;align-items:center"><input type="number" min="0" step="${step}" data-ck="${esc(x.key)}" value="${Math.round((h[x.key]||0)*100)/100}" aria-label="${esc(x.name)} count"><span class="muted" style="font-size:.8rem">${x.unit}</span></div></td>
       <td>${x.deletable?`<button type="button" class="btn icon ghost" data-del="${esc(x.key)}" aria-label="Remove ${esc(x.name)}" title="Remove from inventory">✕</button>`:''}</td></tr>`).join('')}
     </tbody></table>
-    ${sec.add?`<div class="addrow"><input type="${sec.numeric?'number':'text'}" id="newItem" placeholder="${sec.add}" ${sec.numeric?'min="0.5" step="0.5"':''}><button type="button" class="btn" id="addItem">+ Add</button></div>`:''}
     ${sec.note?`<p class="muted" style="margin:0;font-size:.82rem">${sec.note}</p>`:''}
     <div class="err" id="formErr"></div>`,
     `<button class="btn" data-close>Cancel</button><button class="btn primary" id="saveCounts">Save counts</button>`);
@@ -1131,13 +1181,6 @@ function openCounts(sec,focusKey){
   m.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{const x=items.find(i=>i.key===b.dataset.del);
     if(!confirm(`Remove ${x.name} from ${sec.title.toLowerCase()}?${x.custom?'':' It will also come off the crew sheet.'}`))return;
     removeItem(sec,x);closeModal();render();openCounts(sec);toast(`${x.name} removed`)});
-  const addBtn=$('#addItem');if(addBtn)addBtn.onclick=()=>{
-    const raw=$('#newItem').value.trim();if(!raw)return $('#formErr').textContent=sec.numeric?'Enter a size in feet.':'Type a name first.';
-    const val=sec.numeric?+raw:raw.replace(/\s+/g,' ');if(sec.numeric&&!(val>0))return $('#formErr').textContent='Enter a size in feet.';
-    const list=sec.list();if(list.some(v=>String(v).toLowerCase()===String(val).toLowerCase()))return $('#formErr').textContent='That one is already on the list.';
-    list.push(val);if(sec.numeric)list.sort((a,b)=>a-b);
-    delete HIDDEN()[sec.prefix+val];if(sec.key==='washed')delete HIDDEN()['BAG:'+val];
-    store.set('settings',SETTINGS);closeModal();render();openCounts(sec,sec.prefix+val);toast(`${sec.numeric?val+' ft':val} added`)};
   $('#saveCounts').onclick=()=>{
     let n=0;
     m.querySelectorAll('[data-ck]').forEach(inp=>{if(inp.value==='')return;const k=inp.dataset.ck,want=+inp.value;
@@ -1167,7 +1210,7 @@ const ORC_SECTIONS=[
 ];
 const ORC_SALE_PRODUCTS=ORC_SECTIONS.flatMap(s=>s.fixed.map(f=>f[1]));
 const orcSaleProducts=()=>[...new Set([...ORC_SALE_PRODUCTS,...extraBins().map(b=>b.name)])];
-const orcUnit=name=>(ORC_SECTIONS.flatMap(s=>s.fixed).find(f=>f[1]===name)||[,,'yd'])[2];
+const orcUnit=name=>{const x=extraBins().find(b=>b.name===name);if(x)return x.kind==='bagged'?'pallets':x.kind==='totes'?'totes':'yd';return (ORC_SECTIONS.flatMap(s=>s.fixed).find(f=>f[1]===name)||[,,'yd'])[2]};
 const smallish=p=>/small|xs|pac fibre medium/i.test(p);
 function inputCalc(e){
   const O=SETTINGS.orc;
@@ -1217,32 +1260,54 @@ const extraBins=()=>SETTINGS.orc.extraBins||(SETTINGS.orc.extraBins=[]);
 function binMap(){
   const ex=extraBins().map(b=>({...b,added:true}));
   const firstDried=BIN_CORE.findIndex(c=>c.kind==='dried');
-  return [...BIN_CORE.slice(0,firstDried),...ex.filter(b=>b.kind==='green'),...BIN_CORE.slice(firstDried),...ex.filter(b=>b.kind==='dried')];
+  const N=SETTINGS.orc.binNotes||{};
+  return [...BIN_CORE.slice(0,firstDried),...ex.filter(b=>b.kind==='green'),...BIN_CORE.slice(firstDried),...ex.filter(b=>b.kind==='dried')]
+    .map(c=>c.divider||N[c.name]===undefined?c:{...c,note:N[c.name]});
 }
+/* bin notes are typed straight into the bin map, like a spreadsheet cell */
+function saveBinNote(cell){
+  const name=cell.dataset.binnote,v=cell.textContent.replace(/\s+/g,' ').trim();
+  const N=SETTINGS.orc.binNotes=SETTINGS.orc.binNotes||{};
+  const cur=binMap().find(c=>c.name===name);if(!cur||(cur.note||'')===v){cell.textContent=v;return}
+  N[name]=v;store.set('settings',SETTINGS);toast('Note saved');
+}
+$('#gridWrap').addEventListener('focusout',e=>{const c=e.target.closest&&e.target.closest('[data-binnote]');if(c)saveBinNote(c)});
+$('#gridWrap').addEventListener('keydown',e=>{const c=e.target.closest&&e.target.closest('[data-binnote]');if(!c)return;
+  if(e.key==='Enter'){e.preventDefault();c.blur()}
+  if(e.key==='Escape'){e.preventDefault();const cur=binMap().find(x=>x.name===c.dataset.binnote);c.textContent=cur?cur.note||'':'';c.blur()}});
+$('#gridWrap').addEventListener('paste',e=>{const c=e.target.closest&&e.target.closest('[data-binnote]');if(!c)return;e.preventDefault();
+  document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text').replace(/\s+/g,' '))});
 const binNames=kind=>binMap().filter(c=>!c.divider&&c.kind===kind).map(c=>c.name);
 const allBinNames=()=>binMap().filter(c=>!c.divider).map(c=>c.name);
-const BAG_MAP=[['Small bagged','SMALL BAGGED','pallets'],['Medium bagged','MEDIUM BAGGED','pallets'],['Small totes','SMALL TOTES','totes'],['Medium totes','MEDIUM TOTES','totes']];
+const BAG_CORE=[['Small bagged','SMALL BAGGED','pallets'],['Medium bagged','MEDIUM BAGGED','pallets'],['Small totes','SMALL TOTES','totes'],['Medium totes','MEDIUM TOTES','totes']];
+/* the bagged + totes table: the workbook's four plus any the manager added (bagged first, then totes) */
+const bagMap=()=>{const ex=extraBins().filter(b=>b.kind==='bagged'||b.kind==='totes').map(b=>[b.name,b.name.toUpperCase(),b.kind==='bagged'?'pallets':'totes',true]);
+  return [...BAG_CORE.slice(0,2),...ex.filter(x=>x[2]==='pallets'),...BAG_CORE.slice(2),...ex.filter(x=>x[2]==='totes')]};
 const BIN_SECTION={key:'obins',title:'Bin',unit:'yd',hand:onHandOrc,get fixed(){return allBinNames().map(n=>['O:'+n,n,'yd'])}};
-const BAG_SECTION={key:'obagged',title:'Bagged & totes',unit:'',hand:onHandOrc,fixed:BAG_MAP.map(([k,n,u])=>['O:'+k,n,u])};
-function openAddBin(){
-  modal('Add a bin',`<div class="fields">
-      <label class="field"><span>Bin name</span><input type="text" id="nbName" maxlength="40" placeholder="e.g. #3 Medium Green"></label>
-      <label class="field"><span>Type</span><select id="nbKind"><option value="green">Green (goes into the dryer)</option><option value="dried">Dried (comes out of the dryer)</option></select></label>
-      <label class="field" style="grid-column:1/-1"><span>Note</span><input type="text" id="nbNote" maxlength="80"></label>
+const BAG_SECTION={key:'obagged',title:'Bagged & totes',unit:'',hand:onHandOrc,get fixed(){return bagMap().map(([k,n,u])=>['O:'+k,n,u])}};
+function openAddBin(group){
+  const bag=group==='bagged';
+  modal(bag?'Add a bagged or tote product':'Add a bin',`<div class="fields">
+      <label class="field"><span>Name</span><input type="text" id="nbName" maxlength="40" autocomplete="off"></label>
+      <label class="field"><span>Type</span><select id="nbKind">${bag
+        ?'<option value="bagged">Bagged (pallets)</option><option value="totes">Totes</option>'
+        :'<option value="green">Green (goes into the dryer)</option><option value="dried">Dried (comes out of the dryer)</option>'}</select></label>
+      ${bag?'':'<label class="field" style="grid-column:1/-1"><span>Note</span><input type="text" id="nbNote" maxlength="80"></label>'}
     </div>
     <div class="err" id="formErr"></div>`,
-    `<button class="btn" data-close>Cancel</button><button class="btn primary" id="nbSave">Add bin</button>`);
+    `<button class="btn" data-close>Cancel</button><button class="btn primary" id="nbSave">Add</button>`);
   $('#nbName').focus();
-  $('#nbSave').onclick=()=>{const name=$('#nbName').value.trim().replace(/\s+/g,' ');const err=t=>$('#formErr').textContent=t;
-    if(!name)return err('Type a name for the bin.');
-    const taken=[...allBinNames(),...ORC_SALE_PRODUCTS,...ORC_PICK].some(n=>n.toLowerCase()===name.toLowerCase());
+  const go=()=>{const name=$('#nbName').value.trim().replace(/\s+/g,' ');const err=t=>$('#formErr').textContent=t;
+    if(!name)return err('Type a name.');
+    const taken=[...allBinNames(),...bagMap().map(x=>x[0]),...ORC_SALE_PRODUCTS,...ORC_PICK].some(n=>n.toLowerCase()===name.toLowerCase());
     if(taken)return err('There’s already a bin or product with that name.');
-    extraBins().push({name,kind:$('#nbKind').value,note:$('#nbNote').value.trim()});
+    extraBins().push({name,kind:$('#nbKind').value,note:bag?'':$('#nbNote').value.trim()});
     store.set('settings',SETTINGS);closeModal();render();toast(`${name} added`)};
+  $('#nbSave').onclick=go;$('#nbName').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();go()}};
 }
 function deleteBin(name){
   const k='O:'+name,q=onHandOrc()[k]||0;
-  if(!confirm(`Delete the ${name} bin?${Math.abs(q)>1e-9?`\n\nIt still shows ${fmtN(q,2)} yd on hand. That number goes away with the bin.`:''}\n\nPast dryer runs and sales keep the name.`))return;
+  if(!confirm(`Delete ${name}?${Math.abs(q)>1e-9?`\n\nIt still shows ${fmtN(q,2)} ${orcUnit(name)} on hand. That number goes away with it.`:''}\n\nPast entries and sales keep the name.`))return;
   SETTINGS.orc.extraBins=extraBins().filter(b=>b.name!==name);
   delete DB.counts[k];
   store.set('settings',SETTINGS);saveDB();render();toast(`${name} deleted`);
@@ -1251,8 +1316,8 @@ function renderOrcInventory(){
   const h=onHandOrc(),oo=openOrders();
   const U=UI.binUnit=UI.binUnit||store.get('binUnit','yd'),ypu=SETTINGS.orc.yardsPerUnit;
   const show=yd=>U==='units'?yd/ypu:yd,uLbl=U==='units'?'units':'yd';
-  $('#toolbar').innerHTML=`<div class="seg" role="group" aria-label="Show bins in">${[['yd','Yards'],['units','Units']].map(([k,l])=>`<button type="button" data-binunit="${k}" aria-pressed="${U===k}">${l}</button>`).join('')}</div><span class="sp"></span><button class="btn" id="addBin">+ Add bin</button><button class="btn primary" data-ocount="obins">Enter counts</button>`;
-  $('#addBin').onclick=openAddBin;$('#toolbar [data-ocount]').onclick=()=>openCounts(BIN_SECTION);
+  $('#toolbar').innerHTML=`<div class="seg" role="group" aria-label="Show bins in">${[['yd','Yards'],['units','Units']].map(([k,l])=>`<button type="button" data-binunit="${k}" aria-pressed="${U===k}">${l}</button>`).join('')}</div><span class="sp"></span><button class="btn" id="addBin">Add +</button><button class="btn primary" data-ocount="obins">Enter counts</button>`;
+  $('#addBin').onclick=()=>openAddBin('bins');$('#toolbar [data-ocount]').onclick=()=>openCounts(BIN_SECTION);
   $('#toolbar').querySelectorAll('[data-binunit]').forEach(b=>b.onclick=()=>{UI.binUnit=b.dataset.binunit;store.set('binUnit',UI.binUnit);renderOrcInventory()});
   const cols=binMap();
   const val=(q,u)=>`<span class="num ${q<0?'neg':''}">${fmtN(q,2)}<small>${u}</small></span>`;
@@ -1260,17 +1325,18 @@ function renderOrcInventory(){
     <thead><tr>${cols.map(c=>c.divider?'<th class="div" aria-hidden="true"></th>':`<th class="bh ${c.kind} ${c.added?'added':''}"><button data-otile="obins" data-key="${esc('O:'+c.name)}">${esc(c.name.toUpperCase())}</button>${c.added?`<button class="bm-del" data-delbin="${esc(c.name)}" title="Delete this bin" aria-label="Delete ${esc(c.name)}">✕</button>`:''}</th>`).join('')}</tr></thead>
     <tbody>
       <tr class="onhand">${cols.map(c=>{if(c.divider)return '<td class="div"></td>';const k='O:'+c.name,q=h[k]||0,cn=DB.counts[k],o=oo[k];
-        return `<td><button data-otile="obins" data-key="${esc(k)}">${val(show(q),uLbl)}${cn?`<span class="bm-meta">Counted ${fmtDate(cn.date)}</span>`:''}${o?`<span class="bm-meta">${fmtN(show(o),1)} ${uLbl} on open orders</span>`:''}</button></td>`}).join('')}</tr>
-      <tr class="note">${cols.map(c=>c.divider?'<td class="div"></td>':`<td>${esc(c.note)}</td>`).join('')}</tr>
+        return `<td><button data-otile="obins" data-key="${esc(k)}">${val(show(q),uLbl)}${o?`<span class="bm-meta">${fmtN(show(o),1)} ${uLbl} on open orders</span>`:''}</button></td>`}).join('')}</tr>
+      <tr class="note">${cols.map(c=>c.divider?'<td class="div"></td>':`<td class="bm-note" contenteditable="plaintext-only" spellcheck="false" data-binnote="${esc(c.name)}" aria-label="Note for ${esc(c.name)}">${esc(c.note||'')}</td>`).join('')}</tr>
     </tbody></table></div>
     <div class="binmap-wrap"><table class="binmap bagmap">
-      <thead><tr>${BAG_MAP.map(([k,n])=>`<th class="bh bagged"><button data-otile="obagged" data-key="${esc('O:'+k)}">${n}</button></th>`).join('')}</tr></thead>
-      <tbody><tr class="onhand">${BAG_MAP.map(([k,,u])=>{const q=h['O:'+k]||0,cn=DB.counts['O:'+k];return `<td><button data-otile="obagged" data-key="${esc('O:'+k)}">${val(q,u)}${cn?`<span class="bm-meta">Counted ${fmtDate(cn.date)}</span>`:''}</button></td>`}).join('')}</tr></tbody>
+      <thead><tr>${bagMap().map(([k,n,,added])=>`<th class="bh bagged ${added?'added':''}"><button data-otile="obagged" data-key="${esc('O:'+k)}">${esc(n)}</button>${added?`<button class="bm-del" data-delbin="${esc(k)}" title="Delete" aria-label="Delete ${esc(k)}">✕</button>`:''}</th>`).join('')}<th class="bm-addcol"><button class="btn" data-addbag aria-label="Add a bagged or tote product">Add +</button></th></tr></thead>
+      <tbody><tr class="onhand">${bagMap().map(([k,,u])=>{const q=h['O:'+k]||0;return `<td><button data-otile="obagged" data-key="${esc('O:'+k)}">${val(q,u)}</button></td>`}).join('')}<td class="bm-addcol"></td></tr></tbody>
     </table></div>`;
 }
 $('#gridWrap').addEventListener('click',e=>{
   if(!(UI.line==='orchid'&&UI.table.orchid==='inventory'))return;
   const del=e.target.closest('[data-delbin]');if(del){deleteBin(del.dataset.delbin);return}
+  if(e.target.closest('[data-addbag]')){openAddBin('bagged');return}
   const t=e.target.closest('[data-otile]'),cb=e.target.closest('[data-ocount]');
   const sec=k=>k==='obins'?BIN_SECTION:k==='obagged'?BAG_SECTION:ORC_SECTIONS.find(s=>s.key===k);
   if(t)openCounts(sec(t.dataset.otile),t.dataset.key);
@@ -1441,6 +1507,8 @@ const r1=v=>Math.round(v*100)/100;
 
 function renderReports(){
   const L=UI.line;UI.reps=UI.reps||{};
+  if(L==='biochar')return renderBioDash();
+  if(L==='orchid')return renderOrcDash();
   const sub=L==='orchid'?[['builder','Report builder'],['trends','Trends'],['export','Export data']]:[['monthend','Month-end'],['builder','Report builder'],['trends','Trends'],['export','Export data']];
   if(!sub.some(([k])=>k===UI.reps[L]))UI.reps[L]=sub[0][0];
   UI.rep=UI.reps[L];
@@ -1465,15 +1533,12 @@ function eomData(month){
       vals:[s.labor,s.equip,s.sum('out',l=>l.item.startsWith('SO1'))]},
   ];
 }
-function renderEOM(){
+function renderEOM(target){
+  const box=target||$('#gridWrap');
   const months=dataMonths();
   if(!UI.month||!months.includes(UI.month))UI.month=months.find(m=>m<thisMonth())||months[0];
-  $('#repTools').innerHTML=`<select id="eomMonth" aria-label="Month">${months.map(m=>`<option value="${m}" ${m===UI.month?'selected':''}>${monthLabel(m)}${m===thisMonth()?' (in progress)':''}</option>`).join('')}</select>
-    <button class="btn" id="eomCsv">CSV</button><button class="btn" id="eomPrint">Print</button>`;
-  $('#eomMonth').onchange=e=>{UI.month=e.target.value;renderEOM()};
+  const monthSel=`<select id="eomMonth" aria-label="Month">${months.map(m=>`<option value="${m}" ${m===UI.month?'selected':''}>${monthLabel(m)}${m===thisMonth()?' (in progress)':''}</option>`).join('')}</select>`;
   const data=eomData(UI.month);
-  $('#eomCsv').onclick=()=>{const rows=[['Biochar month-end',monthLabel(UI.month)]];data.forEach(t=>{rows.push([]);rows.push([t.title]);rows.push(t.cols);rows.push(t.vals.map(r1))});downloadCSV(rows,`dept14-biochar-month-end-${UI.month}.csv`)};
-  $('#eomPrint').onclick=()=>window.print();
   /* One table, same five columns for every job, so every row lines up:
      Labor h · Labor h w/ equip · Material in · Totes in · Made / out. A job that doesn't
      have a column gets a dash. eomData() is unchanged (CSV and Export use it). */
@@ -1484,14 +1549,189 @@ function renderEOM(){
     {name:'Bags',acc:'bag',c:[cell(B.vals[0],'','hours'),cell(B.vals[1],'','hours'),cell(B.vals[2],'14-14-CC1','yd'),cell(null),cell(B.vals[3],'07-86-15W','bags')]},
     {name:'Socks',acc:'sock',c:[cell(S.vals[0],'','hours'),cell(S.vals[1],'','hours'),cell(null),cell(null),cell(S.vals[2],'14-14-SO1','socks')]},
   ];
-  $('#gridWrap').innerHTML=`<div class="eom-wrap"><div class="eom" id="eomCard">
-    <div class="eom-h"><div><div class="eom-dept">Dept 14 · Biochar</div><h3>Month-end · ${monthLabel(UI.month)}</h3></div>${UI.month===thisMonth()?'<span class="pill">In progress</span>':''}</div>
+  box.innerHTML=`<div class="eom-wrap"><div class="eom" id="eomCard">
+    <div class="eom-h"><div><div class="eom-dept">Dept 14 · Biochar</div><h3>Month-end · ${monthLabel(UI.month)}</h3></div><div class="eom-tools">${UI.month===thisMonth()?'<span class="pill">In progress</span>':''}${monthSel}</div></div>
     <table class="eom-t">
       <colgroup><col class="eom-c0"><col><col><col><col><col></colgroup>
       <thead><tr><th></th><th>Labor hours</th><th>Labor hours w/ equip</th><th>Material in</th><th>Totes in</th><th>Made / out</th></tr></thead>
       <tbody>${rows.map(r=>`<tr class="acc-${r.acc}"><th scope="row"><span class="eom-bar"></span>${r.name}</th>${r.c.join('')}</tr>`).join('')}</tbody>
     </table>
   </div></div>`;
+  box.querySelector('#eomMonth').onchange=e=>{UI.month=e.target.value;renderEOM(box)};
+}
+
+/* =============================================================
+   Biochar Reports: a dashboard. The Hours · Product in · Product out
+   cards (with the Wash / Sock / Bag switch and date range) sit above;
+   this shows what was made and used by type for the same job and
+   range, product out over time, then the month-end card. CSV gives
+   every production line in the range for Excel.
+   ============================================================= */
+const BD_UNIT={wash:'yd',sock:'socks',bag:'bags'};
+function bdLabel(l,dir,job){
+  const [k,v]=l.item.split(':');
+  if(k==='SO1')return v==='custom'?`${fmtN(l.size,2)} ft (custom)`:`${v} ft`;
+  if(k==='CB2')return v==='tote'?'Raw char · toted':'Raw char · bulk bin';
+  if(k==='MAT')return v;
+  return v;
+}
+function bdUnit(l){const [k,v]=l.item.split(':');if(k==='CB2')return v==='tote'?'totes':'yd';if(k==='MAT')return 'totes';if(k==='CC1')return 'yd';if(k==='SO1')return 'socks';if(k==='BAG')return 'bags';return ''}
+function bdGroup(rs,dir,job){
+  const m=new Map();
+  rs.forEach(r=>r.lines.filter(l=>l.dir===dir&&+l.qty>0).forEach(l=>{const lab=bdLabel(l,dir,job),u=bdUnit(l),k=lab+'|'+u;const o=m.get(k)||{label:lab,unit:u,qty:0,runs:new Set()};o.qty+=+l.qty;o.runs.add(r.id);m.set(k,o)}));
+  return [...m.values()].sort((a,b)=>b.qty-a.qty);
+}
+function bdBars(list){
+  if(!list.length)return '<div class="bd-empty">None in this range.</div>';
+  const byUnit={};list.forEach(x=>byUnit[x.unit]=(byUnit[x.unit]||0)+x.qty);
+  const max=Math.max(...list.map(x=>x.qty));
+  return `<div class="bd-bars">${list.map(x=>`<div class="bd-row"><span class="bd-lab">${esc(x.label)}</span>
+    <span class="bd-track"><span class="bd-fill" style="width:${Math.max(1.5,x.qty/max*100)}%"></span></span>
+    <span class="bd-val num">${fmtN(x.qty,1)} <small>${x.unit}</small></span><span class="bd-pct num">${byUnit[x.unit]?Math.round(x.qty/byUnit[x.unit]*100):0}%</span></div>`).join('')}</div>`;
+}
+/* Product made per week. Week mode: the 12 weeks ending with the chosen week (that week is highlighted).
+   Custom range: every week the range touches. */
+function bdTrend(job,from,to,hiWeek){
+  const out=r=>r.lines.filter(l=>l.dir==='out').reduce((a,l)=>a+(+l.qty||0),0);
+  const weeks=[];for(let x=mondayOf(dOf(from));x<=dOf(to);x.setDate(x.getDate()+7))weeks.push(iso(x));
+  const lo=weeks[0],hi=iso(addDays(dOf(weeks[weeks.length-1]),6));
+  const v=Object.fromEntries(weeks.map(k=>[k,0]));
+  active(DB.bio).filter(r=>r.job===job&&r.date>=lo&&r.date<=hi&&r.date>=from&&r.date<=to).forEach(r=>{const k=iso(mondayOf(dOf(r.date)));if(k in v)v[k]+=out(r)});
+  const vals=weeks.map(k=>v[k]),max=niceMax(Math.max(...vals,0)||1),W=900,H=200,pl=44,pb=26,pt=8,pr=6,iw=W-pl-pr,ih=H-pt-pb,n=weeks.length,bw=iw/n,barW=Math.max(3,Math.min(44,bw*.62));
+  const y=q=>pt+ih-(q/max)*ih,every=Math.ceil(n/13);
+  const lab=k=>dOf(k).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  let bars='';weeks.forEach((k,i)=>{const h=Math.max(0,y(0)-y(vals[i])),x=pl+i*bw+(bw-barW)/2;
+    if(h>0)bars+=`<path d="${roundTop(x,y(0)-h,barW,h,Math.min(4,h))}" fill="var(--s-one)" opacity="${hiWeek&&k!==hiWeek?.45:1}"><title>Week of ${lab(k)}: ${fmtN(vals[i],1)} ${BD_UNIT[job]}</title></path>`;
+    if(i%every===0||k===hiWeek)bars+=`<text x="${pl+i*bw+bw/2}" y="${H-8}" text-anchor="middle" class="ax">${lab(k)}</text>`});
+  return `<div class="bd-sub">${job==='wash'?'Washed char':job==='sock'?'Socks':'Bags'} made by week</div>
+    <svg class="bd-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Made by week">${[0,.5,1].map(f=>max*f).map(t=>`<line x1="${pl}" x2="${W-pr}" y1="${y(t)}" y2="${y(t)}" class="gl"/><text x="${pl-6}" y="${y(t)+4}" text-anchor="end" class="ax">${fmtN(t,Number.isInteger(t)?0:1)}</text>`).join('')}${bars}</svg>`;
+}
+function bdState(){
+  UI.bd=UI.bd||store.get('bdRange',null)||{mode:'week',week:iso(mondayOf(TODAY))};
+  const B=UI.bd;if(!B.week)B.week=iso(mondayOf(TODAY));
+  if(B.mode==='custom'){if(!B.from){B.from=iso(addDays(TODAY,-27));B.to=iso(TODAY)}if(B.from>B.to)[B.from,B.to]=[B.to,B.from];return {B,from:B.from,to:B.to}}
+  return {B,from:B.week,to:iso(addDays(dOf(B.week),6))};
+}
+function bdJob(){const all=store.get('topcards',{}),S=(UI.top&&UI.top.biochar)||all.biochar||{job:'wash'};return S.job||'wash'}
+function bdExport(){
+  const job=bdJob(),{from,to}=bdState();
+  const rs=active(DB.bio).filter(r=>r.job===job&&r.date>=from&&r.date<=to);
+  const head=['Date','Job','Crew','Hours','Used/Made','Item code','Product','Qty','Unit','Notes'];
+  const rows=rs.slice().sort((a,b)=>a.date.localeCompare(b.date)).flatMap(r=>r.lines.map(l=>[r.date,cap(r.job),(r.crew||[]).join('; '),r.hours,l.dir==='in'?'Used':'Made',itemCode(l.item),bdLabel(l),+l.qty,bdUnit(l),(r.notes||'').replace(/\s+/g,' ')]));
+  downloadCSV([head,...rows],`dept14-biochar-${job}-${from}-to-${to}.csv`);
+}
+/* =============================================================
+   Orchid bark Reports: same dashboard as Biochar. Cards above switch
+   Dryer / Picker / Bagging; below, for the same job: what came out and
+   what went in by type, a weekly chart, and Export Data in the tab row.
+   ============================================================= */
+const OD={
+  dryer:{unit:'yd',chart:'Yards out of the dryer',madeTitle:'Out of the dryer',usedTitle:'Into the dryer by product',
+    made:rs=>{const m=new Map();rs.forEach(r=>{if(r.dest==='Bin'){const k=r.bin||'Bin';m.set(k+'|yd',{label:k,unit:'yd',qty:(m.get(k+'|yd')?.qty||0)+(+r.yardsOut||0)})}
+      else{m.set('Totes|totes',{label:'Totes',unit:'totes',qty:(m.get('Totes|totes')?.qty||0)+(+r.totes||0)});m.set('To totes|yd',{label:'Yards to totes',unit:'yd',qty:(m.get('To totes|yd')?.qty||0)+(+r.yardsOut||0)})}});
+      return [...m.values()].filter(x=>x.qty>0).sort((a,b)=>a.unit===b.unit?b.qty-a.qty:a.unit==='yd'?-1:1)},
+    used:rs=>odSum(rs,r=>r.product,r=>+r.yardsIn||0,'yd'),
+    out:r=>+r.yardsOut||0,
+    csv:{head:['Production date','Product in','Yards in','Yards out','Yield %','Hours','Went to','Bin','Totes made','Crew','Notes','Status'],
+      row:r=>[r.date,r.product,r.yardsIn,r.yardsOut,r.yardsIn?r1(r.yardsOut/r.yardsIn*100):'',r.hours,r.dest,r.bin||'',r.dest==='Totes'?(r.totes||0):'',(r.crew||[]).join('; '),(r.notes||'').replace(/\s+/g,' '),r.status]}},
+  picker:{unit:'yd',chart:'Green made by the picker (est.)',madeTitle:'Green made (est.)',usedTitle:'Into the picker by material',
+    made:rs=>{const t={small:0,medium:0,lost:0};rs.forEach(e=>{const c=inputCalc(e);t.small+=c.small;t.medium+=c.medium;t.lost+=c.lost});
+      return [{label:'#1 Small Green',unit:'yd',qty:t.small},{label:'#1 Medium Green',unit:'yd',qty:t.medium},{label:'Lost',unit:'yd',qty:t.lost}].filter(x=>x.qty>0)},
+    used:rs=>odSum(rs,e=>e.material,e=>inputCalc(e).yards,'yd'),
+    out:e=>{const c=inputCalc(e);return c.small+c.medium},
+    csv:{head:['Date','Material','Units','Yards','Small green (est.)','Medium green (est.)','Lost (est.)','Hours','Notes'],
+      row:e=>{const c=inputCalc(e);return [e.date,e.material,e.units,r1(c.yards),r1(c.small),r1(c.medium),r1(c.lost),e.hours||'',(e.notes||'').replace(/\s+/g,' ')]}}},
+  bag:{unit:'pallets',chart:'Pallets bagged',madeTitle:'Pallets bagged',usedTitle:'Yards used by bin',
+    made:rs=>odSum(rs,e=>e.material==='Small Dried'?'Small bagged':'Medium bagged',e=>+e.pallets||0,'pallets'),
+    used:rs=>odSum(rs,e=>e.material,e=>+e.yards||0,'yd'),
+    out:e=>+e.pallets||0,
+    csv:{head:['Date','Bagged from','Yards used','Pallets bagged','Hours','Notes'],
+      row:e=>[e.date,e.material,+e.yards||0,+e.pallets||0,e.hours||'',(e.notes||'').replace(/\s+/g,' ')]}},
+};
+function odSum(rs,keyFn,valFn,unit){const m=new Map();rs.forEach(r=>{const k=keyFn(r)||'—';m.set(k,(m.get(k)||0)+valFn(r))});
+  return [...m.entries()].map(([label,qty])=>({label,unit,qty})).filter(x=>x.qty>0).sort((a,b)=>b.qty-a.qty)}
+function odJob(){const all=store.get('topcards',{}),S=(UI.top&&UI.top.orchid)||all.orchid||{};return ['dryer','picker','bag'].includes(S.job)?S.job:'dryer'}
+function odState(){
+  UI.od=UI.od||store.get('odRange',null)||{mode:'week',week:iso(mondayOf(TODAY))};
+  const B=UI.od;if(!B.week)B.week=iso(mondayOf(TODAY));
+  if(B.mode==='custom'){if(!B.from){B.from=iso(addDays(TODAY,-27));B.to=iso(TODAY)}if(B.from>B.to)[B.from,B.to]=[B.to,B.from];return {B,from:B.from,to:B.to}}
+  return {B,from:B.week,to:iso(addDays(dOf(B.week),6))};
+}
+function odWeekChart(title,unit,rows,valFn,from,to,hiWeek){
+  const weeks=[];for(let x=mondayOf(dOf(from));x<=dOf(to);x.setDate(x.getDate()+7))weeks.push(iso(x));
+  const v=Object.fromEntries(weeks.map(k=>[k,0]));
+  rows.filter(r=>r.date>=from&&r.date<=to).forEach(r=>{const k=iso(mondayOf(dOf(r.date)));if(k in v)v[k]+=valFn(r)});
+  const vals=weeks.map(k=>v[k]),max=niceMax(Math.max(...vals,0)||1),W=900,H=200,pl=44,pb=26,pt=8,pr=6,iw=W-pl-pr,ih=H-pt-pb,n=weeks.length,bw=iw/n,barW=Math.max(3,Math.min(44,bw*.62));
+  const y=q=>pt+ih-(q/max)*ih,every=Math.ceil(n/13),lab=k=>dOf(k).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  let bars='';weeks.forEach((k,i)=>{const h=Math.max(0,y(0)-y(vals[i])),x=pl+i*bw+(bw-barW)/2;
+    if(h>0)bars+=`<path d="${roundTop(x,y(0)-h,barW,h,Math.min(4,h))}" fill="var(--s-one)" opacity="${hiWeek&&k!==hiWeek?.45:1}"><title>Week of ${lab(k)}: ${fmtN(vals[i],1)} ${unit}</title></path>`;
+    if(i%every===0||k===hiWeek)bars+=`<text x="${pl+i*bw+bw/2}" y="${H-8}" text-anchor="middle" class="ax">${lab(k)}</text>`});
+  return `<div class="bd-sub">${title} by week</div>
+    <svg class="bd-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${title} by week">${[0,.5,1].map(f=>max*f).map(t=>`<line x1="${pl}" x2="${W-pr}" y1="${y(t)}" y2="${y(t)}" class="gl"/><text x="${pl-6}" y="${y(t)+4}" text-anchor="end" class="ax">${fmtN(t,Number.isInteger(t)?0:1)}</text>`).join('')}${bars}</svg>`;
+}
+function odExport(){
+  const job=odJob(),{from,to}=odState(),D=OD[job];
+  const rs=orcRows(job).filter(r=>r.date>=from&&r.date<=to).sort((a,b)=>a.date.localeCompare(b.date));
+  downloadCSV([D.csv.head,...rs.map(D.csv.row)],`dept14-orchid-${job==='bag'?'bagging':job}-${from}-to-${to}.csv`);
+}
+function renderOrcDash(){
+  const job=odJob(),{B,from,to}=odState(),D=OD[job];
+  const all=orcRows(job),rs=all.filter(r=>r.date>=from&&r.date<=to);
+  const thisWeek=iso(mondayOf(TODAY)),name={dryer:'Dryer',picker:'Picker',bag:'Bagging'}[job];
+  $('#toolbar').innerHTML=`<span class="bd-range muted">${name} · ${rs.length} ${job==='dryer'?'run':'entr'}${rs.length===1?(job==='dryer'?'':'y'):(job==='dryer'?'s':'ies')}</span><span class="sp"></span>
+    <div class="bd-pick">
+      <select id="odMode" aria-label="Range"><option value="week" ${B.mode!=='custom'?'selected':''}>Week</option><option value="custom" ${B.mode==='custom'?'selected':''}>Custom range</option></select>
+      ${B.mode==='custom'
+        ?`<input type="date" id="odFrom" value="${from}" aria-label="From"><span class="muted">to</span><input type="date" id="odTo" value="${to}" aria-label="To">`
+        :`<button class="btn icon" id="odPrev" aria-label="Previous week">‹</button><span class="bd-wk num">${fmtDate(from)} – ${fmtDate(to)}</span><button class="btn icon" id="odNext" aria-label="Next week" ${B.week>=thisWeek?'disabled':''}>›</button>`}
+    </div>`;
+  const keep=()=>{store.set('odRange',B);renderOrcDash()};
+  $('#odMode').onchange=e=>{B.mode=e.target.value;if(B.mode==='custom'&&!B.from){B.from=B.week;B.to=iso(addDays(dOf(B.week),6))}keep()};
+  const pv=$('#odPrev'),nx=$('#odNext'),f=$('#odFrom'),t=$('#odTo');
+  if(pv)pv.onclick=()=>{B.week=iso(addDays(dOf(B.week),-7));keep()};
+  if(nx)nx.onclick=()=>{if(B.week<thisWeek){B.week=iso(addDays(dOf(B.week),7));keep()}};
+  if(f)f.onchange=e=>{if(e.target.value){B.from=e.target.value;keep()}};
+  if(t)t.onchange=e=>{if(e.target.value){B.to=e.target.value;keep()}};
+  const cFrom=B.mode==='custom'?from:iso(addDays(dOf(B.week),-77));
+  $('#gridWrap').innerHTML=`<div class="bd">
+    <div class="bd-grid">
+      <section class="bd-card"><h3>${D.madeTitle}</h3>${bdBars(D.made(rs))}</section>
+      <section class="bd-card"><h3>${D.usedTitle}</h3>${bdBars(D.used(rs))}</section>
+      <section class="bd-card bd-wide">${odWeekChart(D.chart,D.unit,all,D.out,cFrom,to,B.mode==='custom'?null:B.week)}</section>
+    </div>
+  </div>`;
+}
+function renderBioDash(){
+  const job=bdJob(),{B,from,to}=bdState();
+  const rs=active(DB.bio).filter(r=>r.job===job&&r.date>=from&&r.date<=to);
+  const made=bdGroup(rs,'out',job),used=bdGroup(rs,'in',job);
+  const madeTitle=job==='wash'?'Washed char made by blend':job==='sock'?'Socks made by size':'Bags made by type';
+  const usedTitle=job==='wash'?'Raw char and totes used':'Char used by blend';
+  const thisWeek=iso(mondayOf(TODAY)),wkLabel=`${fmtDate(from)} – ${fmtDate(to)}`;
+  $('#toolbar').innerHTML=`<span class="bd-range muted">${cap(job)} · ${rs.length} sheet${rs.length===1?'':'s'}</span><span class="sp"></span>
+    <div class="bd-pick">
+      <select id="bdMode" aria-label="Range"><option value="week" ${B.mode!=='custom'?'selected':''}>Week</option><option value="custom" ${B.mode==='custom'?'selected':''}>Custom range</option></select>
+      ${B.mode==='custom'
+        ?`<input type="date" id="bdFrom" value="${from}" aria-label="From"><span class="muted">to</span><input type="date" id="bdTo" value="${to}" aria-label="To">`
+        :`<button class="btn icon" id="bdPrev" aria-label="Previous week">‹</button><span class="bd-wk num">${wkLabel}</span><button class="btn icon" id="bdNext" aria-label="Next week" ${B.week>=thisWeek?'disabled':''}>›</button>`}
+    </div>`;
+  const keep=()=>{store.set('bdRange',B);renderBioDash()};
+  $('#bdMode').onchange=e=>{B.mode=e.target.value;if(B.mode==='custom'&&!B.from){B.from=B.week;B.to=iso(addDays(dOf(B.week),6))}keep()};
+  const pv=$('#bdPrev'),nx=$('#bdNext'),f=$('#bdFrom'),t=$('#bdTo');
+  if(pv)pv.onclick=()=>{B.week=iso(addDays(dOf(B.week),-7));keep()};
+  if(nx)nx.onclick=()=>{if(B.week<thisWeek){B.week=iso(addDays(dOf(B.week),7));keep()}};
+  if(f)f.onchange=e=>{if(e.target.value){B.from=e.target.value;keep()}};
+  if(t)t.onchange=e=>{if(e.target.value){B.to=e.target.value;keep()}};
+  const tFrom=B.mode==='custom'?from:iso(addDays(dOf(B.week),-77)),tTo=to;
+  $('#gridWrap').innerHTML=`<div class="bd">
+    <div class="bd-grid">
+      <section class="bd-card"><h3>${madeTitle}</h3>${bdBars(made)}</section>
+      <section class="bd-card"><h3>${usedTitle}</h3>${bdBars(used)}</section>
+      <section class="bd-card bd-wide">${bdTrend(job,tFrom,tTo,B.mode==='custom'?null:B.week)}</section>
+    </div>
+    <div id="eomBox"></div>
+  </div>`;
+  renderEOM($('#eomBox'));
 }
 
 /* =============================================================
@@ -1906,7 +2146,7 @@ const EXPORTS_ORC={
   sales:{label:'Sales orders',head:['Order date','Customer','Sales order #','Load type','Product','Qty','Unit','Completed'],
     rows:(f,t)=>DB.osales.filter(x=>x.date>=f&&x.date<=t).sort((a,b)=>a.date.localeCompare(b.date)).map(x=>[x.date,x.customer,x.so,x.load,x.product,x.qty,orcUnit(x.product),x.done?'Yes':'No'])},
   inventory:{label:'Inventory counts (right now)',nodate:true,head:['Bin','On hand','Unit','Last counted'],
-    rows:()=>{const h=onHandOrc();return [...allBinNames().map(n=>[n,'yd']),...BAG_MAP.map(([k,n,u])=>[k,u])].map(([n,u])=>{const k='O:'+n;return [n,r1(h[k]||0),u,DB.counts[k]?DB.counts[k].date:'']})}},
+    rows:()=>{const h=onHandOrc();return [...allBinNames().map(n=>[n,'yd']),...bagMap().map(([k,n,u])=>[k,u])].map(([n,u])=>{const k='O:'+n;return [n,r1(h[k]||0),u,DB.counts[k]?DB.counts[k].date:'']})}},
 };
 function renderExport(){
   const orc=UI.line==='orchid',EXPORTS=orc?EXPORTS_ORC:EXPORTS_BIO;UI.exps=UI.exps||{};
@@ -1956,8 +2196,10 @@ function openOrchidForm(rec){
     ${isNew?'':`<label class="field"><span>Status</span><select name="status"><option value="active" ${d.status!=='void'?'selected':''}>Counts in totals</option><option value="void" ${d.status==='void'?'selected':''}>Voided</option></select></label>
     <label class="field full" id="vrWrap" ${d.status==='void'?'':'hidden'}><span>Void reason</span><input type="text" name="voidReason" value="${esc(d.voidReason||'')}"></label>`}
     </div><div class="err" id="formErr"></div>`,
-    `<button class="btn" data-close>Cancel</button><button class="btn primary" id="saveRun">${isNew?'Save run':'Save changes'}</button>`);
+    `${isNew?'':'<button class="btn danger" id="delRun" style="margin-right:auto">Delete</button>'}<button class="btn" data-close>Cancel</button><button class="btn primary" id="saveRun">${isNew?'Save run':'Save changes'}</button>`);
   const m=$('#modalRoot'),q=n=>m.querySelector(`[name="${n}"]`);
+  const delBtn=$('#delRun');if(delBtn)delBtn.onclick=()=>{if(!confirm(`Delete this dryer run from ${fmtDate(rec.date)}? It's removed from every total. You can undo it with ⌘Z.`))return;
+    DB.orc=DB.orc.filter(x=>x.id!==rec.id);saveDB();closeModal();render();toast('Dryer run deleted')};
   q('dest').onchange=e=>{$('#binWrap').hidden=e.target.value!=='Bin';$('#totesWrap').hidden=e.target.value!=='Totes'};
   if(q('status'))q('status').onchange=e=>{$('#vrWrap').hidden=e.target.value!=='void'};
   $('#saveRun').onclick=()=>{
@@ -2369,9 +2611,12 @@ Live.load=async function(){
   SETTINGS.crew=emp.filter(e=>e.active).map(e=>({id:e.id,name:e.name,biochar:e.on_biochar_sheet,orchid:e.on_dryer_sheet,active:true}));
   const blends=items.filter(i=>i.kind==='blend'&&!i.is_custom&&i.active).sort((a,b)=>a.sort-b.sort).map(i=>i.blend);
   BLENDS.splice(0,BLENDS.length,...blends);
+  const bags=items.filter(i=>i.kind==='bag'&&!i.is_custom&&i.active).sort((a,b)=>a.sort-b.sort).map(i=>i.blend);
+  BAG_TYPES.splice(0,BAG_TYPES.length,...bags);
   const socks=items.filter(i=>i.kind==='sock'&&!i.is_custom&&i.active).map(sizeOf).sort((a,b)=>a-b);
   SOCK_SIZES.splice(0,SOCK_SIZES.length,...socks);
-  SETTINGS.orc.extraBins=bins.filter(b=>!b.is_core&&b.active&&(b.kind==='green'||b.kind==='dried')).map(b=>({name:b.name,kind:b.kind,note:b.note||''}));
+  SETTINGS.orc.extraBins=bins.filter(b=>!b.is_core&&b.active&&['green','dried','bagged','totes'].includes(b.kind)).map(b=>({name:b.name,kind:b.kind,note:b.note||''}));
+  SETTINGS.orc.binNotes=Object.fromEntries(bins.map(b=>[b.name,b.note||'']));
   SETTINGS.reports=reports.map(r=>({id:r.id,line:r.line,name:r.name,cfg:r.config}));
   SETTINGS.ratio.other=0;
   Live.base=Live.snap();Live.sbase=Live.ssnap();Live.loadedAt=Date.now();
@@ -2388,7 +2633,7 @@ Live.seedReports=async function(){
 const COLS=['bio','orc','oin','osales','purch','adj'];
 Live.snap=()=>{const o={};COLS.forEach(c=>{o[c]=new Map((DB[c]||[]).map(r=>[r.id,JSON.stringify(r)]))});o.counts=JSON.stringify(DB.counts||{});return o};
 Live.ssnap=()=>JSON.stringify({ratio:{wash:SETTINGS.ratio.wash,sock:SETTINGS.ratio.sock,bag:SETTINGS.ratio.bag},bonus:[SETTINGS.bonusPerYardIn,SETTINGS.bonusPerTote,SETTINGS.bonusYdPerTote],
-  orc:{y:SETTINGS.orc.yardsPerUnit,r:SETTINGS.orc.ratios},crew:SETTINGS.crew,blends:[...BLENDS],socks:[...SOCK_SIZES],bins:SETTINGS.orc.extraBins||[],reports:SETTINGS.reports||[],
+  orc:{y:SETTINGS.orc.yardsPerUnit,r:SETTINGS.orc.ratios},binNotes:SETTINGS.orc.binNotes||{},crew:SETTINGS.crew,blends:[...BLENDS],bags:[...BAG_TYPES],socks:[...SOCK_SIZES],bins:SETTINGS.orc.extraBins||[],reports:SETTINGS.reports||[],
   dash:{siteUrl:SETTINGS.siteUrl,forms:SETTINGS.forms,hidden:SETTINGS.catalog.hidden}});
 
 /* ---- dashboard record → table row ---- */
@@ -2478,22 +2723,28 @@ Live.syncSettings=async function(){
   /* blends, sock sizes */
   const maxSort=Math.max(0,...Live.items.map(i=>i.sort||0));
   for(const b of cur.blends.filter(b=>!old.blends.includes(b))){
-    await must(sb.from('items').upsert([{line:'biochar',code:'14-14-CC1',kind:'blend',name:'Washed · '+b,blend:b,unit:'yd',sort:maxSort+1,active:true},
-      {line:'biochar',code:'07-86-15W',kind:'bag',name:'1.5cf bag · '+b,blend:b,unit:'ea',sort:maxSort+2,active:true}],{onConflict:'code,name'}))}
+    await must(sb.from('items').upsert({line:'biochar',code:'14-14-CC1',kind:'blend',name:'Washed · '+b,blend:b,unit:'yd',sort:maxSort+1,active:true},{onConflict:'code,name'}))}
   for(const b of old.blends.filter(b=>!cur.blends.includes(b)))
-    await must(sb.from('items').update({active:false}).in('kind',['blend','bag']).eq('blend',b).eq('is_custom',false));
+    await must(sb.from('items').update({active:false}).eq('kind','blend').eq('blend',b).eq('is_custom',false));
+  for(const b of (cur.bags||[]).filter(b=>!(old.bags||[]).includes(b)))
+    await must(sb.from('items').upsert({line:'biochar',code:'07-86-15W',kind:'bag',name:'1.5cf bag · '+b,blend:b,unit:'ea',sort:maxSort+2,active:true},{onConflict:'code,name'}));
+  for(const b of (old.bags||[]).filter(b=>!(cur.bags||[]).includes(b)))
+    await must(sb.from('items').update({active:false}).eq('kind','bag').eq('blend',b).eq('is_custom',false));
   for(const z of cur.socks.filter(z=>!old.socks.includes(z)))
     await must(sb.from('items').upsert({line:'biochar',code:'14-14-SO1',kind:'sock',name:`Sock · ${z} ft`,size_ft:z,unit:'ea',sort:maxSort+3,active:true},{onConflict:'code,name'}));
   for(const z of old.socks.filter(z=>!cur.socks.includes(z)))
     await must(sb.from('items').update({active:false}).eq('kind','sock').eq('name',`Sock · ${z} ft`));
-  if(JSON.stringify(old.blends)!==JSON.stringify(cur.blends)||JSON.stringify(old.socks)!==JSON.stringify(cur.socks))Live.items=await fetchAll('items');
+  if(JSON.stringify(old.blends)!==JSON.stringify(cur.blends)||JSON.stringify(old.bags)!==JSON.stringify(cur.bags)||JSON.stringify(old.socks)!==JSON.stringify(cur.socks))Live.items=await fetchAll('items');
   /* bins the manager added */
   const oldB=new Set(old.bins.map(b=>b.name)),curB=new Set(cur.bins.map(b=>b.name));
   for(const b of cur.bins.filter(b=>!oldB.has(b.name)))
-    await must(sb.from('bins').upsert({name:b.name,kind:b.kind,unit:'yd',note:b.note||null,on_map:true,dryer_input:b.kind==='green',purchasable:b.kind==='green',
-      totes_to:b.kind==='green'?'Medium totes':null,bags_to:b.kind==='dried'?'Medium bagged':null,is_core:false,active:true,sort:b.kind==='green'?170:230},{onConflict:'name'}));
+    await must(sb.from('bins').upsert({name:b.name,kind:b.kind,unit:b.kind==='bagged'?'pallets':b.kind==='totes'?'totes':'yd',note:b.note||null,on_map:true,dryer_input:b.kind==='green',purchasable:b.kind==='green',
+      totes_to:b.kind==='green'?'Medium totes':null,bags_to:b.kind==='dried'?'Medium bagged':null,is_core:false,active:true,sort:{green:170,dried:230,bagged:315,totes:335}[b.kind]},{onConflict:'name'}));
   for(const b of old.bins.filter(b=>!curB.has(b.name)))await must(sb.from('bins').update({active:false}).eq('name',b.name).eq('is_core',false));
   if(cur.bins.length!==old.bins.length||[...curB].some(n=>!oldB.has(n)))Live.bins=await fetchAll('bins','*',q=>q.order('sort'));
+  /* bin notes */
+  for(const [name,note] of Object.entries(cur.binNotes||{}))if((old.binNotes||{})[name]!==note)
+    await must(sb.from('bins').update({note:note||null}).eq('name',name));
   /* saved reports */
   const oR=new Map(old.reports.map(r=>[r.id,JSON.stringify(r)])),cR=new Map(cur.reports.map(r=>[r.id,r]));
   for(const [id,r] of cR){if(oR.get(id)===JSON.stringify(r))continue;if(!isUuid(id)){const nid=newId();(SETTINGS.reports.find(x=>x.id===id)||{}).id=nid;r.id=nid;
