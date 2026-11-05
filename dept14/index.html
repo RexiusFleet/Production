@@ -299,12 +299,11 @@ table.eom-t{width:100%;border-collapse:collapse;table-layout:fixed}
 .grid tr.fold:hover td{background:var(--accent-soft)}
 .grid tr.fold .fold-act{margin-left:8px;font-weight:500;color:var(--accent);font-size:.85rem}
 .grid td input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent);cursor:pointer}
-.in-modal{width:min(560px,100%)}
-.ord-modal{width:min(680px,100%)}
+.in-modal,.ord-modal{width:min(620px,100%)}
 .ord-lines{width:100%;border-collapse:collapse}
 .ord-lines td{padding:0 6px 8px 0;vertical-align:middle}
 .ord-lines td:first-child{width:auto}
-.ord-lines td:nth-child(2){width:150px}
+.ord-lines td:nth-child(2),.ord-lines th:nth-child(2){width:130px}
 .ord-lines td.ord-load{width:110px}
 .ord-lines td:last-child{width:36px;padding-right:0}
 .ord-lines select,.ord-lines input{width:100%}
@@ -315,7 +314,11 @@ table.eom-t{width:100%;border-collapse:collapse;table-layout:fixed}
 .in-modal .modal-b{gap:18px;padding:18px 20px 20px}
 .in-modal .modal-h h3{font-size:1.25rem}
 .in-sub{font:500 .72rem/1 var(--f-mono);text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-top:4px}
-.in-type{display:grid;grid-template-columns:repeat(3,1fr);width:100%;border-radius:8px}
+.in-type{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);width:100%;border-radius:8px}
+.in-type button:last-child{border-right:0}
+.in-form input[type=number]::-webkit-inner-spin-button,.in-form input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.in-form input[type=number]{-moz-appearance:textfield}
+.ord-lines th{text-align:left;font:600 .7rem/1 var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:0 6px 6px 0}
 .in-type button{padding:10px 6px;font-size:.86rem;line-height:1.2}
 .in-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 14px}
 .in-form .full{grid-column:1/-1}
@@ -435,7 +438,7 @@ table.eom-t{width:100%;border-collapse:collapse;table-layout:fixed}
 .cal-menu{position:fixed;z-index:60;background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;box-shadow:0 8px 24px rgb(0 0 0 / .35);padding:4px;display:grid;min-width:170px}
 .cal-menu button{all:unset;cursor:pointer;padding:8px 12px;border-radius:5px;font-size:.88rem}
 .cal-menu button:hover,.cal-menu button:focus-visible{background:var(--accent-soft)}
-.cal-dayed{display:grid;gap:8px}
+.cal-dayed{display:grid;gap:10px;border-top:1px solid var(--line);padding-top:12px}
 .cal-offchk{display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer}
 .cal-offchk input{width:18px;height:18px;accent-color:var(--accent)}
 .cal-ph{font:600 .62rem/1.3 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}
@@ -1439,7 +1442,7 @@ function inputCalc(e){
 function onHandOrc(){
   const mv=[],add=(k,d,q)=>mv.push(['O:'+k,d,q]);
   DB.oin.forEach(e=>{const c=inputCalc(e);
-    if(e.type==='pick'){add('#1 Small Green',e.date,c.small);add('#1 Medium Green',e.date,c.medium);if(e.material==='#1 Medium Green')add('#1 Medium Green',e.date,-c.yards)}
+    if(e.type==='pick'){add('#1 Small Green',e.date,c.small);add('#1 Medium Green',e.date,c.medium);if(e.material==='#1 Medium Green'||e.material==='Jumbo Orchid')add(e.material,e.date,-c.yards)}
     else if(e.type==='bag'){add(e.material,e.date,-c.yards);add(e.material==='Small Dried'?'Small bagged':'Medium bagged',e.date,+e.pallets||0)}});
   (DB.purch||[]).forEach(p=>{const m=purchMat(p.material);if(m.line==='orchid')add(p.material,p.date,+p.amount||0)});
   active(DB.orc).forEach(r=>{add(r.product,r.date,-r.yardsIn);
@@ -1607,9 +1610,9 @@ function openInputForm(rec,type,line){
     if(d.type==='buy')body=F('Material',sel,'full')+F('Amount',sfx('amount','0.5',d.amount,'Amount',purchMat(d.material).unit))+F('PO',`<input type="text" name="po" value="${esc(d.po||'')}" autocomplete="off">`);
     else if(d.type==='pick'){const P=SETTINGS.orc.profiles[d.material]||[],act=(SETTINGS.orc.active[d.material]??0)+1;if(!d.grate)d.grate=String(act);
       const gl=(p,i)=>`Profile ${i+1} · ${p.small}/${p.medium}/${p.lost}`;
-      body=date+F('Hours',sfx('hours','0.5',d.hours,'Hours','hours'))+F('Material',sel)+F('Units',sfx('units','0.1',d.units,'Units','units'))
+      body=date+F('Material',sel)+F('Units',sfx('units','0.1',d.units,'Units','units'))+F('Hours',sfx('hours','0.5',d.hours,'Hours','hours'))
         +F('Grates',`<select name="grate" aria-label="Grate profile">${P.map((p,i)=>`<option value="${i+1}" ${String(i+1)===String(d.grate)?'selected':''}>${!isNew&&rec.pct&&String(rec.grate)===String(i+1)&&rec.material===d.material?`Profile ${i+1} · ${rec.pct.small}/${rec.pct.medium}/${rec.pct.lost}`:gl(p,i)}</option>`).join('')}</select>`,'full')}
-    else body=date+F('Hours',sfx('hours','0.5',d.hours,'Hours','hours'))+F('Bagged from',sel)+F('Yards used',sfx('yards','0.5',d.yards,'Yards used','yd'))+F('Pallets bagged',sfx('pallets','1',d.pallets,'Pallets bagged','pallets'));
+    else body=date+F('Bagged from',sel)+F('Yards used',sfx('yards','0.5',d.yards,'Yards used','yd'))+F('Pallets bagged',sfx('pallets','1',d.pallets,'Pallets bagged','pallets'))+F('Hours',sfx('hours','0.5',d.hours,'Hours','hours'));
     modal(isNew?(d.type==='buy'?'Purchased input':'Production input'):`Edit ${IN_TYPES[d.type].toLowerCase()}`,`
       ${isNew&&d.type!=='buy'?`<div class="seg in-type" role="group" aria-label="Input type">${Object.entries(IN_TYPES).filter(([k])=>k!=='buy').map(([k,l])=>`<button type="button" data-itype="${k}" aria-pressed="${d.type===k}">${l}</button>`).join('')}</div>`:''}
       <form class="in-form" id="inForm" novalidate>
@@ -1617,7 +1620,7 @@ function openInputForm(rec,type,line){
         ${F('Notes',`<textarea name="notes" rows="2">${esc(d.notes||'')}</textarea>`,'full')}
       </form>
       <div class="in-err" id="formErr" role="alert" hidden></div>`,
-      `${isNew?'':'<button class="btn" id="delIn" style="margin-right:auto">Delete</button>'}<button class="btn" data-close>Cancel</button><button class="btn primary" id="saveIn">${isNew?'Save':'Save changes'}</button>`);
+      `${isNew?'':'<button class="btn danger" id="delIn" style="margin-right:auto">Delete</button>'}<button class="btn" data-close>Cancel</button><button class="btn primary" id="saveIn">${isNew?'Save':'Save changes'}</button>`);
     $('#modalRoot .modal').classList.add('in-modal');
     const m=$('#modalRoot'),grab=()=>{['date','material','hours','units','yards','pallets','notes','amount','po','grate'].forEach(n=>{const el=m.querySelector(`[name="${n}"]`);if(el)d[n]=el.value})};
     m.querySelectorAll('[data-itype]').forEach(b=>b.onclick=()=>{grab();d.type=b.dataset.itype;draw()});
@@ -1672,17 +1675,17 @@ function openOrderForm(rec,line){
   modal(isNew?'Sales input':L==='biochar'?`Order · ${fmtDate(d.date)}`:`Order · ${d.customer||''}`,`
     ${isNew?`<div class="seg in-type" role="group" aria-label="Line">${[['biochar','Biochar'],['orchid','Orchid bark']].map(([k,l])=>`<button type="button" data-oline="${k}" aria-pressed="${L===k}">${l}</button>`).join('')}</div>`:''}
     <div class="in-form">
+      ${L==='orchid'?`<label class="field full"><span>Customer</span><input type="text" name="customer" list="custList" value="${esc(d.customer)}" autocomplete="off"><datalist id="custList">${customers.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label>`:''}
       <label class="field"><span>Order date</span><input type="date" name="date" value="${d.date}"></label>
-      ${L==='orchid'?`<label class="field"><span>Customer</span><input type="text" name="customer" list="custList" value="${esc(d.customer)}" autocomplete="off"><datalist id="custList">${customers.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label>
-      <label class="field"><span>Sales order #</span><input type="text" name="so" value="${esc(d.so||'')}" autocomplete="off"></label>`:''}
+      ${L==='orchid'?`<label class="field"><span>Sales order #</span><input type="text" name="so" value="${esc(d.so||'')}" autocomplete="off"></label>`:''}
       ${isNew?'':`<label class="field ord-done"><span>Completed</span><span class="ord-chk"><input type="checkbox" name="done" ${d.done?'checked':''}> ${d.done&&d.doneOn?'Shipped '+fmtDate(d.doneOn):''}</span></label>`}
-      <div class="field full"><span>Products</span>
-        <table class="ord-lines"><tbody id="ordLines">${d.lines.map(lineRow).join('')}</tbody></table>
+      <div class="field full">
+        <table class="ord-lines"><thead><tr><th>Product</th><th>Qty</th>${L==='orchid'?'<th>Load</th>':''}<th></th></tr></thead><tbody id="ordLines">${d.lines.map(lineRow).join('')}</tbody></table>
         <button type="button" class="btn" id="addLine">Add +</button></div>
       <label class="field full"><span>Notes</span><textarea name="notes" rows="2">${esc(d.notes||'')}</textarea></label>
     </div>
     <div class="in-err" id="formErr" role="alert" hidden></div>`,
-    `${isNew?'':'<button class="btn danger" id="delOrder" style="margin-right:auto">Delete</button>'}<button class="btn" data-close>Cancel</button><button class="btn primary" id="saveOrder">${isNew?'Save order':'Save changes'}</button>`);
+    `${isNew?'':'<button class="btn danger" id="delOrder" style="margin-right:auto">Delete</button>'}<button class="btn" data-close>Cancel</button><button class="btn primary" id="saveOrder">${isNew?'Save':'Save changes'}</button>`);
   $('#modalRoot .modal').classList.add('in-modal','ord-modal');
   const m=$('#modalRoot'),tb=$('#ordLines');
   m.querySelectorAll('[data-oline]').forEach(b=>b.onclick=()=>{if(b.dataset.oline!==L)openOrderForm(null,b.dataset.oline)});
@@ -2478,7 +2481,7 @@ function calHTML(k){
   let cells='';
   for(let i=0;i<42;i++){const d=new Date(start);d.setDate(start.getDate()+i);const ds=iso(d),inM=d.getMonth()===m-1;
     if(i===35&&!inM)break;
-    const rs=by[ds]||[],we=d.getDay()===0||d.getDay()===6,cr=calRec(k,ds)||{},miss=inM&&!rs.length&&!we&&!cr.off&&ds<today&&first&&ds>=first;
+    const rs=by[ds]||[],we=d.getDay()===0||d.getDay()===6,cr0=calRec(k,ds)||{},cr={...cr0,off:cr0.off&&!rs.length},miss=inM&&!rs.length&&!we&&!cr.off&&ds<today&&first&&ds>=first;
     const os=ords[ds]||[];
     cells+=`<button type="button" class="cal-d ${inM?'':'out'} ${miss?'miss':''} ${we?'we':''} ${cr.off?'dayoff':''} ${ds===today?'today':''} ${rs.length?'has':''}" data-calday="${ds}" aria-label="${d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}${rs.length?', '+rs.length+' entries':cr.off?', off':miss?', no entry':''}">
       <span class="cal-n">${d.getDate()}${cr.off?'<span class="cal-off">Off</span>':''}</span>
@@ -2527,10 +2530,10 @@ async function loadDayPhotos(runs,ds){
 /* right-click a day: mark it off (or back on), or open it to write a note */
 $('#gridWrap').addEventListener('contextmenu',e=>{
   const d=e.target.closest('[data-calday]');if(!d||!Live.hasCal)return;e.preventDefault();
-  const k=d.closest('[data-cal]').dataset.cal,ds=d.dataset.calday,cr=calRec(k,ds)||{};
+  const k=d.closest('[data-cal]').dataset.cal,ds=d.dataset.calday,cr=calRec(k,ds)||{},hasData=CAL[k].rows().some(r=>r.date===ds);
   calMenuClose();
   const mnu=document.createElement('div');mnu.className='cal-menu';mnu.id='calMenu';mnu.setAttribute('role','menu');
-  mnu.innerHTML=`<button type="button" role="menuitem" data-cm="off">${cr.off?'Mark day back on':'Mark day off'}</button><button type="button" role="menuitem" data-cm="note">${cr.note?'Edit note':'Add note'}</button>`;
+  mnu.innerHTML=`${hasData?'':`<button type="button" role="menuitem" data-cm="off">${cr.off?'Mark day back on':'Mark day off'}</button>`}<button type="button" role="menuitem" data-cm="note">${cr.note?'Edit note':'Add note'}</button>`;
   document.body.appendChild(mnu);
   const w=mnu.offsetWidth,h=mnu.offsetHeight;mnu.style.left=Math.min(e.clientX,innerWidth-w-8)+'px';mnu.style.top=Math.min(e.clientY,innerHeight-h-8)+'px';
   mnu.onclick=ev=>{const b=ev.target.closest('[data-cm]');if(!b)return;calMenuClose();
@@ -2557,12 +2560,14 @@ function openCalDay(k,ds){
     grates=`<div class="cal-gr">${mats.map(mt=>{const g=[...new Set(rs.filter(r=>r.material===mt).map(r=>r.grate||1))],P=SETTINGS.orc.profiles[mt]||[];
       return `<label class="field"><span>${esc(mt)} grates</span><select data-daygrate="${esc(mt)}">${g.length>1?'<option value="">Mixed</option>':''}${P.map((p,i)=>`<option value="${i+1}" ${g.length===1&&g[0]===i+1?'selected':''}>Profile ${i+1} · ${p.small}/${p.medium}/${p.lost}</option>`).join('')}</select></label>`}).join('')}</div>`}
   const cr=calRec(k,ds)||{};
-  const dayBox=Live.hasCal!==false?`<div class="cal-dayed"><label class="cal-offchk"><input type="checkbox" id="calOff" ${cr.off?'checked':''}> Day off</label>
-    <label class="field"><span>Day notes</span><textarea id="calNote" rows="2" maxlength="1000">${esc(cr.note||'')}</textarea></label></div>`:'';
-  modal(title,`${dayBox}${grates}
+  const dayBox=Live.hasCal!==false?`<div class="cal-dayed">
+    <label class="field"><span>Day notes</span><textarea id="calNote" rows="2" maxlength="1000">${esc(cr.note||'')}</textarea></label>
+    ${rs.length?'':`<label class="cal-offchk"><input type="checkbox" id="calOff" ${cr.off?'checked':''}> Day off</label>`}</div>`:'';
+  modal(title,`${grates}
     ${rs.length?`<table class="grid cal-t"><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rs.map(r=>`<tr data-calrec="${esc(r.id)}">${row(r).map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`:'<div class="muted">No entries.</div>'}
     ${k==='bio'&&Live.photoRuns&&rs.some(r=>Live.photoRuns.has(r.id))?'<div id="dayPhotos"><div class="sect">Photos</div><div class="muted">Loading…</div></div>':''}
-    ${os.length?`<div class="sect">Orders</div><table class="grid cal-t"><tbody>${os.map(o=>`<tr data-calord="${esc(o.id)}"><td>${esc(o.line==='biochar'?(o.notes||'Order'):o.customer)}</td><td>${esc(orderSummary(o))}</td><td>${o.done?'Completed':'Open'}</td></tr>`).join('')}</tbody></table>`:''}`,
+    ${os.length?`<div class="sect">Orders</div><table class="grid cal-t"><tbody>${os.map(o=>`<tr data-calord="${esc(o.id)}"><td>${esc(o.line==='biochar'?(o.notes||'Order'):o.customer)}</td><td>${esc(orderSummary(o))}</td><td>${o.done?'Completed':'Open'}</td></tr>`).join('')}</tbody></table>`:''}
+    ${dayBox}`,
     `<button class="btn" data-close>Close</button><button class="btn primary" id="calAdd">Add +</button>`);
   const m=$('#modalRoot');
   if($('#dayPhotos'))loadDayPhotos(rs.filter(r=>Live.photoRuns.has(r.id)),ds);
