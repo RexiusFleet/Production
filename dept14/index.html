@@ -222,6 +222,9 @@ nav.subtabs .tab-action:hover{background:var(--sunken)}
 .bd-chart{width:100%;height:auto;display:block}.bd-chart .gl{stroke:var(--line)}.bd-chart .ax{fill:var(--muted);font:11px var(--f-mono)}
 .bd-range{font-size:.88rem}
 .eom-tools{display:flex;gap:8px;align-items:center}
+.eom.bill{margin-top:16px}
+.bill-t tr.bill-first td{border-top:2px solid var(--line-strong)}
+.bill-t tbody tr{cursor:default}
 @media (max-width:760px){.bd-grid{grid-template-columns:1fr}.bd-row{grid-template-columns:minmax(70px,110px) minmax(0,1fr) auto}.bd-pct{display:none}}
 .eom-wrap{padding:20px;display:flex;justify-content:center;background:var(--bg)}
 .eom{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:22px 24px;width:100%;max-width:960px;display:grid;gap:16px}
@@ -986,7 +989,7 @@ const TABLES={
     sales:{label:'Sales log',simple:true,rows:()=>DB.orders.filter(o=>o.line===UI.line),addable:true,addLabel:'+ Add order',onAdd:()=>openOrderForm(null,UI.line),
       groups:{'':'None',customer:'Customer',done:'Completed',month:'Month'},
       /* biochar sales only need the date, products and notes */
-      get cols(){return UI.line==='biochar'?this.allCols.filter(c=>!['customer','so','po','ready','carrier','shipDate','freight'].includes(c.k)):this.allCols},
+      get cols(){return UI.line==='biochar'?this.allCols.filter(c=>!['so','po','ready','carrier','shipDate','freight'].includes(c.k)):this.allCols},
       allCols:[
         {k:'date',l:'Order date',get:r=>r.date,fmt:v=>fmtDate(v)},
         {k:'customer',l:'Customer',get:r=>r.customer},
@@ -1021,7 +1024,8 @@ TABLES.orchid.calendar={label:'Calendar',view:'orccal',cols:[],groups:{},rows:()
 TABLES.orchid=Object.fromEntries(['inventory','calendar','sales','dryer','picker','bagging','purchased','reports'].map(k=>[k,TABLES.orchid[k]]));
 /* Biochar: Inventory · Production log · Sales log · Purchased log · Reports */
 TABLES.biochar.sales=TABLES.orchid.sales;
-TABLES.biochar=Object.fromEntries(['inventory','runs','sales','purchased','monthend'].map(k=>[k,TABLES.biochar[k]]));
+TABLES.biochar.eom={label:'Month-end',view:'eom',cols:[],groups:{},rows:()=>[]};
+TABLES.biochar=Object.fromEntries(['inventory','runs','sales','purchased','monthend','eom'].map(k=>[k,TABLES.biochar[k]]));
 function curTable(){const T=TABLES[UI.line];if(T&&!T[UI.table[UI.line]])UI.table[UI.line]=Object.keys(T)[0];return T[UI.table[UI.line]]}
 function tkey(){return UI.line+'.'+UI.table[UI.line]}
 
@@ -1083,7 +1087,7 @@ function viewRows(){
   return rs;
 }
 function updateCount(){const c=$('#count');if(!c)return;if(isSales()&&!UI.q){const o=VIEW.filter(r=>!r.done).length,dn=VIEW.length-o;c.textContent=`${o} open · ${dn} completed`;return}c.textContent=`${VIEW.length} record${VIEW.length===1?'':'s'}`}
-function renderGrid(){$('#toolbar').hidden=false;if(curTable().report){renderReports();return}if(curTable().view==='inventory'){renderInventory();return}if(curTable().view==='orcinv'){renderOrcInventory();return}if(curTable().view==='orccal'){$('#toolbar').innerHTML='';$('#toolbar').hidden=true;$('#gridWrap').innerHTML=orcCalHTML();return}$('#toolbar').hidden=false;renderToolbar();drawRows()}
+function renderGrid(){$('#toolbar').hidden=false;if(curTable().report){renderReports();return}if(curTable().view==='inventory'){renderInventory();return}if(curTable().view==='orcinv'){renderOrcInventory();return}if(curTable().view==='eom'){$('#toolbar').innerHTML='';$('#toolbar').hidden=true;$('#gridWrap').innerHTML='<div id="eomBox"></div><div id="billBox"></div>';renderEOM($('#eomBox'));return}if(curTable().view==='orccal'){$('#toolbar').innerHTML='';$('#toolbar').hidden=true;$('#gridWrap').innerHTML=orcCalHTML();return}$('#toolbar').hidden=false;renderToolbar();drawRows()}
 function drawRows(){
   const T=curTable(),k=tkey(),hidden=T.simple?[]:UI.hidden[k]||[],grp=T.simple?'':UI.group[k]||'',sort=UI.sort[k];
   const cols=T.cols.filter(c=>!hidden.includes(c.k));
@@ -1323,9 +1327,9 @@ function bioActiveOrders(){
   const rows=open.flatMap(o=>o.lines.map(l=>({o,l,t:secOfKey(l.key),p:saleProduct('biochar',l.key)})))
     .sort((a,b)=>T.indexOf(a.t)-T.indexOf(b.t)||a.o.date.localeCompare(b.o.date));
   return `<section class="ao"><div class="ao-h"><h3>Active orders</h3><span class="muted">${open.length}</span></div>
-    ${rows.length?`<table class="grid ao-t"><thead><tr><th class="ao-type">Type</th><th>Product</th><th class="r">Qty</th><th>Unit</th><th>Order date</th><th>Notes</th></tr></thead><tbody>
+    ${rows.length?`<table class="grid ao-t"><thead><tr><th class="ao-type">Type</th><th>Product</th><th class="r">Qty</th><th>Unit</th><th>Customer</th><th>Order date</th><th>Notes</th></tr></thead><tbody>
     ${rows.map(({o,l,t,p})=>{const sec=INV_SECTIONS.find(x=>x.key===t);return `<tr class="ao-line acc-${sec.acc}" data-order="${esc(o.id)}">
-      <td class="ao-type"><span class="ao-mark" aria-hidden="true"></span>${sec.title}</td><td>${esc(p.name)}</td><td class="r num">${fmtN(l.qty,1)}</td><td>${esc(p.unit)}</td><td>${fmtDate(o.date)}</td><td>${esc(o.notes||'')}</td></tr>`}).join('')}
+      <td class="ao-type"><span class="ao-mark" aria-hidden="true"></span>${sec.title}</td><td>${esc(p.name)}</td><td class="r num">${fmtN(l.qty,1)}</td><td>${esc(p.unit)}</td><td>${esc(o.customer||'')}</td><td>${fmtDate(o.date)}</td><td>${esc(o.notes||'')}</td></tr>`}).join('')}
     </tbody></table>`:'<span class="muted">No open orders.</span>'}</section>`;
 }
 /* Active orchid orders: spreadsheet rows ranked 1, 2, 3... Drag a row (or use the arrows) to change the order. */
@@ -1683,7 +1687,7 @@ const saleProduct=(line,key)=>saleProducts(line).find(p=>p.key===key)||{key,name
 const orderSummary=o=>o.lines.map(l=>{const p=saleProduct(o.line,l.key);return `${fmtN(l.qty,2)} ${p.unit} ${p.name}`}).join(', ');
 function openOrderForm(rec,line){
   const isNew=!rec,L=line||rec.line;
-  const d=isNew?{line:L,date:iso(TODAY),customer:L==='biochar'?'Stormwater Biochar':'',so:'',notes:'',done:false,lines:[{key:'',qty:'',load:''}]}
+  const d=isNew?{line:L,date:iso(TODAY),customer:'',so:'',notes:'',done:false,lines:[{key:'',qty:'',load:''}]}
                :{...rec,lines:rec.lines.map(l=>({...l}))};
   const prods=saleProducts(L),customers=[...new Set(DB.orders.filter(o=>o.line===L).map(o=>o.customer))].sort();
   const lineRow=(l,i)=>{const u=l.key?saleProduct(L,l.key).unit:'';return `<tr data-i="${i}">
@@ -1694,7 +1698,7 @@ function openOrderForm(rec,line){
   modal(isNew?'Sales input':L==='biochar'?`Order · ${fmtDate(d.date)}`:`Order · ${d.customer||''}`,`
     ${isNew?`<div class="seg in-type" role="group" aria-label="Line">${[['biochar','Biochar'],['orchid','Orchid bark']].map(([k,l])=>`<button type="button" data-oline="${k}" aria-pressed="${L===k}">${l}</button>`).join('')}</div>`:''}
     <div class="in-form">
-      ${L==='orchid'?`<label class="field full"><span>Customer</span><input type="text" name="customer" list="custList" value="${esc(d.customer)}" autocomplete="off"><datalist id="custList">${customers.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label>`:''}
+      <label class="field full"><span>Customer</span><input type="text" name="customer" list="custList" value="${esc(d.customer)}" autocomplete="off"><datalist id="custList">${customers.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label>
       <label class="field"><span>Order date</span><input type="date" name="date" value="${d.date}"></label>
       ${L==='orchid'?`<label class="field"><span>Sales order #</span><input type="text" name="so" value="${esc(d.so||'')}" autocomplete="off"></label>
       <label class="field"><span>PO</span><input type="text" name="po" value="${esc(d.po||'')}" autocomplete="off"></label>`:''}
@@ -1722,7 +1726,6 @@ function openOrderForm(rec,line){
     DB.orders=DB.orders.filter(x=>x.id!==rec.id);saveDB();closeModal();render();toast('Order deleted')};
   $('#saveOrder').onclick=()=>{grab();const err=t=>{const e=$('#formErr');e.textContent=t;e.hidden=false};
     if(!d.date)return err('Pick the order date.');
-    if(L==='biochar'&&!String(d.customer||'').trim())d.customer='Stormwater Biochar';
     if(!String(d.customer||'').trim())return err('Enter the customer.');
     const lines=d.lines.filter(l=>l.key||+l.qty);
     if(!lines.length)return err('Add at least one product.');
@@ -1841,7 +1844,7 @@ function renderEOM(target){
     {name:'Socks',acc:'sock',c:[cell(S.vals[0],'','hours'),cell(S.vals[1],'','hours'),cell(null),cell(null),cell(S.vals[2],'14-14-SO1','socks')]},
   ];
   box.innerHTML=`<div class="eom-wrap"><div class="eom" id="eomCard">
-    <div class="eom-h"><div><div class="eom-dept">Dept 14 · Biochar</div><h3>Month-end · ${monthLabel(UI.month)}</h3></div><div class="eom-tools">${UI.month===thisMonth()?'<span class="pill">In progress</span>':''}${monthSel}</div></div>
+    <div class="eom-h"><div><div class="eom-dept">Dept 14 · Biochar</div><h3>Month-end · ${monthLabel(UI.month)}</h3></div><div class="eom-tools">${UI.month===thisMonth()?'<span class="pill">In progress</span>':''}${monthSel}<button type="button" class="btn" id="eomCopy">Copy</button></div></div>
     <table class="eom-t">
       <colgroup><col class="eom-c0"><col><col><col><col><col></colgroup>
       <thead><tr><th></th><th>Labor hours</th><th>Labor hours w/ equip</th><th>Material in</th><th>Totes in</th><th>Made / out</th></tr></thead>
@@ -1849,6 +1852,41 @@ function renderEOM(target){
     </table>
   </div></div>`;
   box.querySelector('#eomMonth').onchange=e=>{UI.month=e.target.value;renderEOM(box)};
+  box.querySelector('#eomCopy').onclick=()=>{
+    const v=(x,u,code)=>x==null?'—':`${fmtN(x,1)} ${u}${code?` (${code})`:''}`;
+    const R=[['Washing',v(W.vals[0],'hours'),v(W.vals[1],'hours'),v(W.vals[2],'yd','14-14-CB2'),v(W.vals[3],'totes'),v(W.vals[4],'yd','14-14-CC1')],
+      ['Bags',v(B.vals[0],'hours'),v(B.vals[1],'hours'),v(B.vals[2],'yd','14-14-CC1'),'—',v(B.vals[3],'bags','07-86-15W')],
+      ['Socks',v(S.vals[0],'hours'),v(S.vals[1],'hours'),'—','—',v(S.vals[2],'socks','14-14-SO1')]];
+    copyTable(`Dept 14 Biochar · Month-end · ${monthLabel(UI.month)}`,['','Labor hours','Labor hours w/ equip','Material in','Totes in','Made / out'],R,$('#eomCopy'));
+  };
+  if($('#billBox'))renderBilling($('#billBox'),UI.month);
+}
+/* Copy a table so it pastes into an email or a spreadsheet as a table (HTML + tab-separated text). */
+async function copyTable(title,head,rows,btn){
+  const td='border:1px solid #c3cac1;padding:6px 10px;font:14px Arial,sans-serif;text-align:left';
+  const html=`<div style="font:bold 15px Arial,sans-serif;margin:0 0 6px">${esc(title)}</div><table style="border-collapse:collapse"><thead><tr>${head.map(h=>`<th style="${td};background:#eaece7">${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map((c,i)=>`<td style="${td}${i?'':';font-weight:bold'}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  const text=[title,head.join('\t'),...rows.map(r=>r.join('\t'))].join('\n');
+  try{await navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([html],{type:'text/html'}),'text/plain':new Blob([text],{type:'text/plain'})})])}
+  catch(e){const el=document.createElement('div');el.innerHTML=html;el.style.cssText='position:fixed;left:-9999px';document.body.appendChild(el);
+    const r=document.createRange();r.selectNodeContents(el);const sel=getSelection();sel.removeAllRanges();sel.addRange(r);document.execCommand('copy');sel.removeAllRanges();el.remove()}
+  if(btn){const t=btn.textContent;btn.textContent='Copied';setTimeout(()=>btn.textContent=t,1500)}
+  toast('Copied');
+}
+/* Billing: every biochar sale entered in the month (by order date), per customer, per product and size. */
+function renderBilling(box,month){
+  const T=['washed','bags','socks','raw'],TN={washed:'Washed char',bags:'Bags',socks:'Socks',raw:'Raw char'};
+  const os=(DB.orders||[]).filter(o=>o.line==='biochar'&&o.date.startsWith(month));
+  const by={};os.forEach(o=>{const c=o.customer||'Stormwater Biochar';by[c]=by[c]||{};o.lines.forEach(l=>{by[c][l.key]=(by[c][l.key]||0)+(+l.qty||0)})});
+  const custs=Object.keys(by).sort();
+  const lines=c=>Object.entries(by[c]).map(([k,q])=>({k,q,t:secOfKey(k),p:saleProduct('biochar',k)})).sort((a,b)=>T.indexOf(a.t)-T.indexOf(b.t)||a.p.name.localeCompare(b.p.name,undefined,{numeric:true}));
+  const rows=[];custs.forEach(c=>lines(c).forEach((x,i)=>rows.push([i?'':c,TN[x.t],x.p.name,fmtN(x.q,2),x.p.unit])));
+  box.innerHTML=`<div class="eom-wrap"><div class="eom bill">
+    <div class="eom-h"><div><div class="eom-dept">Dept 14 · Biochar</div><h3>Sales by customer · ${monthLabel(month)}</h3></div><div class="eom-tools">${rows.length?'<button type="button" class="btn" id="billCopy">Copy</button>':''}</div></div>
+    ${rows.length?`<table class="grid bill-t"><thead><tr><th>Customer</th><th>Type</th><th>Product</th><th class="r">Qty</th><th>Unit</th></tr></thead><tbody>
+      ${custs.map(c=>lines(c).map((x,i)=>`<tr class="${i?'':'bill-first'} acc-${INV_SECTIONS.find(s=>s.key===x.t).acc}"><td>${i?'':`<b>${esc(c)}</b>`}</td><td class="ao-type"><span class="ao-mark" aria-hidden="true"></span>${TN[x.t]}</td><td>${esc(x.p.name)}</td><td class="r num">${fmtN(x.q,2)}</td><td>${esc(x.p.unit)}</td></tr>`).join('')).join('')}
+    </tbody></table>`:'<div class="muted" style="padding:4px 2px">No sales.</div>'}
+  </div></div>`;
+  const b=box.querySelector('#billCopy');if(b)b.onclick=()=>copyTable(`Dept 14 Biochar · Sales by customer · ${monthLabel(month)}`,['Customer','Type','Product','Qty','Unit'],rows,b);
 }
 
 /* =============================================================
@@ -2020,9 +2058,7 @@ function renderBioDash(){
       <section class="bd-card"><h3>${usedTitle}</h3>${bdBars(used)}</section>
       <section class="bd-card bd-wide">${bdTrend(job,tFrom,tTo,B.mode==='custom'?null:B.week)}</section>
     </div>
-    <div id="eomBox"></div>
   </div>`;
-  renderEOM($('#eomBox'));
 }
 
 /* =============================================================
