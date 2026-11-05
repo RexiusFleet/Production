@@ -438,6 +438,9 @@ table.eom-t{width:100%;border-collapse:collapse;table-layout:fixed}
 .cal-dayed{display:grid;gap:8px}
 .cal-offchk{display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer}
 .cal-offchk input{width:18px;height:18px;accent-color:var(--accent)}
+.cal-ph{font:600 .62rem/1.3 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}
+.run-ph .ph-dl{position:absolute;bottom:4px;right:4px;width:28px;height:28px;border-radius:99px;background:rgba(0,0,0,.6);color:#fff;display:grid;place-items:center;text-decoration:none;font-weight:700}
+.run-ph .ph-cap{position:absolute;bottom:4px;left:6px;font:600 .65rem var(--f-mono);text-transform:uppercase;color:#fff;text-shadow:0 1px 2px #000}
 .cal-t tbody tr{cursor:pointer}
 .cal-t tbody tr:hover td{background:var(--accent-soft)}
 .cal-gr{display:flex;gap:12px;flex-wrap:wrap}
@@ -523,7 +526,7 @@ table.grid.me{width:100%}
 .qr img,.qr canvas{width:150px;height:150px}
 .qr-box .url{font-size:.78rem;text-align:center;color:var(--muted)}
 #printArea{display:none}
-@media (max-width:900px){.set-grid{grid-template-columns:1fr}.set-grid>.set-card{height:auto}.set-body{overflow:visible}}
+@media (max-width:900px){.set-grid{grid-template-columns:minmax(0,1fr)}.set-card{min-width:0}.set-grid>.set-card{height:auto}.set-body{overflow:visible}}
 @media (max-width:520px){.qr-pair{grid-template-columns:1fr}}
 @media print{body.printing-qr>*:not(#printArea){display:none!important} body.printing-qr #printArea{display:block}
   .sign{text-align:center;padding:40px 20px;color:#000;font-family:var(--f-body)} .sign h1{font:700 3rem/1.1 var(--f-display);text-transform:uppercase;margin:10px 0}
@@ -546,6 +549,27 @@ table.grid.me{width:100%}
 .detail dt{color:var(--muted);font:500 .74rem/1.9 var(--f-mono);text-transform:uppercase;letter-spacing:.06em}
 .detail dd{margin:0}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:.9rem;z-index:50}
+/* phones: the whole dashboard works at 375px wide; only wide tables scroll sideways inside their own box */
+@media (max-width:760px){
+  .top{position:static}
+  .top-in{gap:6px 10px}
+  .brand{width:100%;margin-right:0;padding-bottom:4px;justify-content:space-between;align-items:center}
+  .brand h1{font-size:1.15rem;line-height:1.15}
+  .who{font-size:.78rem;margin-bottom:6px}
+  nav.lines{flex-wrap:wrap;row-gap:8px;padding:0 12px 10px}
+  nav.lines button[role=tab]{padding:8px 10px 7px;font-size:.92rem}
+  nav.lines [data-line=settings]{margin-left:auto!important}
+  nav.lines .input-btn{order:5;flex:1 1 calc(33.333% - 6px);margin:0;padding:10px 4px;font-size:.7rem;letter-spacing:.03em;white-space:normal;line-height:1.1}
+  .toolbar input[type=search],#q{flex:1 1 140px;min-width:0;width:auto}
+  .ao{overflow-x:auto}.ao-t{min-width:560px}
+  .scrim{padding:8px 6px}
+  .modal-h{padding-left:12px;padding-right:12px}.modal-b{padding:12px}.modal-b>table{display:block;overflow-x:auto;max-width:100%}
+  .set-body{overflow-x:auto}
+  .cal{padding:12px 10px}.cal-h h3{min-width:0;font-size:1rem}.cal-stats{margin-left:0;width:100%;gap:10px}
+  .cal-w span{padding:0 2px;font-size:.62rem}
+  .inv-sec{padding:14px 12px 16px 14px}
+  .binmap-wrap{padding:12px 10px}
+}
 @media (max-width:700px){ main{padding:14px 12px 50px} .top-in{padding:10px 12px 0} nav.lines{padding:0 12px} .detail{grid-template-columns:1fr} input[type=search]{width:130px} }
 </style>
 </head>
@@ -879,7 +903,7 @@ const tags=a=>(a||[]).map(t=>`<span class="pill">${esc(t)}</span>`).join('');
 const TABLES={
   biochar:{
     inventory:{label:'Inventory',view:'inventory',cols:[],groups:{},rows:()=>[]},
-    runs:{label:'Production log',rows:()=>DB.bio,addable:true,canVoid:true,pre:()=>calHTML('bio'),
+    runs:{label:'Production log',simple:true,addLabel:'+ Add',rows:()=>DB.bio,addable:true,canVoid:true,pre:()=>calHTML('bio'),
       groups:{'':'None',job:'Job type',month:'Month',crew:'Crew'},
       cols:[
         {k:'date',l:'Date',t:'📅',get:r=>r.date,fmt:v=>fmtDate(v)},
@@ -903,7 +927,7 @@ const TABLES={
     monthend:{label:'Reports',report:true,cols:[],groups:{},rows:()=>[]},
   },
   orchid:{
-    dryer:{label:'Dryer log',rows:()=>DB.orc,addable:true,canVoid:true,pre:()=>calHTML('dryer'),
+    dryer:{label:'Dryer log',simple:true,addLabel:'+ Add',rows:()=>DB.orc,addable:true,canVoid:true,pre:()=>calHTML('dryer'),
       groups:{'':'None',product:'Product in',dest:'Destination',month:'Month',crew:'Crew'},
       cols:[
         {k:'date',l:'Date',t:'📅',get:r=>r.date,fmt:v=>fmtDate(v)},
@@ -1030,7 +1054,7 @@ const isSales=()=>UI.table[UI.line]==='sales'&&(UI.line==='orchid'||UI.line==='b
 function viewRows(){
   const T=curTable(),k=tkey(),s=UI.sort[k];
   let rs=T.rows().slice();
-  if(UI.filterJob&&UI.line==='biochar'&&UI.table.biochar==='runs')rs=rs.filter(r=>r.job===UI.filterJob);
+  if(UI.filterJob&&!T.simple&&UI.line==='biochar'&&UI.table.biochar==='runs')rs=rs.filter(r=>r.job===UI.filterJob);
   if(UI.q){const q=UI.q.toLowerCase();rs=rs.filter(r=>T.cols.some(c=>String(c.get(r)).toLowerCase().includes(q)))}
   if(s){const c=T.cols.find(c=>c.k===s.k);rs.sort((a,b)=>{const x=c.get(a),y=c.get(b);return (c.num?(+x||0)-(+y||0):String(x).localeCompare(String(y)))*s.d})}
   else if(T.cols[0].k==='date')rs.sort((a,b)=>b.date.localeCompare(a.date));
@@ -1039,7 +1063,7 @@ function viewRows(){
 function updateCount(){const c=$('#count');if(!c)return;if(isSales()&&!UI.q){const o=VIEW.filter(r=>!r.done).length,dn=VIEW.length-o;c.textContent=`${o} open · ${dn} completed`;return}c.textContent=`${VIEW.length} record${VIEW.length===1?'':'s'}`}
 function renderGrid(){if(curTable().report){renderReports();return}if(curTable().view==='inventory'){renderInventory();return}if(curTable().view==='orcinv'){renderOrcInventory();return}renderToolbar();drawRows()}
 function drawRows(){
-  const T=curTable(),k=tkey(),hidden=UI.hidden[k]||[],grp=UI.group[k]||'',sort=UI.sort[k];
+  const T=curTable(),k=tkey(),hidden=T.simple?[]:UI.hidden[k]||[],grp=T.simple?'':UI.group[k]||'',sort=UI.sort[k];
   const cols=T.cols.filter(c=>!hidden.includes(c.k));
   VIEW=viewRows();updateCount();
   const pre=T.pre?T.pre():'';
@@ -2459,6 +2483,7 @@ function calHTML(k){
     cells+=`<button type="button" class="cal-d ${inM?'':'out'} ${miss?'miss':''} ${we?'we':''} ${cr.off?'dayoff':''} ${ds===today?'today':''} ${rs.length?'has':''}" data-calday="${ds}" aria-label="${d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}${rs.length?', '+rs.length+' entries':cr.off?', off':miss?', no entry':''}">
       <span class="cal-n">${d.getDate()}${cr.off?'<span class="cal-off">Off</span>':''}</span>
       ${cr.note?`<span class="cal-note">${esc(cr.note)}</span>`:''}
+      ${k==='bio'&&Live.photoRuns&&rs.some(r=>Live.photoRuns.has(r.id))?'<span class="cal-ph">Photos</span>':''}
       ${rs.length?calDay(k,rs).map(([c,t])=>`<span class="cal-l ${c?'c-'+c:''}">${esc(t)}</span>`).join('')+(crewOf(rs).length?`<span class="cal-crew">${esc(crewOf(rs).join(', '))}</span>`:''):''}
       ${os.map(o=>`<span class="cal-o ${o.done?'done':''}">${esc(o.line==='biochar'?(o.notes||'Order'):(o.customer||'Order'))}</span>`).join('')}
     </button>`}
@@ -2484,6 +2509,21 @@ $('#gridWrap').addEventListener('click',e=>{
   if(nav){const k=nav.closest('[data-cal]').dataset.cal,n=+nav.dataset.calnav;UI.cal[k]=n?ymShift(calMonth(k),n):iso(TODAY).slice(0,7);renderGrid();return}
   const d=e.target.closest('[data-calday]');if(d)openCalDay(d.closest('[data-cal]').dataset.cal,d.dataset.calday);
 });
+/* photos from that day's sock / bag sheets: view full size or download */
+async function loadDayPhotos(runs,ds){
+  const B=sb.storage.from('dept14-photos'),items=[];
+  for(const r of runs){const {data}=await B.list('runs/'+r.id,{limit:100,sortBy:{column:'name',order:'asc'}});
+    (data||[]).filter(f=>f.name.endsWith('.jpg')).forEach(f=>items.push({run:r,name:'runs/'+r.id+'/'+f.name}))}
+  const box=$('#dayPhotos');if(!box)return;
+  if(!items.length){box.remove();return}
+  const names=items.map(x=>x.name);
+  const [{data:view},{data:dl}]=await Promise.all([B.createSignedUrls(names,3600),B.createSignedUrls(names,3600,{download:true})]);
+  if(!$('#dayPhotos'))return;
+  box.innerHTML=`<div class="sect">Photos <button type="button" class="btn" id="dlAll" style="margin-left:8px">Download all</button></div>
+    <div class="run-ph">${items.map((x,i)=>`<div class="ph"><a href="${esc(view[i].signedUrl)}" target="_blank" rel="noopener"><img src="${esc(view[i].signedUrl)}" alt="${esc(cap(x.run.job))} photo ${i+1}"></a>
+      <a class="ph-dl" href="${esc(dl[i].signedUrl)}" aria-label="Download photo ${i+1}">↓</a><span class="ph-cap">${esc(cap(x.run.job))}</span></div>`).join('')}</div>`;
+  $('#dlAll').onclick=()=>box.querySelectorAll('.ph-dl').forEach((a,i)=>setTimeout(()=>a.click(),i*400));
+}
 /* right-click a day: mark it off (or back on), or open it to write a note */
 $('#gridWrap').addEventListener('contextmenu',e=>{
   const d=e.target.closest('[data-calday]');if(!d||!Live.hasCal)return;e.preventDefault();
@@ -2521,9 +2561,11 @@ function openCalDay(k,ds){
     <label class="field"><span>Day notes</span><textarea id="calNote" rows="2" maxlength="1000">${esc(cr.note||'')}</textarea></label></div>`:'';
   modal(title,`${dayBox}${grates}
     ${rs.length?`<table class="grid cal-t"><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rs.map(r=>`<tr data-calrec="${esc(r.id)}">${row(r).map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`:'<div class="muted">No entries.</div>'}
+    ${k==='bio'&&Live.photoRuns&&rs.some(r=>Live.photoRuns.has(r.id))?'<div id="dayPhotos"><div class="sect">Photos</div><div class="muted">Loading…</div></div>':''}
     ${os.length?`<div class="sect">Orders</div><table class="grid cal-t"><tbody>${os.map(o=>`<tr data-calord="${esc(o.id)}"><td>${esc(o.line==='biochar'?(o.notes||'Order'):o.customer)}</td><td>${esc(orderSummary(o))}</td><td>${o.done?'Completed':'Open'}</td></tr>`).join('')}</tbody></table>`:''}`,
     `<button class="btn" data-close>Close</button><button class="btn primary" id="calAdd">Add +</button>`);
   const m=$('#modalRoot');
+  if($('#dayPhotos'))loadDayPhotos(rs.filter(r=>Live.photoRuns.has(r.id)),ds);
   const off=$('#calOff');if(off)off.onchange=()=>{setCal(k,ds,{off:off.checked});toast(off.checked?`${fmtDate(ds)} marked off`:`${fmtDate(ds)} back on`)};
   const nt=$('#calNote');if(nt)nt.onchange=()=>{const v=nt.value.trim();if(v===((calRec(k,ds)||{}).note||''))return;setCal(k,ds,{note:v});toast('Note saved')};
   m.querySelectorAll('[data-calrec]').forEach(tr=>tr.onclick=()=>{const r=rs.find(x=>x.id===tr.dataset.calrec);closeModal();
