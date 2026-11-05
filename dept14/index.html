@@ -299,6 +299,18 @@ table.eom-t{width:100%;border-collapse:collapse;table-layout:fixed}
 .grid tr.fold .fold-act{margin-left:8px;font-weight:500;color:var(--accent);font-size:.85rem}
 .grid td input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent);cursor:pointer}
 .in-modal{width:min(560px,100%)}
+.ord-modal{width:min(680px,100%)}
+.ord-lines{width:100%;border-collapse:collapse}
+.ord-lines td{padding:0 6px 8px 0;vertical-align:middle}
+.ord-lines td:first-child{width:auto}
+.ord-lines td:nth-child(2){width:150px}
+.ord-lines td.ord-load{width:110px}
+.ord-lines td:last-child{width:36px;padding-right:0}
+.ord-lines select,.ord-lines input{width:100%}
+.ord-lines .in-sfx{position:relative;display:block}
+.ord-modal #addLine{justify-self:start;width:auto;align-self:start}
+.in-form .field>.ord-chk{display:flex;align-items:center;gap:10px;height:40px;font:400 .88rem var(--f-body);text-transform:none;letter-spacing:0;color:var(--muted)}
+.in-form .ord-chk input[type=checkbox]{width:20px;height:20px;padding:0;accent-color:var(--accent);flex:none}
 .in-modal .modal-b{gap:18px;padding:18px 20px 20px}
 .in-modal .modal-h h3{font-size:1.25rem}
 .in-sub{font:500 .72rem/1 var(--f-mono);text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-top:4px}
@@ -590,7 +602,7 @@ function seedData(){
   ];
   return {bio,orc,adj,counts:{}};
 }
-let DB={bio:[],orc:[],oin:[],osales:[],purch:[],adj:[],counts:{}};
+let DB={bio:[],orc:[],oin:[],orders:[],purch:[],adj:[],counts:{}};
 const saveDB=()=>store.set('db',DB);
 
 /* ---------- item helpers ---------- */
@@ -628,6 +640,8 @@ function onHand(){
   active(DB.bio).forEach(r=>r.lines.forEach(l=>{const k=l.item==='SO1:custom'?`SO1:custom:${l.size}`:l.item;mv.push([k,r.date,l.dir==='out'?l.qty:-l.qty])}));
   DB.adj.forEach(a=>mv.push([a.item,a.date,a.qty]));
   (DB.purch||[]).forEach(p=>{const m=purchMat(p.material);if(m.line==='biochar')mv.push([m.key,p.date,+p.amount||0])});
+  /* completed sales take product out on the day they were completed */
+  (DB.orders||[]).filter(o=>o.line==='biochar'&&o.done).forEach(o=>o.lines.forEach(l=>mv.push([l.key,o.doneOn||o.date,-(+l.qty||0)])));
   const C=DB.counts||{},h={};
   mv.forEach(([k,d,q])=>{const c=C[k];if(c&&d<=c.date)return;h[k]=(h[k]||0)+q});
   Object.entries(C).forEach(([k,c])=>{h[k]=(h[k]||0)+c.qty});
@@ -836,17 +850,16 @@ const TABLES={
         {k:'notes',l:'Notes',get:r=>r.notes||''},
       ]},
     inventory:{label:'Inventory',view:'orcinv',cols:[],groups:{},rows:()=>[]},
-    sales:{label:'Sales',rows:()=>DB.osales,addable:true,addLabel:'+ Add order',onAdd:()=>openSaleForm(),
-      groups:{'':'None',customer:'Customer',load:'Load type',product:'Product',done:'Completed',month:'Month'},
+    sales:{label:'Sales',rows:()=>DB.orders.filter(o=>o.line===UI.line),addable:true,addLabel:'+ Add order',onAdd:()=>openOrderForm(null,UI.line),
+      groups:{'':'None',customer:'Customer',done:'Completed',month:'Month'},
       cols:[
-        {k:'date',l:'Order date',t:'📅',get:r=>r.date,fmt:v=>fmtDate(v)},
-        {k:'customer',l:'Customer',t:'A',get:r=>r.customer},
-        {k:'so',l:'Sales order #',t:'A',get:r=>r.so},
-        {k:'load',l:'Load type',t:'◉',get:r=>r.load,fmt:v=>`<span class="pill ${v==='BULK'?'wash':v==='BAGS'?'bag':'sock'}">${v}</span>`},
-        {k:'product',l:'Product',t:'A',get:r=>r.product},
-        {k:'qty',l:'Qty',t:'#',num:1,get:r=>r.qty,sum:1},
-        {k:'unit',l:'Unit',t:'A',get:r=>orcUnit(r.product)},
-        {k:'done',l:'Completed',t:'☑',get:r=>r.done?'Yes':'No',fmt:(v,r)=>`<input type="checkbox" data-done="${esc(r.id)}" ${r.done?'checked':''} aria-label="Completed">`},
+        {k:'date',l:'Order date',get:r=>r.date,fmt:v=>fmtDate(v)},
+        {k:'customer',l:'Customer',get:r=>r.customer},
+        {k:'so',l:'Sales order #',get:r=>r.so||''},
+        {k:'products',l:'Products',get:r=>orderSummary(r)},
+        {k:'done',l:'Completed',get:r=>r.done?'Yes':'No',fmt:(v,r)=>`<input type="checkbox" data-done="${esc(r.id)}" ${r.done?'checked':''} aria-label="Completed">`},
+        {k:'doneOn',l:'Shipped',get:r=>r.done?(r.doneOn||''):'',fmt:v=>v?fmtDate(v):''},
+        {k:'notes',l:'Notes',get:r=>r.notes||''},
       ]},
   }
 };
@@ -866,6 +879,9 @@ TABLES.purch={purchased:{label:'Purchased material',simple:true,rows:()=>DB.purc
 UI.table.purch='purchased';
 /* Orchid tab order: Inventory · Sales · Dryer · Picker production · Bagging production · Reports */
 TABLES.orchid=Object.fromEntries(['inventory','sales','dryer','picker','bagging','reports'].map(k=>[k,TABLES.orchid[k]]));
+/* Biochar gets the same Sales tab: Inventory · Production sheets · Sales · Reports */
+TABLES.biochar.sales=TABLES.orchid.sales;
+TABLES.biochar=Object.fromEntries(['inventory','runs','sales','monthend'].map(k=>[k,TABLES.biochar[k]]));
 function curTable(){const T=TABLES[UI.line];if(T&&!T[UI.table[UI.line]])UI.table[UI.line]=Object.keys(T)[0];return T[UI.table[UI.line]]}
 function tkey(){return UI.line+'.'+UI.table[UI.line]}
 
@@ -916,7 +932,7 @@ $('#toolbar').addEventListener('input',e=>{if(e.target.id==='q'){UI.q=e.target.v
 document.addEventListener('click',e=>{if(UI.openPop&&!e.target.closest('.pop')){UI.openPop=null;renderToolbar();$('#q')&&($('#q').value=UI.q);updateCount()}});
 
 let VIEW=[];
-const isSales=()=>UI.line==='orchid'&&UI.table.orchid==='sales';
+const isSales=()=>UI.table[UI.line]==='sales'&&(UI.line==='orchid'||UI.line==='biochar');
 function viewRows(){
   const T=curTable(),k=tkey(),s=UI.sort[k];
   let rs=T.rows().slice();
@@ -935,7 +951,7 @@ function drawRows(){
   const cols=T.cols.filter(c=>!hidden.includes(c.k));
   VIEW=viewRows();updateCount();
   const pre=T.pre?T.pre():'';
-  if(!VIEW.length&&!(isSales()&&!UI.q&&DB.osales.some(r=>r.done))){$('#gridWrap').innerHTML=pre+`<div class="empty">No records.</div>`;return}
+  if(!VIEW.length&&!(isSales()&&!UI.q&&DB.orders.some(r=>r.line===UI.line&&r.done))){$('#gridWrap').innerHTML=pre+`<div class="empty">No records.</div>`;return}
   const cell=(c,r)=>{const v=c.get(r);const shown=c.fmt?c.fmt(v,r):(c.num&&v!==''?fmtN(v,1):esc(v));return `<td class="${c.num?'r':''}" title="${esc(typeof v==='number'?fmtN(v,2):v)}">${shown}</td>`};
   const groupKey=r=>grp==='month'?(r.month||r.date).slice(0,7):grp==='crew'?r.crew.join(', '):grp==='done'?(r.done?'Completed':'Open'):grp==='type'?IN_TYPES[r.type]:String(r[grp]??'');
   const groupLabel=g=>grp==='month'?new Date(g+'-15').toLocaleDateString('en-US',{month:'long',year:'numeric'}):grp==='job'?jobPill(g):esc(g||'—');
@@ -944,7 +960,7 @@ function drawRows(){
     order.forEach(g=>{body+=`<tr class="grp"><td class="rn"></td><td colspan="${cols.length}">${groupLabel(g)} <span class="muted" style="font-weight:400">· ${by[g].length}</span></td></tr>`;
       by[g].forEach(r=>body+=rowHtml(r,++n))})}
   else if(isSales()){
-    const open=VIEW.filter(r=>!r.done),done=VIEW.filter(r=>r.done),allDone=DB.osales.filter(r=>r.done).length;
+    const open=VIEW.filter(r=>!r.done),done=VIEW.filter(r=>r.done),allDone=DB.orders.filter(r=>r.line===UI.line&&r.done).length;
     open.forEach(r=>body+=rowHtml(r,++n));
     const shown=UI.showDone||UI.q;
     const cnt=UI.q?done.length:allDone;
@@ -988,7 +1004,7 @@ function openRecord(id){
   if(UI.line==='orchid'&&UI.table.orchid==='dryer')return openOrchidForm(r);
   if(UI.line==='orchid'&&(UI.table.orchid==='picker'||UI.table.orchid==='bagging'))return openInputForm(r);
   if(UI.line==='purch')return openInputForm(r,'buy');
-  if(UI.line==='orchid'&&UI.table.orchid==='sales')return openSaleForm(r);
+  if(isSales())return openOrderForm(r,UI.line);
   const dl=T.cols.map(c=>{const v=c.get(r);if(v===''||v==null)return '';return `<dt>${c.l}</dt><dd>${c.fmt?c.fmt(v,r):(c.num?fmtN(v,2):esc(v))}</dd>`}).join('');
   const isRun=T.canVoid;
   modal(isRun?`${UI.line==='biochar'?r.job[0].toUpperCase()+r.job.slice(1):'Dryer'} run · ${fmtDate(r.date)}`:'Record',
@@ -1122,7 +1138,7 @@ function secItems(sec,h){
   return [...std,...extra];
 }
 function renderInventory(){
-  const h=onHand();
+  const h=onHand(),oo=openOrders('biochar');
   $('#toolbar').innerHTML=`<span class="sp"></span>`;
   const one=sec=>{const items=secItems(sec,h);
     const units=[...new Set(items.map(x=>x.unit))];const tot=items.reduce((a,x)=>a+(h[x.key]||0),0);
@@ -1133,7 +1149,7 @@ function renderInventory(){
       <div class="inv-tiles">${items.map(x=>{const q=h[x.key]||0,c=DB.counts[x.key];return `<button class="inv-tile ${x.custom?'custom':''}" data-tile="${sec.key}" data-key="${esc(x.key)}">
         <span class="t-name">${esc(x.name)}</span>
         <span class="t-val num ${q<0?'neg':''}">${fmtN(q,1)}<small>${x.unit}</small></span>
-        <span class="t-meta">${c?'Counted '+fmtDate(c.date):x.custom?'Custom from sheets':' '}</span></button>`}).join('')||'<span class="muted">Nothing here yet.</span>'}</div>
+        <span class="t-meta">${oo[x.key]?`${fmtN(oo[x.key],1)} ${x.unit} on open orders`:x.custom?'Custom from sheets':' '}</span></button>`}).join('')||'<span class="muted">Nothing here yet.</span>'}</div>
     </section>`};
   const by=k=>INV_SECTIONS.find(x=>x.key===k);
   $('#gridWrap').innerHTML=`<div class="inv">${['raw','washed','bags','socks'].map(k=>one(by(k))).join('')}</div>`;
@@ -1226,7 +1242,7 @@ function onHandOrc(){
   (DB.purch||[]).forEach(p=>{const m=purchMat(p.material);if(m.line==='orchid')add(p.material,p.date,+p.amount||0)});
   active(DB.orc).forEach(r=>{add(r.product,r.date,-r.yardsIn);
     if(r.dest==='Bin'&&r.bin)add(r.bin,r.date,r.yardsOut);else if(r.dest==='Totes')add(smallish(r.product)?'Small totes':'Medium totes',r.date,r.totes||0)});
-  DB.osales.filter(s=>s.done).forEach(s=>add(s.product,s.date,-s.qty));
+  (DB.orders||[]).filter(o=>o.line==='orchid'&&o.done).forEach(o=>o.lines.forEach(l=>add(l.key.slice(2),o.doneOn||o.date,-(+l.qty||0))));
   DB.adj.filter(a=>a.item.startsWith('O:')).forEach(a=>mv.push([a.item,a.date,a.qty]));
   const C=DB.counts,h={};
   mv.forEach(([k,d,q])=>{const c=C[k];if(c&&d<=c.date)return;h[k]=(h[k]||0)+q});
@@ -1234,7 +1250,10 @@ function onHandOrc(){
   return h;
 }
 ORC_SECTIONS.forEach(s=>s.hand=onHandOrc);
-const openOrders=()=>{const o={};DB.osales.filter(s=>!s.done).forEach(s=>{o['O:'+s.product]=(o['O:'+s.product]||0)+s.qty});return o};
+/* open (not completed) order quantities by inventory key, for either line */
+const openOrders=(line='orchid')=>{const o={};(DB.orders||[]).filter(x=>x.line===line&&!x.done).forEach(x=>x.lines.forEach(l=>{o[l.key]=(o[l.key]||0)+(+l.qty||0)}));return o};
+/* old one-row-per-product shape, for the orchid report builder / exports */
+const orcSalesFlat=()=>(DB.orders||[]).filter(o=>o.line==='orchid').flatMap(o=>o.lines.map((l,i)=>({id:o.id+'#'+i,date:o.date,customer:o.customer,so:o.so,load:l.load||'',product:l.key.slice(2),qty:+l.qty,done:o.done})));
 
 /* Bin map: laid out like the workbook's Inventory tab. One column per bin, green (dark green
    header) then dried (orange header), with the black divider where the sheet has its blacked-out
@@ -1426,35 +1445,68 @@ $('#gridWrap').addEventListener('change',e=>{
   if(t.dataset.gr){const [m,k]=t.dataset.gr.split('|');SETTINGS.orc.ratios[m][k]=Math.max(0,Math.min(100,+t.value||0));store.set('settings',SETTINGS);renderGrid();toast('Ratio updated')}
 });
 
-/* ---- Sales ---- */
-function openSaleForm(rec){
-  const isNew=!rec;const d=isNew?{date:iso(TODAY),customer:'',so:'',load:'BULK',product:'#1 Small Green',qty:'',done:false}:{...rec};
-  const customers=[...new Set(DB.osales.map(s=>s.customer))].sort();
-  modal(isNew?'Add order':`Order · ${esc(d.customer)}`,`<div class="fields">
+/* ---- Sales: an order has a date, customer, sales order #, notes and any number of product lines.
+   Open orders don't move inventory; Completed takes the lines out on the day it's ticked. ---- */
+function saleProducts(line){
+  if(line==='orchid')return [...binMap().filter(c=>!c.divider).map(c=>({key:'O:'+c.name,name:c.name,unit:'yd'})),...bagMap().map(([k,,u])=>({key:'O:'+k,name:k,unit:u}))];
+  const h=onHand();
+  return ['washed','socks','bags','raw'].flatMap(k=>{const sec=INV_SECTIONS.find(x=>x.key===k);
+    return secItems(sec,h).map(x=>({key:x.key,unit:x.unit==='ea'?(k==='socks'?'socks':'bags'):x.unit,
+      name:k==='washed'?`${x.name} (washed char)`:k==='bags'?`${x.name} bags`:k==='socks'?`${x.name} socks`:`Raw char · ${x.name.toLowerCase()}`}))});
+}
+const saleProduct=(line,key)=>saleProducts(line).find(p=>p.key===key)||{key,name:key.replace(/^O:/,''),unit:line==='orchid'?orcUnit(key.slice(2)):'ea'};
+const orderSummary=o=>o.lines.map(l=>{const p=saleProduct(o.line,l.key);return `${fmtN(l.qty,2)} ${p.unit} ${p.name}`}).join(', ');
+function openOrderForm(rec,line){
+  const isNew=!rec,L=line||rec.line;
+  const d=isNew?{line:L,date:iso(TODAY),customer:L==='biochar'?'Stormwater Biochar':'',so:'',notes:'',done:false,lines:[{key:'',qty:'',load:''}]}
+               :{...rec,lines:rec.lines.map(l=>({...l}))};
+  const prods=saleProducts(L),customers=[...new Set(DB.orders.filter(o=>o.line===L).map(o=>o.customer))].sort();
+  const lineRow=(l,i)=>{const u=l.key?saleProduct(L,l.key).unit:'';return `<tr data-i="${i}">
+      <td><select data-f="key" aria-label="Product"><option value="">Pick a product</option>${prods.map(p=>`<option value="${esc(p.key)}" ${p.key===l.key?'selected':''}>${esc(p.name)}</option>`).join('')}${l.key&&!prods.some(p=>p.key===l.key)?`<option value="${esc(l.key)}" selected>${esc(saleProduct(L,l.key).name)}</option>`:''}</select></td>
+      <td><span class="in-sfx"><input type="number" data-f="qty" min="0" step="0.5" value="${l.qty??''}" aria-label="Quantity" inputmode="decimal"><i>${u}</i></span></td>
+      ${L==='orchid'?`<td class="ord-load"><select data-f="load" aria-label="Load type"><option value="">—</option>${['BULK','BAGS','TOTES'].map(x=>`<option ${x===l.load?'selected':''}>${x}</option>`).join('')}</select></td>`:''}
+      <td>${d.lines.length>1?`<button type="button" class="btn icon ghost" data-rmline="${i}" aria-label="Remove line">✕</button>`:''}</td></tr>`};
+  modal(isNew?'New order':`Order · ${d.customer||''}`,`
+    <div class="in-form">
       <label class="field"><span>Order date</span><input type="date" name="date" value="${d.date}"></label>
       <label class="field"><span>Customer</span><input type="text" name="customer" list="custList" value="${esc(d.customer)}" autocomplete="off"><datalist id="custList">${customers.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label>
-      <label class="field"><span>Sales order #</span><input type="text" name="so" value="${esc(d.so)}"></label>
-      <label class="field"><span>Load type</span><select name="load">${['BULK','BAGS','TOTES'].map(x=>`<option ${x===d.load?'selected':''}>${x}</option>`).join('')}</select></label>
-      <label class="field"><span>Product</span><select name="product">${orcSaleProducts().map(p=>`<option ${p===d.product?'selected':''}>${esc(p)}</option>`).join('')}</select></label>
-      <label class="field"><span>Quantity (<span id="qu">${orcUnit(d.product)}</span>)</span><input type="number" name="qty" min="0" step="0.5" value="${d.qty}"></label>
-      <label class="field" style="flex-direction:row;display:flex;gap:8px;align-items:center"><input type="checkbox" name="done" ${d.done?'checked':''}><span style="text-transform:none;letter-spacing:0;font:inherit;color:var(--ink)">Completed (takes it out of inventory)</span></label>
-    </div><div class="err" id="formErr"></div>`,
-    `${isNew?'':'<button class="btn" id="delSale" style="margin-right:auto">Delete</button>'}<button class="btn" data-close>Cancel</button><button class="btn primary" id="saveSale">${isNew?'Add order':'Save changes'}</button>`);
-  const m=$('#modalRoot');
-  m.querySelector('[name=product]').onchange=e=>{$('#qu').textContent=orcUnit(e.target.value)};
-  const del=$('#delSale');if(del)del.onclick=()=>{if(!confirm('Delete this order?'))return;DB.osales=DB.osales.filter(x=>x.id!==rec.id);saveDB();closeModal();render();toast('Order deleted')};
-  $('#saveSale').onclick=()=>{const v=n=>m.querySelector(`[name="${n}"]`);const err=t=>{$('#formErr').textContent=t};
-    if(!v('customer').value.trim())return err('Enter the customer.');
-    if(!(+v('qty').value>0))return err('Enter the quantity.');
-    const out={id:isNew?crypto.randomUUID():rec.id,date:v('date').value,customer:v('customer').value.trim(),so:v('so').value.trim()||v('customer').value.trim(),load:v('load').value,product:v('product').value,qty:+v('qty').value,done:v('done').checked};
-    if(isNew)DB.osales.push(out);else Object.assign(rec,out);
-    UI.flash=out.id;saveDB();closeModal();render();UI.flash=null;toast(isNew?'Order added':'Changes saved')};
+      <label class="field"><span>Sales order #</span><input type="text" name="so" value="${esc(d.so||'')}" autocomplete="off"></label>
+      <label class="field ord-done"><span>Completed</span><span class="ord-chk"><input type="checkbox" name="done" ${d.done?'checked':''}> ${d.done&&d.doneOn?'Shipped '+fmtDate(d.doneOn):''}</span></label>
+      <div class="field full"><span>Products</span>
+        <table class="ord-lines"><tbody id="ordLines">${d.lines.map(lineRow).join('')}</tbody></table>
+        <button type="button" class="btn" id="addLine">Add +</button></div>
+      <label class="field full"><span>Notes</span><textarea name="notes" rows="2">${esc(d.notes||'')}</textarea></label>
+    </div>
+    <div class="in-err" id="formErr" role="alert" hidden></div>`,
+    `${isNew?'':'<button class="btn danger" id="delOrder" style="margin-right:auto">Delete</button>'}<button class="btn" data-close>Cancel</button><button class="btn primary" id="saveOrder">${isNew?'Save order':'Save changes'}</button>`);
+  $('#modalRoot .modal').classList.add('in-modal','ord-modal');
+  const m=$('#modalRoot'),tb=$('#ordLines');
+  const grab=()=>{d.date=m.querySelector('[name=date]').value;d.customer=m.querySelector('[name=customer]').value;d.so=m.querySelector('[name=so]').value;d.notes=m.querySelector('[name=notes]').value;d.done=m.querySelector('[name=done]').checked;
+    tb.querySelectorAll('tr[data-i]').forEach(tr=>{const l=d.lines[+tr.dataset.i];tr.querySelectorAll('[data-f]').forEach(el=>{l[el.dataset.f]=el.value})})};
+  const redraw=()=>{tb.innerHTML=d.lines.map(lineRow).join('')};
+  tb.addEventListener('change',e=>{if(e.target.dataset.f==='key'){grab();redraw()}});
+  tb.addEventListener('click',e=>{const b=e.target.closest('[data-rmline]');if(b){grab();d.lines.splice(+b.dataset.rmline,1);redraw()}});
+  $('#addLine').onclick=()=>{grab();d.lines.push({key:'',qty:'',load:''});redraw();tb.querySelector('tr:last-child select')?.focus()};
+  const del=$('#delOrder');if(del)del.onclick=()=>{if(!confirm('Delete this order? If it was completed, its products go back into inventory. You can undo it with ⌘Z.'))return;
+    DB.orders=DB.orders.filter(x=>x.id!==rec.id);saveDB();closeModal();render();toast('Order deleted')};
+  $('#saveOrder').onclick=()=>{grab();const err=t=>{const e=$('#formErr');e.textContent=t;e.hidden=false};
+    if(!d.date)return err('Pick the order date.');
+    if(!d.customer.trim())return err('Enter the customer.');
+    const lines=d.lines.filter(l=>l.key||+l.qty);
+    if(!lines.length)return err('Add at least one product.');
+    if(lines.some(l=>!l.key))return err('Pick a product for each line.');
+    if(lines.some(l=>!(+l.qty>0)))return err('Enter a quantity for each line.');
+    const wasDone=!isNew&&rec.done;
+    const out={id:isNew?crypto.randomUUID():rec.id,line:L,date:d.date,customer:d.customer.trim(),so:d.so.trim(),notes:d.notes.trim(),done:d.done,
+      doneOn:d.done?(wasDone?(rec.doneOn||iso(TODAY)):iso(TODAY)):null,lines:lines.map(l=>({key:l.key,qty:+l.qty,...(L==='orchid'&&l.load?{load:l.load}:{})}))};
+    if(isNew)DB.orders.push(out);else{Object.keys(rec).forEach(k=>delete rec[k]);Object.assign(rec,out)}
+    UI.flash=out.id;saveDB();closeModal();render();UI.flash=null;toast(isNew?'Order saved':'Changes saved')};
 }
 /* tick "Completed" right in the grid */
 $('#gridWrap').addEventListener('click',e=>{
   const cb=e.target.closest('[data-done]');if(!cb)return;
-  e.stopPropagation();const s=DB.osales.find(x=>x.id===cb.dataset.done);if(!s)return;
-  s.done=!s.done;UI.flash=s.id;saveDB();render();UI.flash=null;toast(s.done?(UI.showDone?'Marked completed':'Completed. It’s folded under ✓ Completed.'):'Marked open');
+  e.stopPropagation();const s=DB.orders.find(x=>x.id===cb.dataset.done);if(!s)return;
+  s.done=!s.done;s.doneOn=s.done?iso(TODAY):null;UI.flash=s.id;saveDB();render();UI.flash=null;toast(s.done?(UI.showDone?'Marked completed':'Completed. It’s folded under ✓ Completed.'):'Marked open');
 },true);
 
 /* demo data for the orchid tabs */
@@ -1806,7 +1858,7 @@ const RB_SRC={
       {k:'pallets',l:'Pallets bagged',type:'num',unit:'pallets',get:r=>+r.pallets||0},
       {k:'hours',l:'Hours',type:'num',unit:'hours',get:r=>+r.hours||0},
     ]},
-  sales:{line:'orchid',label:'Sales orders',rows:()=>DB.osales,
+  sales:{line:'orchid',label:'Sales orders',rows:()=>orcSalesFlat(),
     fields:[
       {k:'date',l:'Order date',type:'date',get:r=>r.date},
       {k:'customer',l:'Customer',type:'dim',get:r=>r.customer},
@@ -2033,8 +2085,8 @@ const TREND_ORC={
   pickerHours:{label:'Picker labor hours',unit:'h',split:'opick',rows:()=>DB.oin.filter(e=>e.type==='pick'),val:(e,key)=>(!key||e.material===key)?(+e.hours||0):0},
   purchased:{label:'Purchased',unit:'yd',split:'oproduct',rows:()=>DB.purch.filter(p=>purchMat(p.material).line==='orchid'),val:byProd(p=>+p.amount||0)},
   bagged:{label:'Pallets bagged',unit:'pallets',rows:()=>DB.oin.filter(e=>e.type==='bag'),val:e=>+e.pallets||0},
-  soldBulk:{label:'Bulk sold (completed)',unit:'yd',split:'oproduct',rows:()=>DB.osales.filter(x=>x.done&&x.load==='BULK'),val:byProd(x=>x.qty)},
-  orders:{label:'Orders placed',unit:'',split:'oload',rows:()=>DB.osales,val:(x,key)=>(!key||x.load===key)?1:0},
+  soldBulk:{label:'Bulk sold (completed)',unit:'yd',split:'oproduct',rows:()=>orcSalesFlat().filter(x=>x.done&&x.load==='BULK'),val:byProd(x=>x.qty)},
+  orders:{label:'Orders placed',unit:'',split:'oload',rows:()=>orcSalesFlat(),val:(x,key)=>(!key||x.load===key)?1:0},
 };
 const trendMeasures=()=>UI.line==='orchid'?TREND_ORC:TREND_BIO;
 function splitKeys(kind){
@@ -2144,7 +2196,7 @@ const EXPORTS_ORC={
     rows:(f,t)=>DB.oin.filter(e=>e.type==='bag'&&e.date>=f&&e.date<=t).sort((a,b)=>a.date.localeCompare(b.date)).map(e=>[e.date,e.material,+e.yards||0,+e.pallets||0,e.hours||'',e.notes||''])},
   purchased:PURCH_EXPORT,
   sales:{label:'Sales orders',head:['Order date','Customer','Sales order #','Load type','Product','Qty','Unit','Completed'],
-    rows:(f,t)=>DB.osales.filter(x=>x.date>=f&&x.date<=t).sort((a,b)=>a.date.localeCompare(b.date)).map(x=>[x.date,x.customer,x.so,x.load,x.product,x.qty,orcUnit(x.product),x.done?'Yes':'No'])},
+    rows:(f,t)=>orcSalesFlat().filter(x=>x.date>=f&&x.date<=t).sort((a,b)=>a.date.localeCompare(b.date)).map(x=>[x.date,x.customer,x.so,x.load,x.product,x.qty,orcUnit(x.product),x.done?'Yes':'No'])},
   inventory:{label:'Inventory counts (right now)',nodate:true,head:['Bin','On hand','Unit','Last counted'],
     rows:()=>{const h=onHandOrc();return [...allBinNames().map(n=>[n,'yd']),...bagMap().map(([k,n,u])=>[k,u])].map(([n,u])=>{const k='O:'+n;return [n,r1(h[k]||0),u,DB.counts[k]?DB.counts[k].date:'']})}},
 };
@@ -2377,7 +2429,7 @@ $('#inputBtn').onclick=()=>openInputForm(null);
    Prototype: kept in this browser (d14.versions, last 80). Live: a
    dept14 audit table written by the database, shared by every manager.
    ============================================================= */
-const VH_NAMES={bio:'Biochar production sheets',orc:'Dryer runs',oin:'Picker & bagging production',purch:'Purchased material',osales:'Sales',counts:'Inventory counts',adj:'Inventory adjustments',settings:'Settings'};
+const VH_NAMES={bio:'Biochar production sheets',orc:'Dryer runs',oin:'Picker & bagging production',purch:'Purchased material',orders:'Sales',counts:'Inventory counts',adj:'Inventory adjustments',settings:'Settings'};
 const VH_MAX=80;
 const VH={list:[],ptr:-1,applying:false,pending:false};
 (function vhLoad(){try{const v=JSON.parse(localStorage.getItem('d14.versions')||'null');if(v&&Array.isArray(v.list)){VH.list=v.list;VH.ptr=Math.min(v.ptr,v.list.length-1)}}catch(e){}})();
@@ -2432,7 +2484,7 @@ function vhRowName(k,r){
   if(k==='orc')return `Dryer run · ${d} · ${r.product||''}`;
   if(k==='oin')return `${IN_TYPES[r.type]||'Input'} · ${d} · ${r.material||''}`;
   if(k==='purch')return `${r.material||''} · ${d}${r.po?' · PO '+r.po:''}`;
-  if(k==='osales')return `${r.customer||'Order'} · ${d} · ${r.product||''}`;
+  if(k==='orders')return `${r.customer||'Order'} · ${d}${r.so?' · '+r.so:''}`;
   if(k==='adj')return `${(r.item||'').replace(/^O:/,'')} · ${d}`;
   return r.name||r.id||'';
 }
@@ -2459,7 +2511,7 @@ function vhDiff(k,c){
 }
 /* A short title for a version, written from what changed. */
 const VH_SET={bonusPerYardIn:'bonus $ per yard',bonusPerTote:'bonus $ per tote',bonusYdPerTote:'yards per tote',ratio:'equipment hours',crew:'crew',orc:'orchid settings',catalog:'inventory items',siteUrl:'site link',forms:'crew sheets',reports:'saved reports'};
-const VH_ONE={bio:'production sheet',orc:'dryer run',oin:'input',purch:'purchase',osales:'sales order',adj:'inventory adjustment'};
+const VH_ONE={bio:'production sheet',orc:'dryer run',oin:'input',purch:'purchase',orders:'sales order',adj:'inventory adjustment'};
 function vhSummary(v){
   if(v.label)return v.label;
   const parts=Object.entries(v.changes).filter(([k])=>VH_NAMES[k]).map(([k,c])=>{
@@ -2472,9 +2524,9 @@ function vhSummary(v){
     const n=added.length+gone.length+edited.length;
     if(n===1){const id=added[0]||gone[0]||edited[0],r=am.get(id)||bm.get(id);
       let verb=added.length?'Added':gone.length?'Deleted':'Edited';
-      if(edited.length){const o=bm.get(id);if(k==='osales'&&o.done!==r.done&&Object.keys(r).every(x=>x==='done'||JSON.stringify(o[x])===JSON.stringify(r[x])))verb=r.done?'Completed':'Reopened';
+      if(edited.length){const o=bm.get(id);if(k==='orders'&&o.done!==r.done&&Object.keys(r).every(x=>x==='done'||x==='doneOn'||JSON.stringify(o[x])===JSON.stringify(r[x])))verb=r.done?'Completed':'Reopened';
         else if(o.status!==r.status)verb=r.status==='void'?'Voided':'Restored'}
-      return `${verb} · ${k==='osales'?'Sales order · ':k==='adj'?'Adjustment · ':k==='purch'?'Purchase · ':''}${vhRowName(k,r)}`}
+      return `${verb} · ${k==='orders'?'Sales order · ':k==='adj'?'Adjustment · ':k==='purch'?'Purchase · ':''}${vhRowName(k,r)}`}
     return `${VH_NAMES[k]}: ${[added.length&&added.length+' added',edited.length&&edited.length+' edited',gone.length&&gone.length+' deleted'].filter(Boolean).join(', ')}`;
   });
   return parts.join(' · ')||'Changed';
@@ -2581,11 +2633,11 @@ async function fetchAll(table,select='*',filter){
 
 /* ---- read everything ---- */
 Live.load=async function(){
-  const [items,bins,emp,settings,reports,runs,dryer,picker,bagging,sales,purch,adj,counts]=await Promise.all([
+  const [items,bins,emp,settings,reports,runs,dryer,picker,bagging,orders,purch,adj,counts]=await Promise.all([
     fetchAll('items'),fetchAll('bins','*',q=>q.order('sort')),fetchAll('employees','*',q=>q.order('name')),fetchAll('settings'),fetchAll('saved_reports','*',q=>q.order('created_at')),
     fetchAll('production_runs','*,run_workers(employee_id),run_lines(*)',q=>q.eq('line','biochar')),
     fetchAll('dryer_runs','*,dryer_run_workers(employee_id)'),fetchAll('picker_runs'),fetchAll('bagging_runs'),
-    fetchAll('sales_orders'),fetchAll('purchases'),fetchAll('inventory_adjustments'),
+    fetchAll('orders','*,order_lines(*)'),fetchAll('purchases'),fetchAll('inventory_adjustments'),
     fetchAll('inventory_counts','*',q=>q.order('counted_on',{ascending:false}).order('created_at',{ascending:false}))]);
   Live.items=items;Live.bins=bins;Live.emp=emp;
   const bn=id=>(Live.bin(id)||{}).name||'';
@@ -2597,7 +2649,8 @@ Live.load=async function(){
     notes:r.notes||'',status:r.status,voidReason:r.void_reason||'',source:r.source}));
   DB.oin=[...picker.map(p=>({id:p.id,type:'pick',date:p.production_date,material:bn(p.material_bin_id),units:+p.units,hours:+p.hours,yards:0,pallets:0,notes:p.notes||''})),
           ...bagging.map(b=>({id:b.id,type:'bag',date:b.production_date,material:bn(b.from_bin_id),yards:+b.yards_used,pallets:+b.pallets,hours:+b.hours,units:0,notes:b.notes||''}))];
-  DB.osales=sales.map(s=>({id:s.id,date:s.order_date,customer:s.customer,so:s.sales_order_no||'',load:s.load_type,product:bn(s.bin_id),qty:+s.qty,done:s.completed,notes:s.notes||''}));
+  DB.orders=orders.map(o=>({id:o.id,line:o.line,date:o.order_date,customer:o.customer,so:o.sales_order_no||'',notes:o.notes||'',done:o.completed,doneOn:o.completed_on||null,
+    lines:(o.order_lines||[]).map(l=>({key:l.bin_id?'O:'+bn(l.bin_id):countKeyOf(Live.item(l.item_id),l.custom_size_ft,l.custom_name),qty:+l.qty,...(l.load_type?{load:l.load_type}:{})}))}));
   DB.purch=purch.map(p=>({id:p.id,date:p.purchase_date,material:p.bin_id?bn(p.bin_id):PURCH_RAW[keyOfLine(Live.item(p.item_id))]||'',amount:+p.amount,po:p.po||'',notes:p.notes||''}));
   DB.adj=adj.map(a=>({id:a.id,date:a.adj_date,item:a.bin_id?'O:'+bn(a.bin_id):countKeyOf(Live.item(a.item_id),a.custom_size_ft,a.custom_name),qty:+a.qty_delta,reason:a.reason,notes:a.notes||''}));
   DB.counts={};
@@ -2630,7 +2683,7 @@ Live.seedReports=async function(){
 };
 
 /* ---- snapshots used to work out what changed ---- */
-const COLS=['bio','orc','oin','osales','purch','adj'];
+const COLS=['bio','orc','oin','orders','purch','adj'];
 Live.snap=()=>{const o={};COLS.forEach(c=>{o[c]=new Map((DB[c]||[]).map(r=>[r.id,JSON.stringify(r)]))});o.counts=JSON.stringify(DB.counts||{});return o};
 Live.ssnap=()=>JSON.stringify({ratio:{wash:SETTINGS.ratio.wash,sock:SETTINGS.ratio.sock,bag:SETTINGS.ratio.bag},bonus:[SETTINGS.bonusPerYardIn,SETTINGS.bonusPerTote,SETTINGS.bonusYdPerTote],
   orc:{y:SETTINGS.orc.yardsPerUnit,r:SETTINGS.orc.ratios},binNotes:SETTINGS.orc.binNotes||{},crew:SETTINGS.crew,blends:[...BLENDS],bags:[...BAG_TYPES],socks:[...SOCK_SIZES],bins:SETTINGS.orc.extraBins||[],reports:SETTINGS.reports||[],
@@ -2645,14 +2698,14 @@ const ROW={
     status:r.status||'active',void_reason:r.status==='void'?(r.voidReason||null):null}),
   pick:r=>({id:r.id,production_date:r.date,material_bin_id:Live.binId(r.material),units:+r.units,hours:+r.hours||0,notes:r.notes||null}),
   bag:r=>({id:r.id,production_date:r.date,from_bin_id:Live.binId(r.material),yards_used:+r.yards,pallets:+r.pallets,hours:+r.hours||0,notes:r.notes||null}),
-  osales:r=>({id:r.id,order_date:r.date,customer:r.customer,sales_order_no:r.so||null,load_type:r.load,bin_id:Live.binId(r.product),qty:+r.qty,completed:!!r.done}),
+  orders:r=>({id:r.id,line:r.line,order_date:r.date,customer:r.customer,sales_order_no:r.so||null,notes:r.notes||null,completed:!!r.done,completed_on:r.done?(r.doneOn||iso(TODAY)):null}),
   purch:r=>{const raw=Object.entries(PURCH_RAW).find(([,n])=>n===r.material);
     return raw?{id:r.id,purchase_date:r.date,line:'biochar',item_id:itemOfKey(raw[0]).item_id,bin_id:null,amount:+r.amount,po:r.po||null,notes:r.notes||null}
               :{id:r.id,purchase_date:r.date,line:'orchid',item_id:null,bin_id:Live.binId(r.material),amount:+r.amount,po:r.po||null,notes:r.notes||null}},
   adj:r=>r.item.startsWith('O:')?{id:r.id,bin_id:Live.binId(r.item.slice(2)),item_id:null,qty_delta:+r.qty,reason:r.reason,adj_date:r.date,notes:r.notes||null}
         :{id:r.id,...itemOfKey(r.item),bin_id:null,qty_delta:+r.qty,reason:r.reason,adj_date:r.date,notes:r.notes||null},
 };
-const TABLE={bio:'production_runs',orc:'dryer_runs',pick:'picker_runs',bag:'bagging_runs',osales:'sales_orders',purch:'purchases',adj:'inventory_adjustments'};
+const TABLE={bio:'production_runs',orc:'dryer_runs',pick:'picker_runs',bag:'bagging_runs',orders:'orders',purch:'purchases',adj:'inventory_adjustments'};
 const must=async p=>{const {error}=await p;if(error)throw error};
 
 /* ---- write what changed ---- */
@@ -2679,6 +2732,11 @@ Live.sync=async function(){
             await must(sb.from('run_lines').delete().eq('run_id',id));
             const ls=(r.lines||[]).filter(l=>+l.qty>0).map(l=>({run_id:id,direction:l.dir,qty:+l.qty,...itemOfKey(l.item,l.size)}));
             if(ls.length)await must(sb.from('run_lines').insert(ls));
+          }
+          if(c==='orders'){
+            await must(sb.from('order_lines').delete().eq('order_id',id));
+            const ls=(r.lines||[]).filter(l=>+l.qty>0).map(l=>({order_id:id,qty:+l.qty,load_type:l.load||null,...(l.key.startsWith('O:')?{bin_id:Live.binId(l.key.slice(2))}:itemOfKey(l.key))}));
+            if(ls.length)await must(sb.from('order_lines').insert(ls));
           }
           if(c==='orc'){
             await must(sb.from('dryer_run_workers').delete().eq('run_id',id));
