@@ -170,7 +170,8 @@ nav.subtabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:va
 .pop-menu{position:absolute;top:calc(100% + 4px);left:0;z-index:15;background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--r);padding:8px;min-width:200px;display:grid;gap:4px;box-shadow:0 8px 24px rgb(0 0 0 / .12)}
 .pop-menu label{display:flex;gap:8px;align-items:center;font-size:.88rem;padding:3px 4px;border-radius:4px;cursor:pointer}
 .pop-menu label:hover{background:var(--sunken)}
-.grid-wrap{overflow:auto;max-height:62vh}
+.grid-wrap{overflow-x:auto}
+.base{min-height:calc(100vh - 210px)}
 table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:.88rem}
 .grid th,.grid td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:0 10px;height:36px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px;text-align:left}
 .grid th{position:sticky;top:0;z-index:2;background:var(--sunken);font-weight:600;font-size:.8rem;color:var(--muted);cursor:pointer;user-select:none}
@@ -398,6 +399,43 @@ table.eom-t{width:100%;border-collapse:collapse;table-layout:fixed}
 .inv-tile .t-name{font:600 .8rem/1.2 var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .inv-tile .t-val{font:700 2.2rem/1.05 var(--f-display)}
 .inv-tile .t-val small{font:500 .85rem var(--f-body);color:var(--muted);margin-left:4px}
+.t-two{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.t-after{display:grid;justify-items:end;text-align:right}
+.inv-tile .t-after .t-val{font-size:1.6rem}
+.t-lab,.bm-lab{font:500 .7rem/1.2 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.t-after .t-val.neg,.bm-after .num.neg{color:var(--bad)}
+/* active orders above the inventory */
+.ao{padding:16px 18px 18px 20px;border-bottom:1px solid var(--line);display:grid;gap:12px}
+.ao-h{display:flex;align-items:center;gap:10px}
+.ao-h h3{margin:0;font-size:1.1rem;text-transform:uppercase;letter-spacing:.05em}
+.ao-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.ao-col{border:1px solid var(--line);border-top:4px solid var(--acc);border-radius:var(--r);background:linear-gradient(180deg,color-mix(in srgb,var(--acc) 8%,transparent),transparent 70%);padding:10px 12px;display:grid;gap:6px;align-content:start}
+.ao-col h4{margin:0;display:flex;align-items:center;gap:8px;font:600 .8rem/1.2 var(--f-mono);text-transform:uppercase;letter-spacing:.08em}
+.ao-col h4 .inv-dot{background:var(--acc)}
+.ao-item{all:unset;cursor:pointer;display:grid;grid-template-columns:auto 1fr;gap:2px 10px;padding:6px 8px;border-radius:6px;background:var(--surface);border:1px solid var(--line)}
+.ao-item:hover,.ao-item:focus-visible{border-color:var(--acc)}
+.ao-item .num{font-weight:700}
+.ao-item .ao-sub{grid-column:2;font-size:.8rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ao-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.ao-row{display:grid;grid-template-columns:22px 34px minmax(120px,1.2fr) minmax(70px,.5fr) minmax(0,2fr) auto auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);cursor:pointer}
+.ao-row:hover{border-color:var(--accent)}
+.ao-row.dragging{opacity:.4}
+.ao-row.drop-before{box-shadow:0 -3px 0 var(--accent)}
+.ao-row.drop-after{box-shadow:0 3px 0 var(--accent)}
+.ao-grip{cursor:grab;color:var(--muted);text-align:center;user-select:none;font-size:1.1rem;line-height:1}
+.ao-rank{font:700 1.2rem/1 var(--f-display)}
+.ao-cust{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ao-so,.ao-date{font-size:.85rem;color:var(--muted);white-space:nowrap}
+.ao-prod{font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ao-mv{display:flex;gap:2px}
+.ao-mv .btn{width:28px;height:28px;padding:0;justify-content:center}
+@media (max-width:760px){.ao-row{grid-template-columns:22px 30px 1fr auto}.ao-so,.ao-prod,.ao-date{display:none}}
+.binmap .bh{min-width:176px}
+.bm-two{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.bm-after{display:grid;justify-items:end}
+.bm-lab{white-space:nowrap}
+.binmap .onhand .bm-two>.num{font-size:1.45rem}
+.binmap .onhand .bm-after .num{font-size:1.2rem}
 .inv-tile .t-meta{font-size:.78rem;color:var(--muted)}
 @keyframes flashrow{from{background:var(--accent-soft)}to{background:var(--surface)}}
 .grid tbody tr.flash{animation:flashrow 1.6s ease-out}
@@ -1145,6 +1183,44 @@ function secItems(sec,h){
     .map(k=>({key:k,name:sec.key==='socks'?`${k.split(':')[2]} ft (custom)`:k.slice(sec.prefix.length),unit:sec.unit,deletable:true,custom:true}));
   return [...std,...extra];
 }
+/* Active biochar orders, split by product type in that type's color. An order with socks and bags shows in both. */
+function bioActiveOrders(){
+  const open=(DB.orders||[]).filter(o=>o.line==='biochar'&&!o.done).sort((a,b)=>a.date.localeCompare(b.date));
+  const cols=['washed','bags','socks','raw'].map(k=>{const sec=INV_SECTIONS.find(x=>x.key===k);
+    const items=open.flatMap(o=>o.lines.filter(l=>secOfKey(l.key)===k).map(l=>({o,l,p:saleProduct('biochar',l.key)})));
+    return items.length?`<div class="ao-col acc-${sec.acc}"><h4><span class="inv-dot" aria-hidden="true"></span>${sec.title}</h4>
+      ${items.map(({o,l,p})=>`<button type="button" class="ao-item" data-order="${esc(o.id)}"><span class="num">${fmtN(l.qty,1)} ${esc(p.unit)}</span><span>${esc(p.name)}</span><span class="ao-sub">${fmtDate(o.date)}${o.notes?' · '+esc(o.notes):''}</span></button>`).join('')}</div>`:''}).join('');
+  return `<section class="ao"><div class="ao-h"><h3>Active orders</h3><span class="muted">${open.length}</span></div>${open.length?`<div class="ao-cols">${cols}</div>`:'<span class="muted">No open orders.</span>'}</section>`;
+}
+/* Active orchid orders, ranked 1, 2, 3... Drag a row (or use the arrows) to change the order. */
+function orcActiveOrders(){
+  const open=rankedOrchid();
+  return `<section class="ao"><div class="ao-h"><h3>Active orders</h3><span class="muted">${open.length}</span></div>
+    ${open.length?`<ol class="ao-list" id="aoList">${open.map((o,i)=>`<li class="ao-row" draggable="true" data-oid="${esc(o.id)}">
+      <span class="ao-grip" aria-hidden="true">⋮⋮</span><span class="ao-rank num">${i+1}.</span>
+      <span class="ao-cust">${esc(o.customer||'')}</span><span class="ao-so num">${esc(o.so||'')}</span>
+      <span class="ao-prod">${esc(orderSummary(o))}</span><span class="ao-date">${fmtDate(o.date)}</span>
+      <span class="ao-mv"><button type="button" class="btn ghost" data-mv="-1" ${i?'':'disabled'} aria-label="Move ${esc(o.customer)} up">↑</button><button type="button" class="btn ghost" data-mv="1" ${i<open.length-1?'':'disabled'} aria-label="Move ${esc(o.customer)} down">↓</button></span></li>`).join('')}</ol>`:'<span class="muted">No open orders.</span>'}
+  </section>`;
+}
+let AO_DRAG=null;
+$('#gridWrap').addEventListener('click',e=>{
+  const it=e.target.closest('[data-order]');if(it){const o=DB.orders.find(x=>x.id===it.dataset.order);if(o)openOrderForm(o);return}
+  const row=e.target.closest('.ao-row');if(!row)return;
+  const mv=e.target.closest('[data-mv]');const ids=rankedOrchid().map(o=>o.id);
+  if(mv){const i=ids.indexOf(row.dataset.oid),j=i+ +mv.dataset.mv;if(j<0||j>=ids.length)return;[ids[i],ids[j]]=[ids[j],ids[i]];setRank(ids);
+    $(`.ao-row[data-oid="${CSS.escape(ids[j])}"] [data-mv="${mv.dataset.mv}"]`)?.focus();return}
+  if(e.target.closest('.ao-grip'))return;
+  const o=DB.orders.find(x=>x.id===row.dataset.oid);if(o)openOrderForm(o);
+});
+$('#gridWrap').addEventListener('dragstart',e=>{const r=e.target.closest&&e.target.closest('.ao-row');if(!r)return;AO_DRAG=r.dataset.oid;r.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',AO_DRAG)});
+$('#gridWrap').addEventListener('dragover',e=>{const r=e.target.closest('.ao-row');if(!r||!AO_DRAG)return;e.preventDefault();
+  document.querySelectorAll('.ao-row.drop-before,.ao-row.drop-after').forEach(x=>x.classList.remove('drop-before','drop-after'));
+  if(r.dataset.oid===AO_DRAG)return;const b=r.getBoundingClientRect();r.classList.add(e.clientY<b.top+b.height/2?'drop-before':'drop-after')});
+$('#gridWrap').addEventListener('drop',e=>{const r=e.target.closest('.ao-row');if(!r||!AO_DRAG)return;e.preventDefault();
+  const after=r.classList.contains('drop-after'),ids=rankedOrchid().map(o=>o.id).filter(id=>id!==AO_DRAG);
+  let at=ids.indexOf(r.dataset.oid);if(at<0)at=ids.length;else if(after)at++;ids.splice(at,0,AO_DRAG);AO_DRAG=null;setRank(ids)});
+$('#gridWrap').addEventListener('dragend',()=>{AO_DRAG=null;document.querySelectorAll('.ao-row').forEach(x=>x.classList.remove('dragging','drop-before','drop-after'))});
 function renderInventory(){
   const h=onHand(),oo=openOrders('biochar');
   $('#toolbar').innerHTML=`<span class="sp"></span>`;
@@ -1154,13 +1230,14 @@ function renderInventory(){
       <div class="inv-h"><span class="inv-dot" aria-hidden="true"></span><h3>${sec.title}</h3>${sec.code?`<span class="muted num">${sec.code}</span>`:''}
         <span class="inv-tot"></span>
         ${sec.add?`<button class="btn" data-addprod="${sec.key}" aria-label="${sec.addTitle}">Add +</button>`:''}<button class="btn" data-count="${sec.key}">Enter counts</button></div>
-      <div class="inv-tiles">${items.map(x=>{const q=h[x.key]||0,c=DB.counts[x.key];return `<button class="inv-tile ${x.custom?'custom':''}" data-tile="${sec.key}" data-key="${esc(x.key)}">
+      <div class="inv-tiles">${items.map(x=>{const q=h[x.key]||0,af=q-(oo[x.key]||0);return `<button class="inv-tile ${x.custom?'custom':''}" data-tile="${sec.key}" data-key="${esc(x.key)}">
         <span class="t-name">${esc(x.name)}</span>
-        <span class="t-val num ${q<0?'neg':''}">${fmtN(q,1)}<small>${x.unit}</small></span>
-        <span class="t-meta">${oo[x.key]?`${fmtN(oo[x.key],1)} ${x.unit} on open orders`:x.custom?'Custom from sheets':' '}</span></button>`}).join('')||'<span class="muted">Nothing here yet.</span>'}</div>
+        <span class="t-two"><span class="t-val num ${q<0?'neg':''}">${fmtN(q,1)}<small>${x.unit}</small></span>
+          <span class="t-after"><span class="t-val num ${af<-1e-9?'neg':''}">${fmtN(af,1)}<small>${x.unit}</small></span><span class="t-lab">after sales</span></span></span>
+        <span class="t-meta">${x.custom?'Custom from sheets':' '}</span></button>`}).join('')||'<span class="muted">Nothing here yet.</span>'}</div>
     </section>`};
   const by=k=>INV_SECTIONS.find(x=>x.key===k);
-  $('#gridWrap').innerHTML=`<div class="inv">${['raw','washed','bags','socks'].map(k=>one(by(k))).join('')}</div>`;
+  $('#gridWrap').innerHTML=bioActiveOrders()+`<div class="inv">${['raw','washed','bags','socks'].map(k=>one(by(k))).join('')}</div>`;
 }
 $('#gridWrap').addEventListener('click',e=>{
   if(!(UI.line==='biochar'&&UI.table.biochar==='inventory'))return;
@@ -1259,6 +1336,12 @@ function onHandOrc(){
 }
 ORC_SECTIONS.forEach(s=>s.hand=onHandOrc);
 /* open (not completed) order quantities by inventory key, for either line */
+/* biochar sale line → its inventory section (for colors) */
+const secOfKey=k=>k.startsWith('CC1:')?'washed':k.startsWith('BAG:')?'bags':k.startsWith('SO1:')?'socks':'raw';
+/* open orchid orders in priority order (ranked ones first, then by date) */
+const rankedOrchid=()=>(DB.orders||[]).filter(o=>o.line==='orchid'&&!o.done)
+  .sort((a,b)=>(a.priority??1e9)-(b.priority??1e9)||a.date.localeCompare(b.date));
+function setRank(ids){ids.forEach((id,i)=>{const o=DB.orders.find(x=>x.id===id);if(o)o.priority=i+1});saveDB();render()}
 const openOrders=(line='orchid')=>{const o={};(DB.orders||[]).filter(x=>x.line===line&&!x.done).forEach(x=>x.lines.forEach(l=>{o[l.key]=(o[l.key]||0)+(+l.qty||0)}));return o};
 /* old one-row-per-product shape, for the orchid report builder / exports */
 const orcSalesFlat=()=>(DB.orders||[]).filter(o=>o.line==='orchid').flatMap(o=>o.lines.map((l,i)=>({id:o.id+'#'+i,date:o.date,customer:o.customer,so:o.so,load:l.load||'',product:l.key.slice(2),qty:+l.qty,done:o.done})));
@@ -1348,16 +1431,17 @@ function renderOrcInventory(){
   $('#toolbar').querySelectorAll('[data-binunit]').forEach(b=>b.onclick=()=>{UI.binUnit=b.dataset.binunit;store.set('binUnit',UI.binUnit);renderOrcInventory()});
   const cols=binMap();
   const val=(q,u)=>`<span class="num ${q<0?'neg':''}">${fmtN(q,2)}<small>${u}</small></span>`;
-  $('#gridWrap').innerHTML=`<div class="binmap-wrap"><table class="binmap">
+  const two=(q,o,u)=>{const af=q-(o||0);return `<span class="bm-two">${val(q,u)}<span class="bm-after"><span class="num ${af<-1e-9?'neg':''}">${fmtN(af,2)}<small>${u}</small></span><span class="bm-lab">after sales</span></span></span>`};
+  $('#gridWrap').innerHTML=orcActiveOrders()+`<div class="binmap-wrap"><table class="binmap">
     <thead><tr>${cols.map(c=>c.divider?'<th class="div" aria-hidden="true"></th>':`<th class="bh ${c.kind} ${c.added?'added':''}"><button data-otile="obins" data-key="${esc('O:'+c.name)}">${esc(c.name.toUpperCase())}</button>${c.added?`<button class="bm-del" data-delbin="${esc(c.name)}" title="Delete this bin" aria-label="Delete ${esc(c.name)}">✕</button>`:''}</th>`).join('')}</tr></thead>
     <tbody>
       <tr class="onhand">${cols.map(c=>{if(c.divider)return '<td class="div"></td>';const k='O:'+c.name,q=h[k]||0,cn=DB.counts[k],o=oo[k];
-        return `<td><button data-otile="obins" data-key="${esc(k)}">${val(show(q),uLbl)}${o?`<span class="bm-meta">${fmtN(show(o),1)} ${uLbl} on open orders</span>`:''}</button></td>`}).join('')}</tr>
+        return `<td><button data-otile="obins" data-key="${esc(k)}">${two(show(q),show(o||0),uLbl)}</button></td>`}).join('')}</tr>
       <tr class="note">${cols.map(c=>c.divider?'<td class="div"></td>':`<td class="bm-note" contenteditable="plaintext-only" spellcheck="false" data-binnote="${esc(c.name)}" aria-label="Note for ${esc(c.name)}">${esc(c.note||'')}</td>`).join('')}</tr>
     </tbody></table></div>
     <div class="binmap-wrap"><table class="binmap bagmap">
       <thead><tr>${bagMap().map(([k,n,,added])=>`<th class="bh bagged ${added?'added':''}"><button data-otile="obagged" data-key="${esc('O:'+k)}">${esc(n)}</button>${added?`<button class="bm-del" data-delbin="${esc(k)}" title="Delete" aria-label="Delete ${esc(k)}">✕</button>`:''}</th>`).join('')}<th class="bm-addcol"><button class="btn" data-addbag aria-label="Add a bagged or tote product">Add +</button></th></tr></thead>
-      <tbody><tr class="onhand">${bagMap().map(([k,,u])=>{const q=h['O:'+k]||0;return `<td><button data-otile="obagged" data-key="${esc('O:'+k)}">${val(q,u)}</button></td>`}).join('')}<td class="bm-addcol"></td></tr></tbody>
+      <tbody><tr class="onhand">${bagMap().map(([k,,u])=>{const q=h['O:'+k]||0;return `<td><button data-otile="obagged" data-key="${esc('O:'+k)}">${two(q,oo['O:'+k],u)}</button></td>`}).join('')}<td class="bm-addcol"></td></tr></tbody>
     </table></div>`;
 }
 $('#gridWrap').addEventListener('click',e=>{
@@ -2663,7 +2747,9 @@ Live.load=async function(){
     notes:r.notes||'',status:r.status,voidReason:r.void_reason||'',source:r.source}));
   DB.oin=[...picker.map(p=>({id:p.id,type:'pick',date:p.production_date,material:bn(p.material_bin_id),units:+p.units,hours:+p.hours,yards:0,pallets:0,notes:p.notes||''})),
           ...bagging.map(b=>({id:b.id,type:'bag',date:b.production_date,material:bn(b.from_bin_id),yards:+b.yards_used,pallets:+b.pallets,hours:+b.hours,units:0,notes:b.notes||''}))];
-  DB.orders=orders.map(o=>({id:o.id,line:o.line,date:o.order_date,customer:o.customer,so:o.sales_order_no||'',notes:o.notes||'',done:o.completed,doneOn:o.completed_on||null,
+  Live.hasPrio=!orders.length||'priority' in orders[0];
+  if(!orders.length)Live.hasPrio=!(await sb.from('orders').select('priority').limit(1)).error;
+  DB.orders=orders.map(o=>({id:o.id,line:o.line,date:o.order_date,customer:o.customer,so:o.sales_order_no||'',notes:o.notes||'',done:o.completed,doneOn:o.completed_on||null,priority:o.priority??null,
     lines:(o.order_lines||[]).map(l=>({key:l.bin_id?'O:'+bn(l.bin_id):countKeyOf(Live.item(l.item_id),l.custom_size_ft,l.custom_name),qty:+l.qty,...(l.load_type?{load:l.load_type}:{})}))}));
   DB.purch=purch.map(p=>({id:p.id,date:p.purchase_date,material:p.bin_id?bn(p.bin_id):PURCH_RAW[keyOfLine(Live.item(p.item_id))]||'',amount:+p.amount,po:p.po||'',notes:p.notes||''}));
   DB.adj=adj.map(a=>({id:a.id,date:a.adj_date,item:a.bin_id?'O:'+bn(a.bin_id):countKeyOf(Live.item(a.item_id),a.custom_size_ft,a.custom_name),qty:+a.qty_delta,reason:a.reason,notes:a.notes||''}));
@@ -2712,7 +2798,7 @@ const ROW={
     status:r.status||'active',void_reason:r.status==='void'?(r.voidReason||null):null}),
   pick:r=>({id:r.id,production_date:r.date,material_bin_id:Live.binId(r.material),units:+r.units,hours:+r.hours||0,notes:r.notes||null}),
   bag:r=>({id:r.id,production_date:r.date,from_bin_id:Live.binId(r.material),yards_used:+r.yards,pallets:+r.pallets,hours:+r.hours||0,notes:r.notes||null}),
-  orders:r=>({id:r.id,line:r.line,order_date:r.date,customer:r.customer,sales_order_no:r.so||null,notes:r.notes||null,completed:!!r.done,completed_on:r.done?(r.doneOn||iso(TODAY)):null}),
+  orders:r=>({id:r.id,line:r.line,order_date:r.date,customer:r.customer,sales_order_no:r.so||null,notes:r.notes||null,completed:!!r.done,completed_on:r.done?(r.doneOn||iso(TODAY)):null,...(Live.hasPrio?{priority:r.done?null:(r.priority??null)}:{})}),
   purch:r=>{const raw=Object.entries(PURCH_RAW).find(([,n])=>n===r.material);
     return raw?{id:r.id,purchase_date:r.date,line:'biochar',item_id:itemOfKey(raw[0]).item_id,bin_id:null,amount:+r.amount,po:r.po||null,notes:r.notes||null}
               :{id:r.id,purchase_date:r.date,line:'orchid',item_id:null,bin_id:Live.binId(r.material),amount:+r.amount,po:r.po||null,notes:r.notes||null}},
