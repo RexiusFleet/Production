@@ -17,36 +17,34 @@ insert into dept14.employees (name, active, on_biochar_sheet, on_dryer_sheet)
 values ('Nate', false, false, false)
 on conflict (name) do update set active = false, on_biochar_sheet = false, on_dryer_sheet = false;
 
-create temp table d14_nate on commit drop as
-select (select id from dept14.employees where name = 'Nate')      as nate,
-       (select id from dept14.employees where name = 'Nathaniel') as nathaniel,
-       (select min(r.production_date) from dept14.production_runs r
-          join dept14.run_workers w on w.run_id = r.id
-          join dept14.employees e on e.id = w.employee_id
-         where r.line = 'biochar' and e.name = 'Cameron')          as cameron_first;
-
--- 1. before June 2026: Nathaniel -> Nate
-insert into dept14.run_workers (run_id, employee_id)
-select w.run_id, n.nate
-  from dept14.run_workers w
-  join dept14.production_runs r on r.id = w.run_id
-  cross join d14_nate n
- where r.line = 'biochar' and r.production_date < date '2026-06-01' and w.employee_id = n.nathaniel
-on conflict do nothing;
-delete from dept14.run_workers w
- using dept14.production_runs r, d14_nate n
- where r.id = w.run_id and r.line = 'biochar' and r.production_date < date '2026-06-01' and w.employee_id = n.nathaniel;
-
--- 2. before Cameron's first run: Nate alone
-delete from dept14.run_workers w
- using dept14.production_runs r, d14_nate n
- where r.id = w.run_id and r.line = 'biochar' and n.cameron_first is not null
-   and r.production_date < n.cameron_first and w.employee_id <> n.nate;
-insert into dept14.run_workers (run_id, employee_id)
-select r.id, n.nate
-  from dept14.production_runs r cross join d14_nate n
- where r.line = 'biochar' and n.cameron_first is not null and r.production_date < n.cameron_first
-on conflict do nothing;
+do $$
+declare
+  v_nate uuid := (select id from dept14.employees where name = 'Nate');
+  v_nath uuid := (select id from dept14.employees where name = 'Nathaniel');
+  v_cam  date := (select min(r.production_date) from dept14.production_runs r
+                    join dept14.run_workers w on w.run_id = r.id
+                    join dept14.employees e on e.id = w.employee_id
+                   where r.line = 'biochar' and e.name = 'Cameron');
+begin
+  -- 1. before June 2026: Nathaniel -> Nate
+  if v_nath is not null then
+    insert into dept14.run_workers (run_id, employee_id)
+    select w.run_id, v_nate from dept14.run_workers w join dept14.production_runs r on r.id = w.run_id
+     where r.line = 'biochar' and r.production_date < date '2026-06-01' and w.employee_id = v_nath
+    on conflict do nothing;
+    delete from dept14.run_workers w using dept14.production_runs r
+     where r.id = w.run_id and r.line = 'biochar' and r.production_date < date '2026-06-01' and w.employee_id = v_nath;
+  end if;
+  -- 2. before Cameron's first run: Nate alone
+  if v_cam is not null then
+    delete from dept14.run_workers w using dept14.production_runs r
+     where r.id = w.run_id and r.line = 'biochar' and r.production_date < v_cam and w.employee_id <> v_nate;
+    insert into dept14.run_workers (run_id, employee_id)
+    select r.id, v_nate from dept14.production_runs r
+     where r.line = 'biochar' and r.production_date < v_cam
+    on conflict do nothing;
+  end if;
+end $$;
 
 commit;
 
