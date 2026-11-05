@@ -419,6 +419,7 @@ table.grid.me{width:100%}
 .set-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:440px;gap:16px}
 .set-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;display:flex;flex-direction:column;gap:12px;min-height:0}
 .set-body{flex:1;min-height:0;overflow:auto;display:grid;gap:12px;align-content:start}
+.crew .crew-x{width:36px;text-align:right}
 .crew th.c,.crew td.c{text-align:center;width:110px}
 .crew td input[type=text]{width:100%}
 .crew input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
@@ -2342,10 +2343,11 @@ function renderSettings(){
     <div class="set-card">
       <div class="set-h"><h2>Crew</h2><button class="btn icon" id="addCrew" aria-label="Add crew member" title="Add crew member">+</button></div>
       <div class="set-body">
-        <table class="lines crew"><thead><tr><th>Name</th><th class="c">Biochar sheet</th><th class="c">Dryer sheet</th></tr></thead><tbody>
+        <table class="lines crew"><thead><tr><th>Name</th><th class="c">Biochar sheet</th><th class="c">Dryer sheet</th><th class="crew-x"></th></tr></thead><tbody>
         ${S.crew.map((c,i)=>`<tr><td><input type="text" data-crew="${i}" data-f="name" value="${esc(c.name)}" placeholder="Name" aria-label="Crew member name"></td>
           <td class="c"><input type="checkbox" data-crew="${i}" data-f="biochar" ${c.biochar?'checked':''} aria-label="Show ${esc(c.name)} on the biochar sheet"></td>
-          <td class="c"><input type="checkbox" data-crew="${i}" data-f="orchid" ${c.orchid?'checked':''} aria-label="Show ${esc(c.name)} on the dryer sheet"></td></tr>`).join('')}
+          <td class="c"><input type="checkbox" data-crew="${i}" data-f="orchid" ${c.orchid?'checked':''} aria-label="Show ${esc(c.name)} on the dryer sheet"></td>
+          <td class="crew-x"><button type="button" class="btn icon ghost" data-rmcrew="${i}" aria-label="Delete ${esc(c.name||'crew member')}" title="Delete">✕</button></td></tr>`).join('')}
         </tbody></table>
       </div>
     </div>
@@ -2395,6 +2397,9 @@ $('#settingsSec').addEventListener('change',e=>{
 });
 $('#settingsSec').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.rmcrew!=null){const i=+b.dataset.rmcrew,c=SETTINGS.crew[i];
+    if(c.name&&!confirm(`Delete ${c.name} from the crew? They come off both crew sheets. Past production sheets keep their name.`))return;
+    SETTINGS.crew.splice(i,1);saveSettings(c.name?`${c.name} deleted`:'');renderSettings();return}
   if(b.id==='addCrew'){SETTINGS.crew.push({name:'',biochar:true,orchid:false});renderSettings();const ins=document.querySelectorAll('[data-crew][data-f=name]');ins[ins.length-1].focus();return}
   if(b.dataset.editsheet){const k=b.dataset.editsheet;
     modal(`Customize ${FORM_NAME[k].toLowerCase()}`,`<p style="margin:0">Not built yet.</p>`,`<button class="btn" data-close>Close</button>`);return}
@@ -2781,6 +2786,8 @@ Live.syncSettings=async function(){
     const row={name:c.name,on_biochar_sheet:!!c.biochar,on_dryer_sheet:!!c.orchid,active:true};
     if(c.id)await must(sb.from('employees').update(row).eq('id',c.id));
     else{const {data,error}=await sb.from('employees').upsert(row,{onConflict:'name'}).select('id').single();if(error)throw error;c.id=data.id}}
+  const keep=new Set(SETTINGS.crew.map(c=>c.id).filter(Boolean));
+  for(const c of (old.crew||[]))if(c.id&&!keep.has(c.id))await must(sb.from('employees').update({active:false,on_biochar_sheet:false,on_dryer_sheet:false}).eq('id',c.id));
   Live.emp=await fetchAll('employees','*',q=>q.order('name'));
   /* blends, sock sizes */
   const maxSort=Math.max(0,...Live.items.map(i=>i.sort||0));
