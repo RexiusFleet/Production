@@ -193,7 +193,7 @@ function render(){
     ${q('washOut','Washed char made',`<div class="rows">${SHEET.blends.map(b=>`<div class="charrow tote">
         <div class="row"><span class="name">${b}</span><span class="ydout" data-yd="b:${esc(b)}">${ydText(F.washOut[b],sizeOf(b))}</span></div>
         <div class="row">${sizeSel('washSize.'+b,b,sizeOf(b))}<div style="display:flex;align-items:center;gap:8px">${stepper('washOut.'+b,F.washOut[b],1,'',b+' totes filled')}</div></div></div>`).join('')}
-      ${F.washCustom.map((c,i)=>`<div class="charrow tote"><div class="charhead"><input type="text" data-k="washCustom.${i}.name" value="${esc(c.name)}" placeholder="What did you make?" aria-label="Custom blend name" autocomplete="off"><button type="button" class="rm" data-rmwash="${i}" aria-label="Remove custom blend">✕</button></div>
+      ${F.washCustom.map((c,i)=>`<div class="charrow tote"><div class="charhead"><input type="text" data-k="washCustom.${i}.name" value="${esc(c.name)}" placeholder="Blend name" aria-label="Custom blend name" autocomplete="off"><button type="button" class="rm" data-rmwash="${i}" aria-label="Remove custom blend">✕</button></div>
         <div class="row">${sizeSel(`washCustom.${i}.size`,null,c.size||defSize(null))}<span class="ydout" data-yd="c:${i}">${ydText(c.totes,c.size||defSize(null))}</span><div style="display:flex;align-items:center;gap:8px">${stepper(`washCustom.${i}.totes`,c.totes,1,'','custom blend totes filled')}</div></div></div>`).join('')}</div>
       <button type="button" class="link" id="addWashCustom">+ Add a custom blend</button>`)}`}
 
@@ -202,7 +202,7 @@ function render(){
     h+=`<div class="sect">${cap(j)}</div>`+q('inputs',j==='bag'?'Char used and bags made':'Char used',`<div class="rows">${F.inputs.map((x,i)=>`<div class="charrow">
       <div class="charhead"><select data-k="inputs.${i}.blend" aria-label="Char type"><option value="">Pick char type</option>${SHEET.blends.map(b=>`<option value="${b}" ${x.blend===b?'selected':''} ${taken(i).includes(b)?'disabled':''}>${b}</option>`).join('')}<option value="__custom" ${x.blend==='__custom'?'selected':''}>Custom</option></select>
         ${F.inputs.length>1?`<button type="button" class="rm" data-rminput="${i}" aria-label="Remove this char type">✕</button>`:''}</div>
-      ${x.blend==='__custom'?`<input type="text" data-k="inputs.${i}.cname" value="${esc(x.cname||'')}" placeholder="What's in it?" aria-label="Custom char description" autocomplete="off">`:''}
+      ${x.blend==='__custom'?`<input type="text" data-k="inputs.${i}.cname" value="${esc(x.cname||'')}" placeholder="Char type" aria-label="Custom char description" autocomplete="off">`:''}
       <div class="row"><span class="name">Yards used</span><div style="display:flex;align-items:center;gap:8px">${stepper(`inputs.${i}.yd`,x.yd,.5,'yd','yards used')}</div></div>
       ${j==='bag'?`<div class="row"><span class="name">${x.blend?esc(charName(x)||'Custom')+' bags':'Bags'} made<small>1.5cf</small></span><div style="display:flex;align-items:center;gap:8px">${stepper(`inputs.${i}.bags`,x.bags,1,'','bags made')}</div></div>`:''}
     </div>`).join('')}</div>

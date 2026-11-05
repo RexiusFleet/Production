@@ -1115,7 +1115,7 @@ function openRunEditor(run){
     <div class="fields">
       <label class="field"><span>Boxes</span><input type="number" name="boxes" min="0" value="${d.boxes||''}"></label>
       <label class="field"><span>Pallets</span><input type="number" name="pallets" min="0" value="${d.pallets||''}"></label>
-      <label class="field full"><span>Orders (comma separated)</span><input type="text" name="orders" value="${esc(d.orders.join(', '))}" placeholder="AECOM, Tesla"></label>
+      <label class="field full"><span>Orders (comma separated)</span><input type="text" name="orders" value="${esc(d.orders.join(', '))}"></label>
       <label class="field full"><span>Notes</span><textarea name="notes" rows="2">${esc(d.notes)}</textarea></label>
     </div>
     ${isNew?'':`<div class="muted" style="font-size:.82rem">${d.source==='manager'?'Added by manager':'Submitted from crew form'}${d.editedAt?` · last edited ${new Date(d.editedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}`:''}</div>`}
@@ -1537,7 +1537,7 @@ function openInputForm(rec,type,line){
     const F=(label,ctl,cls='')=>`<label class="field ${cls}"><span>${label}</span>${ctl}</label>`;
     const date=F('Date',`<input type="date" name="date" value="${d.date}">`);
     let body='';
-    if(d.type==='buy')body=F('Material',sel,'full')+F('Amount',sfx('amount','0.5',d.amount,'Amount',purchMat(d.material).unit))+F('PO',`<input type="text" name="po" value="${esc(d.po||'')}" autocomplete="off" placeholder="PO number">`);
+    if(d.type==='buy')body=F('Material',sel,'full')+F('Amount',sfx('amount','0.5',d.amount,'Amount',purchMat(d.material).unit))+F('PO',`<input type="text" name="po" value="${esc(d.po||'')}" autocomplete="off">`);
     else if(d.type==='pick')body=date+F('Hours',sfx('hours','0.5',d.hours,'Hours','hours'))+F('Material',sel)+F('Units',sfx('units','0.1',d.units,'Units','units'));
     else body=date+F('Hours',sfx('hours','0.5',d.hours,'Hours','hours'))+F('Bagged from',sel)+F('Yards used',sfx('yards','0.5',d.yards,'Yards used','yd'))+F('Pallets bagged',sfx('pallets','1',d.pallets,'Pallets bagged','pallets'));
     modal(isNew?(d.type==='buy'?'Purchased input':'Production input'):`Edit ${IN_TYPES[d.type].toLowerCase()}`,`

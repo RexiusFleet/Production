@@ -145,7 +145,7 @@ function render(){
   ${q('yards','Yards',`<div class="rows">${row('Went in',stepper('yin',F.yin,.5,'yd','yards in'))}${row('Came out',stepper('yout',F.yout,.5,'yd','yards out'))}</div>`)}
   ${q('hours','How many hours did it take?',row('',stepper('hours',F.hours,.5,'h','hours')))}
   ${q('dest','Where did it go?',`<div class="jobs" style="grid-template-columns:1fr 1fr">${['Totes','Bin'].map(x=>`<button type="button" class="chip" data-chip="dest" data-v="${x}" aria-pressed="${F.dest===x}">${x}</button>`).join('')}</div>`)}`;
-  if(F.dest==='Totes')h+=q('totes','How many totes?',`<input type="text" inputmode="decimal" data-k="totes" value="${esc(F.totes)}" placeholder="9.75" autocomplete="off" aria-label="Number of totes">`);
+  if(F.dest==='Totes')h+=q('totes','How many totes?',`<input type="text" inputmode="decimal" data-k="totes" value="${esc(F.totes)}" autocomplete="off" aria-label="Number of totes">`);
   if(F.dest==='Bin')h+=q('bin','Which bin?',chips('bin',SHEET.bins,F.bin,false));
   h+=q('notes','Notes',`<textarea data-k="notes">${esc(F.notes)}</textarea>`);
   h+=`<div class="formerr" id="formerr">${Object.keys(errors).length?'Fix the highlighted questions above.':''}</div>
