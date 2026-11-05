@@ -455,6 +455,12 @@ table.grid.me{width:100%}
 .field>span{font:500 .72rem/1.2 var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .field.full{grid-column:1/-1}
 .chk{display:flex;flex-wrap:wrap;gap:6px}
+.sl-list{display:grid;border:1px solid var(--line);border-radius:8px;max-height:220px;overflow:auto}
+.sl-row{display:flex;align-items:center;gap:4px;padding:2px 6px;border-top:1px solid var(--line)}
+.sl-row:first-child{border-top:0}
+.sl-row label{flex:1;display:flex;gap:8px;align-items:center;padding:6px 0;cursor:pointer}
+.sl-row .btn.icon{width:30px;height:30px}
+.sheet-ed{grid-template-columns:1fr}
 .chk label{display:flex;gap:6px;align-items:center;border:1px solid var(--line-strong);border-radius:99px;padding:4px 10px;font-size:.88rem;cursor:pointer}
 .chk input:checked+span{font-weight:600}
 .sect{font:600 .95rem var(--f-display);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-top:1px solid var(--line);padding-top:12px}
@@ -553,6 +559,8 @@ const SETTINGS=Object.assign({ratio:{wash:.85,sock:.2,bag:.2},bonusPerYardIn:.5,
 const CORE_BLENDS=['Basic','Washed','Peat','Zapt','Revd'],CORE_SOCKS=[3,6,10]; // top three, then the two custom blends; odd mixes are typed in as custom
 SETTINGS.orc=Object.assign({yardsPerUnit:7.5,ratios:{'Jumbo Orchid':{small:60,medium:30,lost:10},'#1 Medium Green':{small:75,medium:15,lost:10}}},SETTINGS.orc||{});
 SETTINGS.catalog=Object.assign({blends:CORE_BLENDS.slice(),bagTypes:['Basic','Washed','Peat'],sockSizes:CORE_SOCKS.slice(),materials:['Pallets','Blank white totes'],hidden:{}},SETTINGS.catalog||{});
+SETTINGS.sheets={char:{title:'Biochar production sheet',jobs:['wash','sock','bag'],hiddenBlends:[],blendOrder:[],hiddenSocks:[],questions:{totes:true,pallets:true,orders:true,notes:true,customBlend:true,customSock:true}},
+  dryer:{title:'Dryer production sheet',hiddenProducts:[],productOrder:[],hiddenBins:[],binOrder:[],dest:['Totes','Bin'],questions:{notes:true}}};
 const BLENDS=SETTINGS.catalog.blends,SOCK_SIZES=SETTINGS.catalog.sockSizes,BAG_TYPES=SETTINGS.catalog.bagTypes; // bags have their own list (a subset of the blends that get bagged)
 const CORE_BAGS=['Basic','Washed','Peat'];
 const crewFor=(line,keep=[])=>[...new Set([...SETTINGS.crew.filter(c=>c.name&&c[line]).map(c=>c.name),...keep])];
@@ -2387,6 +2395,50 @@ function renderSettings(){
   </div>`;
   ['char','dryer'].forEach(k=>{const el=$('#qr-'+k);if(window.QRCode){new QRCode(el,{text:formUrl(k),width:150,height:150,correctLevel:QRCode.CorrectLevel.M})}else el.innerHTML='<div class="muted" style="font-size:.8rem;padding:20px">QR code didn’t load</div>'});
 }
+/* Customize sheet: what each crew sheet shows. Saved to settings sheet_char / sheet_dryer; the sheets read it through form_options. */
+function openSheetEditor(k){
+  const L=JSON.parse(JSON.stringify(SETTINGS.sheets[k])),char=k==='char';
+  const ordered=(all,order)=>{const o=(order||[]).map(String);const at=x=>{const i=o.indexOf(String(x));return i<0?1e6+all.indexOf(x):i};return [...all].sort((a,b)=>at(a)-at(b))};
+  const lists=char?{blends:{all:()=>[...BLENDS],hid:'hiddenBlends',ord:'blendOrder'},socks:{all:()=>[...SOCK_SIZES],hid:'hiddenSocks',fmt:x=>x+' ft'}}
+    :{products:{all:()=>(Live.bins||[]).filter(b=>b.active&&b.dryer_input).map(b=>b.name),hid:'hiddenProducts',ord:'productOrder'},
+      bins:{all:()=>(Live.bins||[]).filter(b=>b.active&&b.kind==='dried').map(b=>b.name),hid:'hiddenBins',ord:'binOrder'}};
+  Object.values(lists).forEach(x=>{L[x.hid]=L[x.hid]||[];if(x.ord)L[x.ord]=ordered(x.all(),L[x.ord]).map(String)});
+  const list=(key,label)=>{const x=lists[key],items=x.ord?ordered(x.all(),L[x.ord]):x.all();
+    return `<div class="field full"><span>${label}</span><div class="sl-list">${items.map((v,i)=>`<div class="sl-row">
+      <label><input type="checkbox" data-sl="${key}" value="${esc(v)}" ${L[x.hid].map(String).includes(String(v))?'':'checked'}><span>${esc(x.fmt?x.fmt(v):v)}</span></label>
+      ${x.ord?`<button class="btn ghost icon" data-slmove="${key}" data-i="${i}" data-d="-1" aria-label="Move ${esc(v)} up" ${i?'':'disabled'}>↑</button><button class="btn ghost icon" data-slmove="${key}" data-i="${i}" data-d="1" aria-label="Move ${esc(v)} down" ${i<items.length-1?'':'disabled'}>↓</button>`:''}</div>`).join('')}</div></div>`};
+  const box=(group,v,label,on)=>`<label><input type="checkbox" data-sq="${group}" value="${v}" ${on?'checked':''}><span>${label}</span></label>`;
+  const Q=L.questions||(L.questions={});
+  const body=()=>`<div class="fields sheet-ed">
+      <label class="field full"><span>Title</span><input type="text" id="slTitle" maxlength="60" value="${esc(L.title||'')}"></label>
+      ${char?`<div class="field full"><span>Jobs</span><div class="chk">${['wash','sock','bag'].map(j=>box('jobs',j,j[0].toUpperCase()+j.slice(1),(L.jobs||[]).includes(j))).join('')}</div></div>
+        ${list('blends','Blends')}${list('socks','Sock sizes')}
+        <div class="field full"><span>Questions</span><div class="chk">${[['totes','Blank white totes used'],['pallets','Pallets wrapped'],['orders','Orders filled'],['customBlend','Custom blend'],['customSock','Custom sock size'],['notes','Notes']].map(([q,l])=>box('q',q,l,Q[q]!==false)).join('')}</div></div>`
+      :`${list('products','Products into the dryer')}${list('bins','Dried bins')}
+        <div class="field full"><span>Where did it go?</span><div class="chk">${['Totes','Bin'].map(d=>box('dest',d,d,(L.dest||[]).includes(d))).join('')}</div></div>
+        <div class="field full"><span>Questions</span><div class="chk">${box('q','notes','Notes',Q.notes!==false)}</div></div>`}
+    </div><div class="err" id="formErr"></div>`;
+  modal(`Customize ${FORM_NAME[k].toLowerCase()}`,body(),
+    `<a class="btn" href="${esc(formUrl(k))}" target="_blank" rel="noopener" style="margin-right:auto">Open sheet</a><button class="btn" data-close>Cancel</button><button class="btn primary" id="slSave">Save</button>`);
+  const root=$('#modalRoot');
+  const redraw=()=>{L.title=$('#slTitle').value;root.querySelector('.modal-b').innerHTML=body()};
+  root.onchange=e=>{const t=e.target;
+    if(t.dataset.sl){const x=lists[t.dataset.sl],v=String(t.value);L[x.hid]=L[x.hid].map(String).filter(h=>h!==v);if(!t.checked)L[x.hid].push(v)}
+    if(t.dataset.sq==='q')Q[t.value]=t.checked;
+    if(t.dataset.sq==='jobs'||t.dataset.sq==='dest'){const key=t.dataset.sq,all=key==='jobs'?['wash','sock','bag']:['Totes','Bin'];
+      const cur=new Set(L[key]||[]);t.checked?cur.add(t.value):cur.delete(t.value);L[key]=all.filter(x=>cur.has(x))}};
+  root.onclick=e=>{const m=e.target.closest('[data-slmove]');if(m){const x=lists[m.dataset.slmove],o=L[x.ord],i=+m.dataset.i,j=i+ +m.dataset.d;
+      if(j<0||j>=o.length)return;[o[i],o[j]]=[o[j],o[i]];redraw();root.querySelector(`[data-slmove="${m.dataset.slmove}"][data-i="${j}"][data-d="${m.dataset.d}"]`)?.focus();return}
+    if(e.target.id!=='slSave')return;
+    L.title=$('#slTitle').value.trim().replace(/\s+/g,' ');const err=t=>{$('#formErr').textContent=t};
+    if(!L.title)return err('Type a title.');
+    const shown=key=>lists[key].all().filter(v=>!L[lists[key].hid].map(String).includes(String(v))).length;
+    if(char){if(!(L.jobs||[]).length)return err('Pick at least one job.');if(!shown('blends'))return err('Show at least one blend.');
+      if((L.jobs||[]).includes('sock')&&!shown('socks')&&Q.customSock===false)return err('Show at least one sock size.')}
+    else{if(!shown('products'))return err('Show at least one product.');if(!(L.dest||[]).length)return err('Pick Totes, Bin or both.');
+      if(L.dest.includes('Bin')&&!shown('bins'))return err('Show at least one dried bin.')}
+    SETTINGS.sheets[k]=L;root.onchange=root.onclick=null;closeModal();saveSettings(`${L.title} saved`)};
+}
 function saveSettings(msg){store.set('settings',SETTINGS);if(msg)toast(msg)}
 $('#settingsSec').addEventListener('change',e=>{
   const t=e.target,S=SETTINGS;
@@ -2403,8 +2455,7 @@ $('#settingsSec').addEventListener('click',e=>{
     if(c.name&&!confirm(`Delete ${c.name} from the crew? They come off both crew sheets. Past production sheets keep their name.`))return;
     SETTINGS.crew.splice(i,1);saveSettings(c.name?`${c.name} deleted`:'');renderSettings();return}
   if(b.id==='addCrew'){SETTINGS.crew.push({name:'',biochar:true,orchid:false});renderSettings();const ins=document.querySelectorAll('[data-crew][data-f=name]');ins[ins.length-1].focus();return}
-  if(b.dataset.editsheet){const k=b.dataset.editsheet;
-    modal(`Customize ${FORM_NAME[k].toLowerCase()}`,`<p style="margin:0">Not built yet.</p>`,`<button class="btn" data-close>Close</button>`);return}
+  if(b.dataset.editsheet){openSheetEditor(b.dataset.editsheet);return}
   if(b.dataset.printqr){const k=b.dataset.printqr;const src=$('#qr-'+k+' canvas')?.toDataURL()||$('#qr-'+k+' img')?.src||'';
     $('#printArea').innerHTML=`<div class="sign"><div class="sign-dept">Rexius · Dept 14</div><h1>${esc(FORM_NAME[k])}</h1><p>Scan with your phone camera to fill out today’s production sheet.</p>${src?`<img src="${src}" alt="QR code">`:''}<div class="num">${esc(formUrl(k))}</div></div>`;
     document.body.classList.add('printing-qr');window.print();setTimeout(()=>document.body.classList.remove('printing-qr'),500)}
@@ -2521,7 +2572,7 @@ function vhDiff(k,c){
   return out;
 }
 /* A short title for a version, written from what changed. */
-const VH_SET={bonusPerYardIn:'bonus $ per yard',bonusPerTote:'bonus $ per tote',bonusYdPerTote:'yards per tote',ratio:'equipment hours',crew:'crew',orc:'orchid settings',catalog:'inventory items',siteUrl:'site link',forms:'crew sheets',reports:'saved reports'};
+const VH_SET={bonusPerYardIn:'bonus $ per yard',bonusPerTote:'bonus $ per tote',bonusYdPerTote:'yards per tote',ratio:'equipment hours',crew:'crew',orc:'orchid settings',catalog:'inventory items',siteUrl:'site link',forms:'crew sheets',sheets:'crew sheet layout',reports:'saved reports'};
 const VH_ONE={bio:'production sheet',orc:'dryer run',oin:'input',purch:'purchase',orders:'sales order',adj:'inventory adjustment'};
 function vhSummary(v){
   if(v.label)return v.label;
@@ -2672,6 +2723,8 @@ Live.load=async function(){
   if(S.bonus){SETTINGS.bonusPerYardIn=+S.bonus.per_yard_in;SETTINGS.bonusPerTote=+S.bonus.per_tote;SETTINGS.bonusYdPerTote=+S.bonus.yards_per_tote}
   if(S.orchid)SETTINGS.orc={...SETTINGS.orc,yardsPerUnit:+S.orchid.yards_per_unit,ratios:S.orchid.ratios,extraBins:[]};
   if(S.dashboard){const D=S.dashboard;if(D.siteUrl)SETTINGS.siteUrl=D.siteUrl;if(D.forms)SETTINGS.forms=D.forms;if(D.hidden)SETTINGS.catalog.hidden=D.hidden}
+  if(S.sheet_char)SETTINGS.sheets.char={...SETTINGS.sheets.char,...S.sheet_char};
+  if(S.sheet_dryer)SETTINGS.sheets.dryer={...SETTINGS.sheets.dryer,...S.sheet_dryer};
   SETTINGS.crew=emp.filter(e=>e.active).map(e=>({id:e.id,name:e.name,biochar:e.on_biochar_sheet,orchid:e.on_dryer_sheet,active:true}));
   const blends=items.filter(i=>i.kind==='blend'&&!i.is_custom&&i.active).sort((a,b)=>a.sort-b.sort).map(i=>i.blend);
   BLENDS.splice(0,BLENDS.length,...blends);
@@ -2698,7 +2751,7 @@ const COLS=['bio','orc','oin','orders','purch','adj'];
 Live.snap=()=>{const o={};COLS.forEach(c=>{o[c]=new Map((DB[c]||[]).map(r=>[r.id,JSON.stringify(r)]))});o.counts=JSON.stringify(DB.counts||{});return o};
 Live.ssnap=()=>JSON.stringify({ratio:{wash:SETTINGS.ratio.wash,sock:SETTINGS.ratio.sock,bag:SETTINGS.ratio.bag},bonus:[SETTINGS.bonusPerYardIn,SETTINGS.bonusPerTote,SETTINGS.bonusYdPerTote],
   orc:{y:SETTINGS.orc.yardsPerUnit,r:SETTINGS.orc.ratios},binNotes:SETTINGS.orc.binNotes||{},crew:SETTINGS.crew,blends:[...BLENDS],bags:[...BAG_TYPES],socks:[...SOCK_SIZES],bins:SETTINGS.orc.extraBins||[],reports:SETTINGS.reports||[],
-  dash:{siteUrl:SETTINGS.siteUrl,forms:SETTINGS.forms,hidden:SETTINGS.catalog.hidden}});
+  dash:{siteUrl:SETTINGS.siteUrl,forms:SETTINGS.forms,hidden:SETTINGS.catalog.hidden},sheets:SETTINGS.sheets});
 
 /* ---- dashboard record → table row ---- */
 const ROW={
@@ -2784,6 +2837,7 @@ Live.syncSettings=async function(){
   if(JSON.stringify(old.bonus)!==JSON.stringify(cur.bonus))await up('bonus',{per_yard_in:cur.bonus[0],per_tote:cur.bonus[1],yards_per_tote:cur.bonus[2]});
   if(JSON.stringify(old.orc)!==JSON.stringify(cur.orc))await up('orchid',{yards_per_unit:cur.orc.y,ratios:cur.orc.r});
   if(JSON.stringify(old.dash)!==JSON.stringify(cur.dash))await up('dashboard',cur.dash);
+  for(const k of ['char','dryer'])if(JSON.stringify((old.sheets||{})[k])!==JSON.stringify(cur.sheets[k]))await up('sheet_'+k,cur.sheets[k]);
   /* crew */
   for(const c of SETTINGS.crew){if(!c.name)continue;
     const row={name:c.name,on_biochar_sheet:!!c.biochar,on_dryer_sheet:!!c.orchid,active:true};

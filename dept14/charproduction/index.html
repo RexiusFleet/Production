@@ -116,7 +116,10 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const store={get(k,d){try{const v=localStorage.getItem('d14.'+k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem('d14.'+k,JSON.stringify(v))}catch(e){}}};
 
 /* Sheet setup: crew on the biochar sheet and the active catalog, from Supabase. */
-const SHEET={title:'Biochar production sheet',crew:[],jobs:['wash','sock','bag'],blends:[],sockSizes:[],questions:['shipping','orders','notes']};
+const SHEET={title:'Biochar production sheet',crew:[],jobs:['wash','sock','bag'],blends:[],sockSizes:[],ask:{totes:true,pallets:true,orders:true,notes:true,customBlend:true,customSock:true}};
+/* manager's layout (Settings > Customize sheet): drop hidden entries, put the rest in the saved order */
+const arrange=(list,hidden,order)=>{const h=new Set((hidden||[]).map(String)),o=(order||[]).map(String);const r=list.filter(x=>!h.has(String(x)));const at=x=>{const i=o.indexOf(String(x));return i<0?1e6+list.indexOf(x):i};return r.sort((a,b)=>at(a)-at(b))};
+
 const CAT={crew:{},items:[]};
 const CFG=window.MIX_BOARD_CONFIG||{};
 const sb=window.supabase&&CFG.SUPABASE_URL?window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{db:{schema:'dept14'},auth:{persistSession:false}}):null;
@@ -128,6 +131,12 @@ async function loadSheet(){
   CAT.items=data.items||[];
   SHEET.blends=CAT.items.filter(i=>i.kind==='blend'&&!i.is_custom).map(i=>i.blend);
   SHEET.sockSizes=CAT.items.filter(i=>i.kind==='sock'&&!i.is_custom).map(i=>+(i.name.match(/[\d.]+/)||[0])[0]).filter(Boolean);
+  const L=data.sheet||{};
+  if(L.title&&String(L.title).trim())SHEET.title=String(L.title).trim();
+  const jobs=(L.jobs||[]).filter(j=>['wash','sock','bag'].includes(j));if(jobs.length)SHEET.jobs=jobs;
+  SHEET.blends=arrange(SHEET.blends,L.hiddenBlends,L.blendOrder);
+  SHEET.sockSizes=arrange(SHEET.sockSizes,L.hiddenSocks,[]);
+  Object.keys(SHEET.ask).forEach(k=>{if(L.questions&&L.questions[k]===false)SHEET.ask[k]=false});
 }
 /* catalog lookups → item ids */
 const itemOf=(kind,blend)=>CAT.items.find(i=>i.kind===kind&&!i.is_custom&&i.blend===blend);
@@ -141,7 +150,7 @@ const LAST_CREW=store.get('sheet.lastCrew',[]);
 
 const today=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)};
 const cap=s=>s[0].toUpperCase()+s.slice(1);
-const fresh=()=>({date:today(),crew:LAST_CREW.filter(c=>SHEET.crew.includes(c)),hours:'',job:'',
+const fresh=()=>({date:today(),crew:LAST_CREW.filter(c=>SHEET.crew.includes(c)),hours:'',job:SHEET.jobs.length===1?SHEET.jobs[0]:'',
   raw:'',totes:'',washOut:{},washCustom:[],inputs:[{blend:'',yd:'',bags:''}],socks:{},custom:[],boxes:'',pallets:'',orders:'',notes:''});
 let F=fresh(), errors={};
 
@@ -157,20 +166,20 @@ function render(){
   ${q('date','Production date',`<input type="date" data-k="date" value="${F.date}" max="${today()}">`)}
   ${q('crew','Who worked on it?',chips('crew',SHEET.crew,F.crew,true))}
   ${q('hours','How many hours did it take?',`<div class="row"><span></span><div style="display:flex;align-items:center;gap:8px">${stepper('hours',F.hours,.5,'h','hours')}</div></div>`)}
-  ${q('job','What did you do?',`<div class="jobs">${SHEET.jobs.map(x=>`<button type="button" class="chip" data-chip="job" data-v="${x}" aria-pressed="${j===x}">${cap(x)}</button>`).join('')}</div>`)}`;
+  ${q('job','What did you do?',`<div class="jobs" style="grid-template-columns:repeat(${SHEET.jobs.length},1fr)">${SHEET.jobs.map(x=>`<button type="button" class="chip" data-chip="job" data-v="${x}" aria-pressed="${j===x}">${cap(x)}</button>`).join('')}</div>`)}`;
 
   if(j==='wash'){h+=`<div class="sect">Wash</div>
     ${q('raw','Raw biochar used',`<div class="row"><span class="name">Yards of unwashed used</span><div style="display:flex;align-items:center;gap:8px">${stepper('raw',F.raw,.5,'yd','raw yards')}</div></div>`)}
-    ${q('totes','Blank white totes used',`<div class="row"><span class="name">Totes</span><div style="display:flex;align-items:center;gap:8px">${stepper('totes',F.totes,1,'','blank white totes')}</div></div>`)}
+    ${!SHEET.ask.totes?'':q('totes','Blank white totes used',`<div class="row"><span class="name">Totes</span><div style="display:flex;align-items:center;gap:8px">${stepper('totes',F.totes,1,'','blank white totes')}</div></div>`)}
     ${q('washOut','Washed char made',`<div class="rows">${SHEET.blends.map(b=>`<div class="row"><span class="name">${b}</span><div style="display:flex;align-items:center;gap:8px">${stepper('washOut.'+b,F.washOut[b],.5,'yd',b+' yards made')}</div></div>`).join('')}
       ${F.washCustom.map((c,i)=>`<div class="charrow"><div class="charhead"><input type="text" data-k="washCustom.${i}.name" value="${esc(c.name)}" placeholder="What did you make?" aria-label="Custom blend name" autocomplete="off"><button type="button" class="rm" data-rmwash="${i}" aria-label="Remove custom blend">✕</button></div>
         <div class="row"><span class="name">Yards made</span><div style="display:flex;align-items:center;gap:8px">${stepper(`washCustom.${i}.yd`,c.yd,.5,'yd','custom blend yards made')}</div></div></div>`).join('')}</div>
-      <button type="button" class="link" id="addWashCustom">+ Add a custom blend</button>`)}`}
+      ${SHEET.ask.customBlend?'<button type="button" class="link" id="addWashCustom">+ Add a custom blend</button>':''}`)}`}
 
   if(j==='sock'||j==='bag'){
     const taken=i=>F.inputs.filter((x,k)=>k!==i).map(x=>x.blend);
     h+=`<div class="sect">${cap(j)}</div>`+q('inputs',j==='bag'?'Char used and bags made':'Char used',`<div class="rows">${F.inputs.map((x,i)=>`<div class="charrow">
-      <div class="charhead"><select data-k="inputs.${i}.blend" aria-label="Char type"><option value="">Pick char type</option>${SHEET.blends.map(b=>`<option value="${b}" ${x.blend===b?'selected':''} ${taken(i).includes(b)?'disabled':''}>${b}</option>`).join('')}<option value="__custom" ${x.blend==='__custom'?'selected':''}>Custom</option></select>
+      <div class="charhead"><select data-k="inputs.${i}.blend" aria-label="Char type"><option value="">Pick char type</option>${SHEET.blends.map(b=>`<option value="${b}" ${x.blend===b?'selected':''} ${taken(i).includes(b)?'disabled':''}>${b}</option>`).join('')}${SHEET.ask.customBlend?`<option value="__custom" ${x.blend==='__custom'?'selected':''}>Custom</option>`:''}</select>
         ${F.inputs.length>1?`<button type="button" class="rm" data-rminput="${i}" aria-label="Remove this char type">✕</button>`:''}</div>
       ${x.blend==='__custom'?`<input type="text" data-k="inputs.${i}.cname" value="${esc(x.cname||'')}" placeholder="What's in it?" aria-label="Custom char description" autocomplete="off">`:''}
       <div class="row"><span class="name">Yards used</span><div style="display:flex;align-items:center;gap:8px">${stepper(`inputs.${i}.yd`,x.yd,.5,'yd','yards used')}</div></div>
@@ -181,16 +190,16 @@ function render(){
 
   if(j==='sock'){h+=q('socks','Socks made',`<div class="rows">${SHEET.sockSizes.map(s=>`<div class="row"><span class="name">${s} ft</span><div style="display:flex;align-items:center;gap:8px">${stepper('socks.'+s,F.socks[s],1,'',s+' foot socks')}</div></div>`).join('')}
       ${F.custom.map((c,i)=>`<div class="custom"><div class="pair"><span class="name">Custom</span>${stepper('custom.'+i+'.len',c.len,.5,'ft','custom length in feet')}<span>×</span>${stepper('custom.'+i+'.qty',c.qty,1,'','custom sock count')}</div><button type="button" class="rm" data-rmcustom="${i}" aria-label="Remove custom size">✕</button></div>`).join('')}</div>
-      <button type="button" class="link" id="addCustom">+ Add a custom size</button>`)}
+      ${SHEET.ask.customSock?'<button type="button" class="link" id="addCustom">+ Add a custom size</button>':''}`)}
 
   if(j){
-    if(j==='sock'&&(SHEET.questions.includes('shipping')||SHEET.questions.includes('orders'))){
+    if(j==='sock'&&(SHEET.ask.pallets||SHEET.ask.orders)){
       h+=`<div class="sect">Wrap up</div>`;
-      if(SHEET.questions.includes('shipping'))h+=q('ship','Wrapped for shipping',`<div class="rows">
+      if(SHEET.ask.pallets)h+=q('ship','Wrapped for shipping',`<div class="rows">
         <div class="row"><span class="name">Pallets</span><div style="display:flex;align-items:center;gap:8px">${stepper('pallets',F.pallets,1,'','pallets')}</div></div></div>`);
-      if(SHEET.questions.includes('orders'))h+=q('orders','Orders filled',`<input type="text" data-k="orders" value="${esc(F.orders)}" autocomplete="off">`);
+      if(SHEET.ask.orders)h+=q('orders','Orders filled',`<input type="text" data-k="orders" value="${esc(F.orders)}" autocomplete="off">`);
     }
-    if(SHEET.questions.includes('notes'))h+=q('notes','Notes',`<textarea data-k="notes">${esc(F.notes)}</textarea>`);
+    if(SHEET.ask.notes)h+=q('notes','Notes',`<textarea data-k="notes">${esc(F.notes)}</textarea>`);
     h+=`<div class="formerr" id="formerr">${Object.keys(errors).length?'Fix the highlighted questions above.':''}</div>
     <button type="button" class="submit" id="submit">Submit</button>`;
   }
@@ -234,7 +243,7 @@ function validate(){
   if(!F.date)e.date='Pick the production date.';else if(F.date>today())e.date='The date can’t be in the future.';
   if(!F.crew.length)e.crew='Pick at least one name.';
   if(!(n(F.hours)>0))e.hours='Enter how many hours it took.';else if(n(F.hours)>24)e.hours='Hours can’t be more than 24.';
-  if(!F.job)e.job='Pick Wash, Sock or Bag.';
+  if(!F.job)e.job='Pick what you did.';
   if(F.job==='wash'){if(!(n(F.raw)>0))e.raw='Enter the raw yards used.';if(!SHEET.blends.some(b=>n(F.washOut[b])>0)&&!F.washCustom.some(c=>n(c.yd)>0))e.washOut='Enter at least one blend you made.';
     else if(F.washCustom.some(c=>n(c.yd)>0&&!c.name.trim()))e.washOut='Type what each custom blend is.'}
   if(F.job==='sock'||F.job==='bag'){

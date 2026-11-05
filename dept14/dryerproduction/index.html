@@ -117,7 +117,10 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const store={get(k,d){try{const v=localStorage.getItem('d14.'+k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem('d14.'+k,JSON.stringify(v))}catch(e){}}};
 
 /* Sheet setup: crew on the dryer sheet, products into the dryer and dried bins, from Supabase. */
-const SHEET={title:'Dryer production sheet',crew:[],products:[],bins:[]};
+const SHEET={title:'Dryer production sheet',crew:[],products:[],bins:[],dest:['Totes','Bin'],notes:true};
+/* manager's layout (Settings > Customize sheet): drop hidden entries, put the rest in the saved order */
+const arrange=(list,hidden,order)=>{const h=new Set((hidden||[]).map(String)),o=(order||[]).map(String);const r=list.filter(x=>!h.has(String(x)));const at=x=>{const i=o.indexOf(String(x));return i<0?1e6+list.indexOf(x):i};return r.sort((a,b)=>at(a)-at(b))};
+
 const IDS={crew:{},product:{},bin:{}};
 const CFG=window.MIX_BOARD_CONFIG||{};
 const sb=window.supabase&&CFG.SUPABASE_URL?window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{db:{schema:'dept14'},auth:{persistSession:false}}):null;
@@ -127,9 +130,15 @@ async function loadSheet(){
   if(error)throw error;
   const put=(list,key)=>(list||[]).map(x=>{IDS[key][x.name]=x.id;return x.name});
   SHEET.crew=put(data.employees,'crew');SHEET.products=put(data.products,'product');SHEET.bins=put(data.bins,'bin');
+  const L=data.sheet||{};
+  if(L.title&&String(L.title).trim())SHEET.title=String(L.title).trim();
+  SHEET.products=arrange(SHEET.products,L.hiddenProducts,L.productOrder);
+  SHEET.bins=arrange(SHEET.bins,L.hiddenBins,L.binOrder);
+  const d=(L.dest||[]).filter(x=>x==='Totes'||x==='Bin');if(d.length)SHEET.dest=d;
+  if(L.questions&&L.questions.notes===false)SHEET.notes=false;
 }
 const today=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)};
-const fresh=()=>({date:today(),crew:store.get('dryer.lastCrew',[]).filter(c=>SHEET.crew.includes(c)),product:'',yin:'',yout:'',hours:'',dest:'',bin:'',totes:'',notes:''});
+const fresh=()=>({date:today(),crew:store.get('dryer.lastCrew',[]).filter(c=>SHEET.crew.includes(c)),product:'',yin:'',yout:'',hours:'',dest:SHEET.dest.length===1?SHEET.dest[0]:'',bin:'',totes:'',notes:''});
 let F=fresh(),errors={};
 
 const stepper=(key,val,step=1,unit='',label='')=>`<div class="step"><button type="button" data-dec="${key}" data-step="${step}" aria-label="Less ${esc(label)}">−</button><input type="number" inputmode="decimal" min="0" step="${step}" data-k="${key}" value="${val??''}" aria-label="${esc(label)}" placeholder="0"><button type="button" data-inc="${key}" data-step="${step}" aria-label="More ${esc(label)}">+</button></div><span class="unit">${unit}</span>`;
@@ -138,16 +147,17 @@ const q=(id,label,body,hint='')=>`<div class="q ${errors[id]?'bad':''}" id="q-${
 const row=(name,inner)=>`<div class="row"><span class="name">${name}</span><div style="display:flex;align-items:center;gap:8px">${inner}</div></div>`;
 
 function render(){
+  $('#title').textContent=SHEET.title;document.title=SHEET.title;
   let h=`
   ${q('date','Production date',`<input type="date" data-k="date" value="${F.date}" max="${today()}">`)}
   ${q('crew','Who worked on it?',chips('crew',SHEET.crew,F.crew,true))}
   ${q('product','What went into the dryer?',`<select data-k="product" aria-label="Product into the dryer"><option value="">Pick a product</option>${SHEET.products.map(p=>`<option ${F.product===p?'selected':''}>${esc(p)}</option>`).join('')}</select>`)}
   ${q('yards','Yards',`<div class="rows">${row('Went in',stepper('yin',F.yin,.5,'yd','yards in'))}${row('Came out',stepper('yout',F.yout,.5,'yd','yards out'))}</div>`)}
   ${q('hours','How many hours did it take?',row('',stepper('hours',F.hours,.5,'h','hours')))}
-  ${q('dest','Where did it go?',`<div class="jobs" style="grid-template-columns:1fr 1fr">${['Totes','Bin'].map(x=>`<button type="button" class="chip" data-chip="dest" data-v="${x}" aria-pressed="${F.dest===x}">${x}</button>`).join('')}</div>`)}`;
+  ${SHEET.dest.length<2?'':q('dest','Where did it go?',`<div class="jobs" style="grid-template-columns:1fr 1fr">${SHEET.dest.map(x=>`<button type="button" class="chip" data-chip="dest" data-v="${x}" aria-pressed="${F.dest===x}">${x}</button>`).join('')}</div>`)}`;
   if(F.dest==='Totes')h+=q('totes','How many totes?',`<input type="text" inputmode="decimal" data-k="totes" value="${esc(F.totes)}" placeholder="9.75" autocomplete="off" aria-label="Number of totes">`);
   if(F.dest==='Bin')h+=q('bin','Which bin?',chips('bin',SHEET.bins,F.bin,false));
-  h+=q('notes','Notes',`<textarea data-k="notes">${esc(F.notes)}</textarea>`);
+  if(SHEET.notes)h+=q('notes','Notes',`<textarea data-k="notes">${esc(F.notes)}</textarea>`);
   h+=`<div class="formerr" id="formerr">${Object.keys(errors).length?'Fix the highlighted questions above.':''}</div>
     <button type="button" class="submit" id="submit">Submit</button>`;
   $('#app').innerHTML=h;
