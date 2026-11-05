@@ -815,6 +815,8 @@ function itemLabel(code,size){
 }
 const unitOf=code=>code.startsWith('CB2')||code.startsWith('CC1')?'yd':'ea';
 const itemCode=code=>({CB2:'14-14-CB2',CC1:'14-14-CC1',SO1:'14-14-SO1',BAG:'07-86-15W'})[code.split(':')[0]]||'';
+/* biochar labor: sheet hours are per person, so labor = hours x people on the sheet (at least 1). Output doesn't change. */
+const labH=r=>(+r.hours||0)*Math.max(1,(r.crew||[]).length);
 const linesSum=(run,dir,pred)=>run.lines.filter(l=>l.dir===dir&&pred(l)).reduce((a,l)=>a+l.qty,0);
 const summary=(run,dir)=>run.lines.filter(l=>l.dir===dir).map(l=>`${fmtN(l.qty,1)} ${unitOf(l.item)==='yd'?'yd ':''}${itemLabel(l.item,l.size)}`).join(', ');
 const active=rs=>rs.filter(r=>r.status==='active');
@@ -859,8 +861,8 @@ const METRICS={
     socks6:{label:'6 ft socks made',unit:'',calc:rs=>rs.reduce((a,r)=>a+sockQty(r,6),0)},
     socks10:{label:'10 ft socks made',unit:'',calc:rs=>rs.reduce((a,r)=>a+sockQty(r,10),0)},
     bags:{label:'Bags made',unit:'',calc:rs=>rs.reduce((a,r)=>a+linesSum(r,'out',l=>l.item.startsWith('BAG')),0)},
-    hours:{label:'Total hours',unit:'h',calc:rs=>rs.reduce((a,r)=>a+r.hours,0),digits:1},
-    equipHours:{label:'Equipment hours',unit:'h',calc:rs=>rs.reduce((a,r)=>a+r.hours*SETTINGS.ratio[r.job],0),digits:1},
+    hours:{label:'Labor hours',unit:'h',calc:rs=>rs.reduce((a,r)=>a+labH(r),0),digits:1},
+    equipHours:{label:'Equipment hours',unit:'h',calc:rs=>rs.reduce((a,r)=>a+labH(r)*SETTINGS.ratio[r.job],0),digits:1},
     pallets:{label:'Pallets wrapped',unit:'',calc:rs=>rs.reduce((a,r)=>a+(r.pallets||0),0)},
     onhandBasic:{label:'Basic on hand',unit:'yd',snapshot:true,calc:()=>onHand()['CC1:Basic']||0},
     onhandPeat:{label:'Peat on hand',unit:'yd',snapshot:true,calc:()=>onHand()['CC1:Peat']||0},
@@ -905,14 +907,15 @@ function fmtMetric(m,v){const d=m.digits||0;return m.unit==='$'?'$'+fmtN(v,d):fm
 const sumIn=pred=>rs=>rs.reduce((a,r)=>a+linesSum(r,'in',pred),0);
 const sumOut=pred=>rs=>rs.reduce((a,r)=>a+linesSum(r,'out',pred),0);
 const hoursOf=rs=>rs.reduce((a,r)=>a+r.hours,0);
+const bioHoursOf=rs=>rs.reduce((a,r)=>a+labH(r),0);
 const TOP_CARDS={
-  wash:[{label:'Hours',unit:'h',calc:hoursOf,sub:'Wash hours',split:'wash'},
+  wash:[{label:'Hours',unit:'h',calc:bioHoursOf,sub:'Wash hours',split:'wash'},
         {label:'Product in',unit:'yd',calc:sumIn(l=>l.item==='CB2'),sub:'Raw char · 14-14-CB2'},
         {label:'Product out',unit:'yd',calc:sumOut(l=>l.item.startsWith('CC1')),sub:'Washed char · 14-14-CC1'}],
-  sock:[{label:'Hours',unit:'h',calc:hoursOf,sub:'Sock hours',split:'sock'},
+  sock:[{label:'Hours',unit:'h',calc:bioHoursOf,sub:'Sock hours',split:'sock'},
         {label:'Product in',unit:'yd',calc:sumIn(l=>l.item.startsWith('CC1')),sub:'Washed char · 14-14-CC1'},
         {label:'Product out',unit:'socks',calc:sumOut(l=>l.item.startsWith('SO1')),sub:'Socks · 14-14-SO1'}],
-  bag:[{label:'Hours',unit:'h',calc:hoursOf,sub:'Bag hours',split:'bag'},
+  bag:[{label:'Hours',unit:'h',calc:bioHoursOf,sub:'Bag hours',split:'bag'},
        {label:'Product in',unit:'yd',calc:sumIn(l=>l.item.startsWith('CC1')),sub:'Washed char · 14-14-CC1'},
        {label:'Product out',unit:'bags',calc:sumOut(l=>l.item.startsWith('BAG')),sub:'1.5cf bags · 07-86-15W'}],
   opicker:[{label:'Hours',unit:'h',calc:rs=>rs.reduce((a,r)=>a+(+r.hours||0),0),sub:'Picker labor hours'},
@@ -993,6 +996,7 @@ const TABLES={
         {k:'job',l:'Job',t:'◉',get:r=>r.job,fmt:v=>jobPill(v)},
         {k:'crew',l:'Crew',t:'👥',get:r=>r.crew.join(', '),fmt:(v,r)=>tags(r.crew)},
         {k:'hours',l:'Hours',t:'#',num:1,get:r=>r.hours,sum:1},
+        {k:'labor',l:'Labor hours',t:'#',num:1,get:r=>labH(r),sum:1},
         {k:'used',l:'Used',t:'↘',get:r=>summary(r,'in')},
         {k:'made',l:'Made',t:'↗',get:r=>summary(r,'out')},
         {k:'washed',l:'Washed yd',t:'#',num:1,get:r=>linesSum(r,'out',l=>l.item.startsWith('CC1'))||'',sum:1},
@@ -1233,7 +1237,7 @@ function lineRow(l,i){
 }
 /* Photos the crew added on a sock / bag sheet: runs/<run id>/ in the dept14-photos bucket. */
 async function loadRunPhotos(id){
-  const box=$('#runPhotos');if(!box||!Live.photoRuns||!Live.photoRuns.has(id))return;
+  const box=$('#runPhotos');if(!box)return;if(!Live.photoRuns||!Live.photoRuns.has(id)){box.innerHTML='';return}
   const B=sb.storage.from('dept14-photos');
   const {data:files}=await B.list('runs/'+id,{limit:100,sortBy:{column:'name',order:'asc'}});
   const names=(files||[]).filter(f=>f.name.endsWith('.jpg')).map(f=>'runs/'+id+'/'+f.name);
@@ -1794,7 +1798,7 @@ function openOrderForm(rec,line){
   tb.addEventListener('change',e=>{if(e.target.dataset.f==='key'){grab();redraw()}});
   /* customer: type-ahead from the line's list; a new name goes on the list */
   const addCust=n=>{const list=custList(L),name=String(n).trim().replace(/\s+/g,' ');if(name&&!list.some(c=>c.toLowerCase()===name.toLowerCase())){list.push(name);list.sort((x,y)=>x.localeCompare(y));saveSettings(`${name} added to customers`)}};
-  combo(val('customer'),()=>custList(L),addCust);
+  combo(val('customer'),()=>custList(L),()=>{});
   tb.addEventListener('click',e=>{const b=e.target.closest('[data-rmline]');if(b){grab();d.lines.splice(+b.dataset.rmline,1);redraw()}});
   $('#addLine').onclick=()=>{grab();d.lines.push({key:'',qty:'',load:''});redraw();tb.querySelector('tr:last-child select')?.focus()};
   const del=$('#delOrder');if(del)del.onclick=()=>{if(!confirm('Delete this order? If it was completed, its products go back into inventory. You can undo it with ⌘Z.'))return;
@@ -1859,7 +1863,7 @@ const itemOrder=()=>itemKeys().map(k=>itemLabel(k));
 function monthEndData(month){
   const rs=active(DB.bio).filter(r=>r.date.startsWith(month));
   return PRODUCT_GROUPS.map(g=>{
-    const jr=rs.filter(r=>r.job===g.job);const hrs=jr.reduce((a,r)=>a+r.hours,0);const eq=hrs*SETTINGS.ratio[g.job];
+    const jr=rs.filter(r=>r.job===g.job);const hrs=jr.reduce((a,r)=>a+labH(r),0);const eq=hrs*SETTINGS.ratio[g.job];
     const by={};jr.forEach(r=>r.lines.filter(l=>l.dir==='out'&&g.match(l)).forEach(l=>{const n=itemLabel(l.item,l.size);by[n]=(by[n]||0)+l.qty}));
     const order=itemOrder();const pos=n=>{const i=order.indexOf(n);return i<0?999:i};
     const items=Object.entries(by).sort((a,b)=>pos(a[0])-pos(b[0])||a[0].localeCompare(b[0],undefined,{numeric:true}));
@@ -1891,7 +1895,7 @@ function renderReports(){
 /* ---- Month-end: same breakdown as the Google Sheet EOM tab ---- */
 function eomData(month){
   const rs=active(DB.bio).filter(r=>r.date.startsWith(month));
-  const job=j=>{const jr=rs.filter(r=>r.job===j),hrs=jr.reduce((a,r)=>a+r.hours,0),eq=hrs*SETTINGS.ratio[j];
+  const job=j=>{const jr=rs.filter(r=>r.job===j),hrs=jr.reduce((a,r)=>a+labH(r),0),eq=hrs*SETTINGS.ratio[j];
     const sum=(dir,pred)=>jr.reduce((a,r)=>a+linesSum(r,dir,pred),0);return {labor:hrs-eq,equip:eq,sum}};
   const w=job('wash'),b=job('bag'),s=job('sock');
   const bags=rs.reduce((a,r)=>a+linesSum(r,'out',l=>l.item.startsWith('BAG')),0); // bags made on any job (sock runs make some too)
@@ -2023,8 +2027,9 @@ function bdJob(){const all=store.get('topcards',{}),S=(UI.top&&UI.top.biochar)||
 function bdExport(){
   const job=bdJob(),{from,to}=bdState();
   const rs=active(DB.bio).filter(r=>r.job===job&&r.date>=from&&r.date<=to);
-  const head=['Date','Job','Crew','Hours','Used/Made','Item code','Product','Qty','Unit','Notes'];
-  const rows=rs.slice().sort((a,b)=>a.date.localeCompare(b.date)).flatMap(r=>r.lines.map(l=>[r.date,cap(r.job),(r.crew||[]).join('; '),r.hours,l.dir==='in'?'Used':'Made',itemCode(l.item),bdLabel(l),+l.qty,bdUnit(l),(r.notes||'').replace(/\s+/g,' ')]));
+  const head=['Date','Job','Crew','Hours','Labor hours','Used/Made','Item code','Product','Qty','Unit','Notes'];
+  /* hours go on each sheet's first line only, so a column sum in a spreadsheet is right */
+  const rows=rs.slice().sort((a,b)=>a.date.localeCompare(b.date)).flatMap(r=>r.lines.map((l,i)=>[r.date,cap(r.job),(r.crew||[]).join('; '),i?'':r.hours,i?'':labH(r),l.dir==='in'?'Used':'Made',itemCode(l.item),bdLabel(l),+l.qty,bdUnit(l),(r.notes||'').replace(/\s+/g,' ')]));
   downloadCSV([head,...rows],`dept14-biochar-${job}-${from}-to-${to}.csv`);
 }
 /* =============================================================
@@ -2156,8 +2161,8 @@ const RB_SRC={
       {k:'crew',l:'Crew',type:'dim',multi:true,get:r=>r.crew},
       {k:'orders',l:'Order tag',type:'dim',multi:true,get:r=>r.orders||[]},
       {k:'hours',l:'Hours',type:'num',unit:'hours',get:r=>r.hours},
-      {k:'labor',l:'Labor hours',type:'num',unit:'hours',get:r=>r.hours*(1-SETTINGS.ratio[r.job])},
-      {k:'equip',l:'Labor hours w/ equip',type:'num',unit:'hours',get:r=>r.hours*SETTINGS.ratio[r.job]},
+      {k:'labor',l:'Labor hours',type:'num',unit:'hours',get:r=>labH(r)*(1-SETTINGS.ratio[r.job])},
+      {k:'equip',l:'Labor hours w/ equip',type:'num',unit:'hours',get:r=>labH(r)*SETTINGS.ratio[r.job]},
       {k:'rawIn',l:'Raw char in (14-14-CB2)',type:'num',unit:'yd',get:r=>linesSum(r,'in',l=>l.item==='CB2')},
       {k:'washedOut',l:'Washed char made (14-14-CC1)',type:'num',unit:'yd',get:r=>linesSum(r,'out',l=>l.item.startsWith('CC1'))},
       {k:'ccIn',l:'Washed char used (14-14-CC1)',type:'num',unit:'yd',get:r=>linesSum(r,'in',l=>l.item.startsWith('CC1'))},
@@ -2421,9 +2426,9 @@ const TREND_BIO={
   raw:{label:'Raw char washed',unit:'yd',job:'wash',val:r=>linesSum(r,'in',l=>l.item==='CB2')},
   socks:{label:'Socks made',unit:'',job:'sock',split:'size',val:(r,key)=>linesSum(r,'out',l=>l.item.startsWith('SO1')&&(!key||(key==='custom'?l.item==='SO1:custom':l.item==='SO1:'+key)))},
   bags:{label:'Bags made',unit:'',job:'bag',split:'blend',val:(r,key)=>linesSum(r,'out',l=>l.item.startsWith('BAG')&&(!key||l.item.split(':')[1]===key))},
-  hours:{label:'Total hours',unit:'h',split:'job',val:(r,key)=>(!key||r.job===key)?r.hours:0},
-  labor:{label:'Labor hours',unit:'h',split:'job',val:(r,key)=>(!key||r.job===key)?r.hours*(1-SETTINGS.ratio[r.job]):0},
-  equip:{label:'Labor hours w/ equip',unit:'h',split:'job',val:(r,key)=>(!key||r.job===key)?r.hours*SETTINGS.ratio[r.job]:0},
+  hours:{label:'Total labor hours',unit:'h',split:'job',val:(r,key)=>(!key||r.job===key)?labH(r):0},
+  labor:{label:'Labor hours',unit:'h',split:'job',val:(r,key)=>(!key||r.job===key)?labH(r)*(1-SETTINGS.ratio[r.job]):0},
+  equip:{label:'Labor hours w/ equip',unit:'h',split:'job',val:(r,key)=>(!key||r.job===key)?labH(r)*SETTINGS.ratio[r.job]:0},
   yield:{label:'Wash yield',unit:'%',job:'wash',ratio:rs=>{const i=rs.reduce((a,r)=>a+linesSum(r,'in',l=>l.item==='CB2'),0),o=rs.reduce((a,r)=>a+linesSum(r,'out',l=>l.item.startsWith('CC1')),0);return i?o/i*100:0}},
 };
 /* Orchid trends. Each measure names its own records (dryer runs, input, sales). */
@@ -2603,7 +2608,7 @@ function setCal(k,ds,patch){
 }
 const crewOf=rs=>[...new Set(rs.flatMap(r=>r.crew||[]))];
 function calDay(k,rs){
-  const hrs=rs.reduce((a,r)=>a+(+r.hours||0),0),L=[];
+  const hrs=rs.reduce((a,r)=>a+(k==='bio'?labH(r):(+r.hours||0)),0),L=[];
   if(k==='bio'){const by=j=>rs.filter(r=>r.job===j);
     const w=by('wash').reduce((a,r)=>a+linesSum(r,'out',l=>l.item.startsWith('CC1')),0),so=by('sock').reduce((a,r)=>a+sockQty(r),0),ba=by('bag').reduce((a,r)=>a+linesSum(r,'out',l=>l.item.startsWith('BAG')),0);
     if(w)L.push(['wash',`Wash ${fmtN(w,1)} yd`]);if(so)L.push(['sock',`Sock ${fmtN(so,0)}`]);if(ba)L.push(['bag',`Bag ${fmtN(ba,0)}`]);
