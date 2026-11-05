@@ -110,7 +110,7 @@ nav.lines{display:flex;gap:4px;padding:0 20px;width:100%}
 nav.lines button{background:none;border:0;color:inherit;opacity:.6;padding:10px 16px 9px;font:600 1.05rem/1 var(--f-display);text-transform:uppercase;letter-spacing:.08em;border-bottom:3px solid transparent;cursor:pointer}
 nav.lines button[aria-selected="true"]{opacity:1;border-bottom-color:var(--accent)}
 
-main{padding:20px 20px 60px;max-width:1500px;margin:0 auto;display:grid;gap:20px}
+main{padding:20px 20px 60px;margin:0 auto;display:grid;gap:20px}
 
 /* Highlight cards */
 .hl-head{display:flex;align-items:center;gap:10px}
@@ -392,50 +392,48 @@ table.eom-t{width:100%;border-collapse:collapse;table-layout:fixed}
 .inv-h h3{font-size:1.5rem;text-transform:uppercase;letter-spacing:.05em}
 .inv-h .inv-tot{margin-left:auto;font-weight:600}
 .inv-h .btn{align-self:center}
-.inv-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.inv-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
 .inv-tile{display:grid;gap:2px;text-align:left;background:var(--surface);border:1px solid var(--line);min-height:96px;border-radius:var(--r);padding:12px 14px;cursor:pointer;color:inherit}
 .inv-tile:hover{border-color:var(--accent)}
 .inv-tile.custom{border-style:dashed}
 .inv-tile .t-name{font:600 .8rem/1.2 var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .inv-tile .t-val{font:700 2.2rem/1.05 var(--f-display)}
 .inv-tile .t-val small{font:500 .85rem var(--f-body);color:var(--muted);margin-left:4px}
-.t-two{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
-.t-after{display:grid;justify-items:end;text-align:right}
-.inv-tile .t-after .t-val{font-size:1.6rem}
-.t-lab,.bm-lab{font:500 .7rem/1.2 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.run-ph{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
+.run-ph .ph{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.run-ph img{width:100%;height:100%;object-fit:cover;display:block}
+.run-ph .ph-x{position:absolute;top:4px;right:4px;width:26px;height:26px;border:0;border-radius:99px;background:rgba(0,0,0,.6);color:#fff;cursor:pointer}
+.ao.ct{background:color-mix(in srgb,#E3A94B 10%,transparent)}
+.ct-t td{vertical-align:middle}
+.t-two{display:grid;grid-template-columns:1fr 1fr;align-items:start}
+.t-after{display:grid;justify-items:end;text-align:right;border-left:1px solid color-mix(in srgb,var(--ink) 14%,transparent);padding-left:10px}
+.inv-tile .t-two .t-val{font-size:1.9rem;white-space:nowrap}
+.t-lab,.bm-lab{font:500 .58rem/1.3 var(--f-mono);text-transform:uppercase;letter-spacing:.07em;color:var(--muted);white-space:nowrap}
 .t-after .t-val.neg,.bm-after .num.neg{color:var(--bad)}
 /* active orders above the inventory */
 .ao{padding:16px 18px 18px 20px;border-bottom:1px solid var(--line);display:grid;gap:12px}
 .ao-h{display:flex;align-items:center;gap:10px}
 .ao-h h3{margin:0;font-size:1.1rem;text-transform:uppercase;letter-spacing:.05em}
-.ao-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
-.ao-col{border:1px solid var(--line);border-top:4px solid var(--acc);border-radius:var(--r);background:linear-gradient(180deg,color-mix(in srgb,var(--acc) 8%,transparent),transparent 70%);padding:10px 12px;display:grid;gap:6px;align-content:start}
-.ao-col h4{margin:0;display:flex;align-items:center;gap:8px;font:600 .8rem/1.2 var(--f-mono);text-transform:uppercase;letter-spacing:.08em}
-.ao-col h4 .inv-dot{background:var(--acc)}
-.ao-item{all:unset;cursor:pointer;display:grid;grid-template-columns:auto 1fr;gap:2px 10px;padding:6px 8px;border-radius:6px;background:var(--surface);border:1px solid var(--line)}
-.ao-item:hover,.ao-item:focus-visible{border-color:var(--acc)}
-.ao-item .num{font-weight:700}
-.ao-item .ao-sub{grid-column:2;font-size:.8rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ao-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
-.ao-row{display:grid;grid-template-columns:22px 34px minmax(120px,1.2fr) minmax(70px,.5fr) minmax(0,2fr) auto auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);cursor:pointer}
-.ao-row:hover{border-color:var(--accent)}
-.ao-row.dragging{opacity:.4}
-.ao-row.drop-before{box-shadow:0 -3px 0 var(--accent)}
-.ao-row.drop-after{box-shadow:0 3px 0 var(--accent)}
-.ao-grip{cursor:grab;color:var(--muted);text-align:center;user-select:none;font-size:1.1rem;line-height:1}
-.ao-rank{font:700 1.2rem/1 var(--f-display)}
-.ao-cust{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ao-so,.ao-date{font-size:.85rem;color:var(--muted);white-space:nowrap}
-.ao-prod{font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ao-mv{display:flex;gap:2px}
-.ao-mv .btn{width:28px;height:28px;padding:0;justify-content:center}
-@media (max-width:760px){.ao-row{grid-template-columns:22px 30px 1fr auto}.ao-so,.ao-prod,.ao-date{display:none}}
-.binmap .bh{min-width:176px}
-.bm-two{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
-.bm-after{display:grid;justify-items:end}
-.bm-lab{white-space:nowrap}
-.binmap .onhand .bm-two>.num{font-size:1.45rem}
-.binmap .onhand .bm-after .num{font-size:1.2rem}
+.ao-t{width:100%}
+.ao-t tbody tr{cursor:pointer}
+.ao-t tbody tr:hover td{background:var(--accent-soft)}
+.ao-t td.ao-type{white-space:nowrap;font:600 .78rem/1.2 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;width:1%;padding-right:18px}
+.ao-mark{display:inline-block;width:4px;height:1.1em;border-radius:2px;background:var(--acc);margin-right:10px;vertical-align:-3px}
+.ao-t .ao-g,.ao-t .ao-mv,.ao-t .ao-mvh{width:1%;white-space:nowrap}
+.ao-grip{cursor:grab;color:var(--muted);user-select:none}
+.ao-mv .btn{width:28px;height:26px;padding:0;justify-content:center}
+.ao-row.dragging td{opacity:.4}
+.ao-row.drop-before td{box-shadow:inset 0 3px 0 var(--accent)}
+.ao-row.drop-after td{box-shadow:inset 0 -3px 0 var(--accent)}
+.binmap{width:100%;table-layout:fixed}
+.binmap .bh{min-width:0}
+.binmap th.div,.binmap td.div{width:8px}
+.binmap .bm-addcol{width:96px}
+.bm-two{display:grid;grid-template-columns:1fr 1fr;align-items:start}
+.bm-two>.num{text-align:left}
+.bm-after{display:grid;justify-items:end;border-left:1px solid color-mix(in srgb,var(--ink) 14%,transparent);padding-left:8px}
+.binmap .onhand .bm-two .num{font-size:clamp(1rem,1.25vw,1.5rem);white-space:nowrap}
+@media (max-width:1100px){.binmap{width:auto;table-layout:auto}.binmap .bh{min-width:170px}}
 .inv-tile .t-meta{font-size:.78rem;color:var(--muted)}
 @keyframes flashrow{from{background:var(--accent-soft)}to{background:var(--surface)}}
 .grid tbody tr.flash{animation:flashrow 1.6s ease-out}
@@ -605,6 +603,7 @@ SETTINGS.orc=Object.assign({yardsPerUnit:7.5,ratios:{'Jumbo Orchid':{small:60,me
 function gratesInit(){const O=SETTINGS.orc;O.profiles=O.profiles||{};O.active=O.active||{};
   Object.keys(O.ratios).forEach(m=>{if(!Array.isArray(O.profiles[m])||O.profiles[m].length<2)O.profiles[m]=[{...O.ratios[m]},{...O.ratios[m]}];if(O.active[m]!==1)O.active[m]=0;O.ratios[m]={...O.profiles[m][O.active[m]]}})}
 gratesInit();
+SETTINGS.toteSizes=SETTINGS.toteSizes||[{name:'1 yd',yd:1},{name:'2 yd',yd:2,blends:['Washed']}];
 SETTINGS.catalog=Object.assign({blends:CORE_BLENDS.slice(),bagTypes:['Basic','Washed','Peat'],sockSizes:CORE_SOCKS.slice(),materials:['Pallets','Blank white totes'],hidden:{}},SETTINGS.catalog||{});
 const BLENDS=SETTINGS.catalog.blends,SOCK_SIZES=SETTINGS.catalog.sockSizes,BAG_TYPES=SETTINGS.catalog.bagTypes; // bags have their own list (a subset of the blends that get bagged)
 const CORE_BAGS=['Basic','Washed','Peat'];
@@ -861,6 +860,7 @@ const TABLES={
         {k:'boxes',l:'Boxes',t:'#',num:1,get:r=>r.boxes||'',sum:1},
         {k:'pallets',l:'Pallets',t:'#',num:1,get:r=>r.pallets||'',sum:1},
         {k:'orders',l:'Orders',t:'🏷',get:r=>r.orders.join(', '),fmt:(v,r)=>tags(r.orders)},
+        {k:'photos',l:'Photos',get:r=>Live.photoRuns&&Live.photoRuns.has(r.id)?'Yes':''},
         {k:'notes',l:'Notes',t:'¶',get:r=>r.notes},
       ]},
     monthend:{label:'Reports',report:true,cols:[],groups:{},rows:()=>[]},
@@ -1079,6 +1079,21 @@ function lineRow(l,i){
     <td class="muted">${unitOf(l.item)}</td>
     <td><button type="button" class="btn icon ghost" data-rm="${i}" aria-label="Remove line">✕</button></td></tr>`;
 }
+/* Photos the crew added on a sock / bag sheet: runs/<run id>/ in the dept14-photos bucket. */
+async function loadRunPhotos(id){
+  const box=$('#runPhotos');if(!box||!Live.photoRuns||!Live.photoRuns.has(id))return;
+  const B=sb.storage.from('dept14-photos');
+  const {data:files}=await B.list('runs/'+id,{limit:100,sortBy:{column:'name',order:'asc'}});
+  const names=(files||[]).filter(f=>f.name.endsWith('.jpg')).map(f=>'runs/'+id+'/'+f.name);
+  if(!$('#runPhotos'))return;
+  if(!names.length){box.innerHTML='';return}
+  const {data:urls}=await B.createSignedUrls(names,3600);
+  if(!$('#runPhotos'))return;
+  box.innerHTML=`<div class="sect">Photos</div><div class="run-ph">${(urls||[]).map((u,i)=>`<div class="ph"><a href="${esc(u.signedUrl)}" target="_blank" rel="noopener"><img src="${esc(u.signedUrl)}" alt="Photo ${i+1}"></a><button type="button" class="ph-x" data-rmph="${esc(names[i])}" aria-label="Delete photo ${i+1}">✕</button></div>`).join('')}</div>`;
+  box.querySelectorAll('[data-rmph]').forEach(b=>b.onclick=async()=>{if(!confirm('Delete this photo?'))return;
+    const {error}=await B.remove([b.dataset.rmph]);if(error)return toast('⚠ Couldn’t delete the photo.');
+    if(names.length===1)Live.photoRuns.delete(id);loadRunPhotos(id);toast('Photo deleted')});
+}
 function openRunEditor(run){
   const isNew=!run;
   const d=isNew?{date:iso(TODAY),job:'',crew:[],hours:'',boxes:0,pallets:0,orders:[],notes:'',status:'active',lines:[]}:JSON.parse(JSON.stringify(run));
@@ -1095,6 +1110,7 @@ function openRunEditor(run){
     <div class="sect">Material used and made</div>
     <div style="overflow-x:auto"><table class="lines"><thead><tr><th style="width:96px"></th><th>Product</th><th style="width:96px">Qty</th><th style="width:130px">Size / name</th><th style="width:30px"></th><th style="width:36px"></th></tr></thead><tbody id="lb"></tbody></table></div>
     <div><button type="button" class="btn" id="addLine">+ Add line</button></div>
+    ${isNew?'':'<div id="runPhotos"></div>'}
     <div class="sect">Shipping and notes</div>
     <div class="fields">
       <label class="field"><span>Boxes</span><input type="number" name="boxes" min="0" value="${d.boxes||''}"></label>
@@ -1106,6 +1122,7 @@ function openRunEditor(run){
     <div class="err" id="formErr"></div>`,
     `${isNew?'':'<button class="btn danger" id="delRun" style="margin-right:auto">Delete</button>'}<button class="btn" data-close>Cancel</button><button class="btn primary" id="saveRun">${isNew?'Add run':'Save changes'}</button>`);
   const m=$('#modalRoot'),lb=$('#lb');
+  if(!isNew)loadRunPhotos(run.id);
   const delBtn=$('#delRun');if(delBtn)delBtn.onclick=()=>{if(!confirm(`Delete this ${run.job} sheet from ${fmtDate(run.date)}? It's removed from every total. You can undo it with ⌘Z.`))return;
     DB.bio=DB.bio.filter(x=>x.id!==run.id);saveDB();closeModal();render();toast('Production sheet deleted')};
   const drawLines=()=>{lb.innerHTML=lines.length?lines.map(lineRow).join(''):''};
@@ -1183,24 +1200,61 @@ function secItems(sec,h){
     .map(k=>({key:k,name:sec.key==='socks'?`${k.split(':')[2]} ft (custom)`:k.slice(sec.prefix.length),unit:sec.unit,deletable:true,custom:true}));
   return [...std,...extra];
 }
-/* Active biochar orders, split by product type in that type's color. An order with socks and bags shows in both. */
-function bioActiveOrders(){
-  const open=(DB.orders||[]).filter(o=>o.line==='biochar'&&!o.done).sort((a,b)=>a.date.localeCompare(b.date));
-  const cols=['washed','bags','socks','raw'].map(k=>{const sec=INV_SECTIONS.find(x=>x.key===k);
-    const items=open.flatMap(o=>o.lines.filter(l=>secOfKey(l.key)===k).map(l=>({o,l,p:saleProduct('biochar',l.key)})));
-    return items.length?`<div class="ao-col acc-${sec.acc}"><h4><span class="inv-dot" aria-hidden="true"></span>${sec.title}</h4>
-      ${items.map(({o,l,p})=>`<button type="button" class="ao-item" data-order="${esc(o.id)}"><span class="num">${fmtN(l.qty,1)} ${esc(p.unit)}</span><span>${esc(p.name)}</span><span class="ao-sub">${fmtDate(o.date)}${o.notes?' · '+esc(o.notes):''}</span></button>`).join('')}</div>`:''}).join('');
-  return `<section class="ao"><div class="ao-h"><h3>Active orders</h3><span class="muted">${open.length}</span></div>${open.length?`<div class="ao-cols">${cols}</div>`:'<span class="muted">No open orders.</span>'}</section>`;
+/* Custom totes from the wash sheet: the crew picked Custom and wrote the size in Notes. They stay out of
+   inventory until the manager names the tote size and gives its yards. */
+function customTotes(){
+  const rows=active(DB.bio).flatMap(r=>(r.pendingTotes||[]).map((p,i)=>({r,p,i})));
+  if(!rows.length)return '';
+  return `<section class="ao ct"><div class="ao-h"><h3>Custom totes</h3><span class="muted">${rows.length}</span></div>
+    <table class="lines ct-t"><thead><tr><th>Date</th><th>Blend</th><th class="n">Totes</th><th>Notes</th><th></th></tr></thead><tbody>
+    ${rows.map(({r,p,i})=>`<tr><td>${fmtDate(r.date)}</td><td>${esc(p.key.replace(/^CC1:/,''))}</td><td class="n num">${fmtN(p.count,1)}</td><td>${esc(r.notes||'')}</td>
+      <td class="n"><button type="button" class="btn primary" data-ctote="${esc(r.id)}|${i}">Add to inventory</button></td></tr>`).join('')}
+    </tbody></table></section>`;
 }
-/* Active orchid orders, ranked 1, 2, 3... Drag a row (or use the arrows) to change the order. */
+function openCustomTote(runId,i){
+  const r=DB.bio.find(x=>x.id===runId),p=r&&r.pendingTotes[i];if(!p)return;
+  modal('Add custom tote',`<div class="fields">
+      <label class="field"><span>Tote name</span><input type="text" id="ctName" maxlength="30" autocomplete="off"></label>
+      <label class="field"><span>Yards per tote</span><input type="number" id="ctYd" min="0.1" step="0.1" inputmode="decimal"></label>
+    </div>
+    <table class="lines"><tbody><tr><td>${fmtDate(r.date)} · ${esc(p.key.replace(/^CC1:/,''))}</td><td class="n num" id="ctOut">${fmtN(p.count,1)} totes</td></tr>
+    ${r.notes?`<tr><td colspan="2" class="muted">${esc(r.notes)}</td></tr>`:''}</tbody></table>
+    <div class="err" id="formErr"></div>`,
+    `<button class="btn" data-close>Cancel</button><button class="btn primary" id="ctSave">Add to inventory</button>`);
+  $('#ctName').focus();
+  $('#ctYd').oninput=()=>{const y=+$('#ctYd').value;$('#ctOut').textContent=y>0?`${fmtN(p.count,1)} totes · ${fmtN(p.count*y,2)} yd`:`${fmtN(p.count,1)} totes`};
+  $('#ctSave').onclick=()=>{const name=$('#ctName').value.trim().replace(/\s+/g,' '),yd=Math.round(+$('#ctYd').value*100)/100,err=t=>$('#formErr').textContent=t;
+    if(!name)return err('Type a name for this tote.');if(!(yd>0))return err('Enter the yards per tote.');
+    const same=SETTINGS.toteSizes.find(t=>t.name.toLowerCase()===name.toLowerCase());
+    if(same&&+same.yd!==yd)return err(`${same.name} is already ${same.yd} yd.`);
+    if(!same&&!SETTINGS.toteSizes.some(t=>+t.yd===yd&&!(t.blends||[]).length))SETTINGS.toteSizes.push({name,yd});
+    r.pendingTotes.splice(i,1);
+    r.lines.push({dir:'out',item:p.key,qty:Math.round(p.count*yd*100)/100,totes:p.count,toteSize:yd});
+    UI.flash=r.id;saveDB();store.set('settings',SETTINGS);closeModal();render();UI.flash=null;toast(`${fmtN(p.count*yd,2)} yd added to ${p.key.replace(/^CC1:/,'')}`)};
+}
+/* Active biochar orders: one spreadsheet row per product line, top to bottom by type (color mark on the left), then date. */
+function bioActiveOrders(){
+  const open=(DB.orders||[]).filter(o=>o.line==='biochar'&&!o.done);
+  const T=['washed','bags','socks','raw'];
+  const rows=open.flatMap(o=>o.lines.map(l=>({o,l,t:secOfKey(l.key),p:saleProduct('biochar',l.key)})))
+    .sort((a,b)=>T.indexOf(a.t)-T.indexOf(b.t)||a.o.date.localeCompare(b.o.date));
+  return `<section class="ao"><div class="ao-h"><h3>Active orders</h3><span class="muted">${open.length}</span></div>
+    ${rows.length?`<table class="grid ao-t"><thead><tr><th class="ao-type">Type</th><th>Product</th><th class="r">Qty</th><th>Unit</th><th>Order date</th><th>Notes</th></tr></thead><tbody>
+    ${rows.map(({o,l,t,p})=>{const sec=INV_SECTIONS.find(x=>x.key===t);return `<tr class="ao-line acc-${sec.acc}" data-order="${esc(o.id)}">
+      <td class="ao-type"><span class="ao-mark" aria-hidden="true"></span>${sec.title}</td><td>${esc(p.name)}</td><td class="r num">${fmtN(l.qty,1)}</td><td>${esc(p.unit)}</td><td>${fmtDate(o.date)}</td><td>${esc(o.notes||'')}</td></tr>`}).join('')}
+    </tbody></table>`:'<span class="muted">No open orders.</span>'}</section>`;
+}
+/* Active orchid orders: spreadsheet rows ranked 1, 2, 3... Drag a row (or use the arrows) to change the order. */
 function orcActiveOrders(){
   const open=rankedOrchid();
   return `<section class="ao"><div class="ao-h"><h3>Active orders</h3><span class="muted">${open.length}</span></div>
-    ${open.length?`<ol class="ao-list" id="aoList">${open.map((o,i)=>`<li class="ao-row" draggable="true" data-oid="${esc(o.id)}">
-      <span class="ao-grip" aria-hidden="true">⋮⋮</span><span class="ao-rank num">${i+1}.</span>
-      <span class="ao-cust">${esc(o.customer||'')}</span><span class="ao-so num">${esc(o.so||'')}</span>
-      <span class="ao-prod">${esc(orderSummary(o))}</span><span class="ao-date">${fmtDate(o.date)}</span>
-      <span class="ao-mv"><button type="button" class="btn ghost" data-mv="-1" ${i?'':'disabled'} aria-label="Move ${esc(o.customer)} up">↑</button><button type="button" class="btn ghost" data-mv="1" ${i<open.length-1?'':'disabled'} aria-label="Move ${esc(o.customer)} down">↓</button></span></li>`).join('')}</ol>`:'<span class="muted">No open orders.</span>'}
+    ${open.length?`<table class="grid ao-t"><thead><tr><th class="ao-g"></th><th class="rn">#</th><th>Customer</th><th>Sales order #</th><th>Products</th><th>Load</th><th>Order date</th><th>Notes</th><th class="ao-mvh"></th></tr></thead><tbody id="aoList">
+    ${open.map((o,i)=>`<tr class="ao-row" draggable="true" data-oid="${esc(o.id)}">
+      <td class="ao-g"><span class="ao-grip" aria-hidden="true">⋮⋮</span></td><td class="rn num">${i+1}</td>
+      <td>${esc(o.customer||'')}</td><td class="num">${esc(o.so||'')}</td><td>${esc(orderSummary(o))}</td>
+      <td>${esc([...new Set(o.lines.map(l=>l.load).filter(Boolean))].join(', '))}</td><td>${fmtDate(o.date)}</td><td>${esc(o.notes||'')}</td>
+      <td class="ao-mv"><button type="button" class="btn ghost" data-mv="-1" ${i?'':'disabled'} aria-label="Move ${esc(o.customer)} up">↑</button><button type="button" class="btn ghost" data-mv="1" ${i<open.length-1?'':'disabled'} aria-label="Move ${esc(o.customer)} down">↓</button></td></tr>`).join('')}
+    </tbody></table>`:'<span class="muted">No open orders.</span>'}
   </section>`;
 }
 let AO_DRAG=null;
@@ -1237,12 +1291,13 @@ function renderInventory(){
         <span class="t-meta">${x.custom?'Custom from sheets':' '}</span></button>`}).join('')||'<span class="muted">Nothing here yet.</span>'}</div>
     </section>`};
   const by=k=>INV_SECTIONS.find(x=>x.key===k);
-  $('#gridWrap').innerHTML=bioActiveOrders()+`<div class="inv">${['raw','washed','bags','socks'].map(k=>one(by(k))).join('')}</div>`;
+  $('#gridWrap').innerHTML=customTotes()+bioActiveOrders()+`<div class="inv">${['raw','washed','bags','socks'].map(k=>one(by(k))).join('')}</div>`;
 }
 $('#gridWrap').addEventListener('click',e=>{
   if(!(UI.line==='biochar'&&UI.table.biochar==='inventory'))return;
   const t=e.target.closest('[data-tile]'),cb=e.target.closest('[data-count]'),ap=e.target.closest('[data-addprod]');
   if(ap){openAddProduct(INV_SECTIONS.find(s=>s.key===ap.dataset.addprod));return}
+  const ct=e.target.closest('[data-ctote]');if(ct){const [id,i]=ct.dataset.ctote.split('|');openCustomTote(id,+i);return}
   if(t){openCounts(INV_SECTIONS.find(s=>s.key===t.dataset.tile),t.dataset.key);return}
   if(cb)openCounts(INV_SECTIONS.find(s=>s.key===cb.dataset.count));
 });
@@ -2739,8 +2794,10 @@ Live.load=async function(){
     fetchAll('inventory_counts','*',q=>q.order('counted_on',{ascending:false}).order('created_at',{ascending:false}))]);
   Live.items=items;Live.bins=bins;Live.emp=emp;
   const bn=id=>(Live.bin(id)||{}).name||'';
+  Live.hasTotes=runs.length?'pending_totes' in runs[0]:!(await sb.from('production_runs').select('pending_totes').limit(1)).error;
   DB.bio=runs.map(r=>({id:r.id,date:r.production_date,job:r.job_type,hours:+r.hours,crew:(r.run_workers||[]).map(w=>Live.empName(w.employee_id)).filter(Boolean),
-    lines:(r.run_lines||[]).map(l=>{const it=Live.item(l.item_id);const o={dir:l.direction,item:keyOfLine(it,l.custom_name),qty:+l.qty};if(l.custom_size_ft!=null)o.size=+l.custom_size_ft;return o}),
+    lines:(r.run_lines||[]).map(l=>{const it=Live.item(l.item_id);const o={dir:l.direction,item:keyOfLine(it,l.custom_name),qty:+l.qty};if(l.custom_size_ft!=null)o.size=+l.custom_size_ft;if(l.tote_count!=null){o.totes=+l.tote_count;o.toteSize=+l.tote_size_yd}return o}),
+    pendingTotes:(r.pending_totes||[]).map(p=>({key:keyOfLine(Live.item(p.item_id),p.custom_name),count:+p.count})),
     boxes:r.boxes??0,pallets:r.pallets??0,orders:r.order_refs||[],notes:r.notes||'',status:r.status,voidReason:r.void_reason||'',source:r.source}));
   DB.orc=dryer.map(r=>({id:r.id,date:r.production_date,product:bn(r.product_bin_id),yardsIn:+r.yards_in,yardsOut:+r.yards_out,hours:+r.hours,
     dest:r.destination==='bin'?'Bin':'Totes',bin:r.bin_id?bn(r.bin_id):'',totes:r.totes!=null?+r.totes:0,crew:(r.dryer_run_workers||[]).map(w=>Live.empName(w.employee_id)).filter(Boolean),
@@ -2760,6 +2817,9 @@ Live.load=async function(){
   if(S.equipment_ratio)SETTINGS.ratio={wash:+S.equipment_ratio.wash,sock:+S.equipment_ratio.sock,bag:+S.equipment_ratio.bag};
   if(S.bonus){SETTINGS.bonusPerYardIn=+S.bonus.per_yard_in;SETTINGS.bonusPerTote=+S.bonus.per_tote;SETTINGS.bonusYdPerTote=+S.bonus.yards_per_tote}
   if(S.orchid){SETTINGS.orc={...SETTINGS.orc,yardsPerUnit:+S.orchid.yards_per_unit,ratios:S.orchid.ratios,profiles:S.orchid.profiles,active:S.orchid.active,extraBins:[]};gratesInit()}
+  if(Array.isArray(S.tote_sizes))SETTINGS.toteSizes=S.tote_sizes;
+  Live.photoRuns=new Set();
+  try{for(let off=0;;off+=1000){const {data,error}=await sb.storage.from('dept14-photos').list('runs',{limit:1000,offset:off});if(error||!data)break;data.forEach(f=>Live.photoRuns.add(f.name));if(data.length<1000)break}}catch(e){}
   if(S.dashboard){const D=S.dashboard;if(D.siteUrl)SETTINGS.siteUrl=D.siteUrl;if(D.forms)SETTINGS.forms=D.forms;if(D.hidden)SETTINGS.catalog.hidden=D.hidden}
   SETTINGS.crew=emp.filter(e=>e.active).map(e=>({id:e.id,name:e.name,biochar:e.on_biochar_sheet,orchid:e.on_dryer_sheet,active:true}));
   const blends=items.filter(i=>i.kind==='blend'&&!i.is_custom&&i.active).sort((a,b)=>a.sort-b.sort).map(i=>i.blend);
@@ -2787,12 +2847,13 @@ const COLS=['bio','orc','oin','orders','purch','adj'];
 Live.snap=()=>{const o={};COLS.forEach(c=>{o[c]=new Map((DB[c]||[]).map(r=>[r.id,JSON.stringify(r)]))});o.counts=JSON.stringify(DB.counts||{});return o};
 Live.ssnap=()=>JSON.stringify({ratio:{wash:SETTINGS.ratio.wash,sock:SETTINGS.ratio.sock,bag:SETTINGS.ratio.bag},bonus:[SETTINGS.bonusPerYardIn,SETTINGS.bonusPerTote,SETTINGS.bonusYdPerTote],
   orc:{y:SETTINGS.orc.yardsPerUnit,r:SETTINGS.orc.ratios,p:SETTINGS.orc.profiles,a:SETTINGS.orc.active},binNotes:SETTINGS.orc.binNotes||{},crew:SETTINGS.crew,blends:[...BLENDS],bags:[...BAG_TYPES],socks:[...SOCK_SIZES],bins:SETTINGS.orc.extraBins||[],reports:SETTINGS.reports||[],
-  dash:{siteUrl:SETTINGS.siteUrl,forms:SETTINGS.forms,hidden:SETTINGS.catalog.hidden}});
+  dash:{siteUrl:SETTINGS.siteUrl,forms:SETTINGS.forms,hidden:SETTINGS.catalog.hidden},totes:SETTINGS.toteSizes});
 
 /* ---- dashboard record → table row ---- */
 const ROW={
   bio:r=>({id:r.id,line:'biochar',job_type:r.job,production_date:r.date,hours:+r.hours,boxes:r.boxes?Math.round(+r.boxes):null,pallets:r.pallets?Math.round(+r.pallets):null,
-    order_refs:r.orders||[],notes:r.notes||null,source:r.source==='form'||r.source==='import'?r.source:'dashboard',status:r.status||'active',void_reason:r.status==='void'?(r.voidReason||null):null}),
+    order_refs:r.orders||[],notes:r.notes||null,source:r.source==='form'||r.source==='import'?r.source:'dashboard',status:r.status||'active',void_reason:r.status==='void'?(r.voidReason||null):null,
+    ...(Live.hasTotes?{pending_totes:(r.pendingTotes||[]).map(p=>{const it=itemOfKey(p.key);return {item_id:it.item_id,custom_name:it.custom_name||null,count:+p.count}})}:{})}),
   orc:r=>({id:r.id,production_date:r.date,product_bin_id:Live.binId(r.product),yards_in:+r.yardsIn,yards_out:+r.yardsOut,hours:+r.hours,destination:r.dest==='Bin'?'bin':'totes',
     bin_id:r.dest==='Bin'?Live.binId(r.bin):null,totes:r.dest==='Totes'?(+r.totes||0):null,notes:r.notes||null,source:r.source==='form'||r.source==='import'?r.source:'dashboard',
     status:r.status||'active',void_reason:r.status==='void'?(r.voidReason||null):null}),
@@ -2830,7 +2891,7 @@ Live.sync=async function(){
             const ws=(r.crew||[]).map(n=>Live.empId(n)).filter(Boolean).map(e=>({run_id:id,employee_id:e}));
             if(ws.length)await must(sb.from('run_workers').insert(ws));
             await must(sb.from('run_lines').delete().eq('run_id',id));
-            const ls=(r.lines||[]).filter(l=>+l.qty>0).map(l=>({run_id:id,direction:l.dir,qty:+l.qty,...itemOfKey(l.item,l.size)}));
+            const ls=(r.lines||[]).filter(l=>+l.qty>0).map(l=>({run_id:id,direction:l.dir,qty:+l.qty,...itemOfKey(l.item,l.size),...(Live.hasTotes&&l.totes?{tote_count:+l.totes,tote_size_yd:+l.toteSize}:{})}));
             if(ls.length)await must(sb.from('run_lines').insert(ls));
           }
           if(c==='orders'){
@@ -2873,6 +2934,7 @@ Live.syncSettings=async function(){
   if(JSON.stringify(old.bonus)!==JSON.stringify(cur.bonus))await up('bonus',{per_yard_in:cur.bonus[0],per_tote:cur.bonus[1],yards_per_tote:cur.bonus[2]});
   if(JSON.stringify(old.orc)!==JSON.stringify(cur.orc))await up('orchid',{yards_per_unit:cur.orc.y,ratios:cur.orc.r,profiles:cur.orc.p,active:cur.orc.a});
   if(JSON.stringify(old.dash)!==JSON.stringify(cur.dash))await up('dashboard',cur.dash);
+  if(JSON.stringify(old.totes)!==JSON.stringify(cur.totes))await up('tote_sizes',cur.totes);
   /* crew */
   for(const c of SETTINGS.crew){if(!c.name)continue;
     const row={name:c.name,on_biochar_sheet:!!c.biochar,on_dryer_sheet:!!c.orchid,active:true};
