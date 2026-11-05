@@ -81,9 +81,6 @@ h1,h2,h3{font-family:var(--f-display);margin:0;letter-spacing:.02em}
 .demo{font:500 .7rem/1 var(--f-mono);text-transform:uppercase;letter-spacing:.1em;padding:5px 9px;border-radius:99px;border:1px solid currentColor;color:#E3A94B;margin-bottom:10px}
 nav.lines .input-btn{opacity:1;align-self:center;margin:0 0 4px 8px;background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;padding:7px 16px;font:700 .9rem/1 var(--f-display);text-transform:uppercase;letter-spacing:.07em;cursor:pointer}
 nav.lines .input-btn:hover{filter:brightness(1.08)}
-.sugg-btn{font:500 .7rem/1 var(--f-mono);text-transform:uppercase;letter-spacing:.1em;padding:5px 10px;border-radius:99px;border:1px solid currentColor;color:var(--bar-ink);background:none;opacity:.85;cursor:pointer;margin:0 0 10px;display:inline-flex;align-items:center;gap:6px}
-.sugg-btn:hover{opacity:1}
-.sg-text{width:100%;min-height:84px;resize:vertical;font:inherit}
 /* Sign-in screen: same look as the Mix Board's (its colors, fonts and sizes) */
 .login{--mb-bg:#f1f3ef;--mb-surface:#fff;--mb-fg:#182019;--mb-muted:#5e6a61;--mb-line:#d3dad2;--mb-line-strong:#aab4ab;--mb-accent:#2c7a44;--mb-accent-ink:#fff;--mb-danger:#b23a3a;--mb-shadow:0 6px 24px rgba(20,30,22,.12);
   position:fixed;inset:0;z-index:60;background:var(--mb-bg);color:var(--mb-fg);display:flex;align-items:center;justify-content:center;padding:16px;font-family:"Barlow","Helvetica Neue",Arial,sans-serif;font-size:14px;line-height:1.35}
@@ -639,7 +636,6 @@ table.grid.me{width:100%}
         <button type="button" class="et-btn" id="redoBtn" title="Redo (⌘⇧Z / Ctrl+Y)" aria-label="Redo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
         <button type="button" class="et-btn" id="verBtn" title="Version history (⌘⌥⇧H / Ctrl+Alt+Shift+H)" aria-label="Version history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></button>
       </div></div>
-    <button type="button" class="sugg-btn" id="suggBtn">Suggestions</button>
     <span class="who"><span id="whoEmail"></span> · <button type="button" class="signout" id="signOut">Sign out</button></span>
   </div>
   <nav class="lines" role="tablist" id="lines">
@@ -2987,20 +2983,7 @@ $('#settingsSec').addEventListener('click',e=>{
     document.body.classList.add('printing-qr');window.print();setTimeout(()=>document.body.classList.remove('printing-qr'),500)}
 });
 
-/* Suggestions: just a text box and Send. Each one is saved with who sent it and when
-   (prototype: this browser, d14.sugg; live: a dept14.suggestions table), and read from there. */
 let ME='manager';
-function openSuggestions(){
-  modal('Suggestions',`<textarea class="sg-text" id="sgText" maxlength="2000" aria-label="Suggestion"></textarea>`,
-    `<button type="button" class="btn primary" id="sgSend">Send suggestion</button>`);
-  const txt=$('#sgText');txt.focus();
-  $('#sgSend').onclick=()=>{const t=txt.value.trim();if(!t){txt.focus();return}
-    $('#sgSend').disabled=true;
-    sb.from('suggestions').insert({body:t}).then(({error})=>{
-      if(error){$('#sgSend').disabled=false;return toast('⚠ Couldn’t send that. Try again.')}
-      closeModal();toast('✓ Suggestion sent.')})};
-}
-$('#suggBtn').onclick=openSuggestions;
 $('#prodBtn').onclick=()=>openInputForm(null);
 $('#buyBtn').onclick=()=>openInputForm(null,'buy',UI.line==='orchid'?'orchid':'biochar');
 $('#salesBtn').onclick=()=>openOrderForm(null,UI.line==='orchid'?'orchid':'biochar');
