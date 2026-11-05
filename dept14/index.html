@@ -458,6 +458,9 @@ table.eom-t{width:100%;border-collapse:collapse;table-layout:fixed}
 .ao-h{display:flex;align-items:center;gap:10px}
 .ao-h h3{margin:0;font-size:1.1rem;text-transform:uppercase;letter-spacing:.05em}
 .ao-t{width:100%}
+.ao-t td.c,.ao-t th.c{text-align:center}
+.ao-t input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent);cursor:pointer}
+.ord-ship div{font-size:.92rem;padding:8px 0}
 .ao-t tbody tr{cursor:pointer}
 .ao-t tbody tr:hover td{background:var(--accent-soft)}
 .ao-t td.ao-type{white-space:nowrap;font:600 .78rem/1.2 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;width:1%;padding-right:18px}
@@ -973,14 +976,19 @@ const TABLES={
     sales:{label:'Sales log',simple:true,rows:()=>DB.orders.filter(o=>o.line===UI.line),addable:true,addLabel:'+ Add order',onAdd:()=>openOrderForm(null,UI.line),
       groups:{'':'None',customer:'Customer',done:'Completed',month:'Month'},
       /* biochar sales only need the date, products and notes */
-      get cols(){return UI.line==='biochar'?this.allCols.filter(c=>c.k!=='customer'&&c.k!=='so'):this.allCols},
+      get cols(){return UI.line==='biochar'?this.allCols.filter(c=>!['customer','so','po','ready','carrier','shipDate','freight'].includes(c.k)):this.allCols},
       allCols:[
         {k:'date',l:'Order date',get:r=>r.date,fmt:v=>fmtDate(v)},
         {k:'customer',l:'Customer',get:r=>r.customer},
         {k:'so',l:'Sales order #',get:r=>r.so||''},
+        {k:'po',l:'PO',get:r=>r.po||''},
         {k:'products',l:'Products',get:r=>orderSummary(r)},
+        {k:'ready',l:'Ready',get:r=>r.ready?'Yes':'No',fmt:(v,r)=>r.done?'':`<input type="checkbox" data-ready="${esc(r.id)}" ${r.ready?'checked':''} aria-label="Ready">`},
         {k:'done',l:'Completed',get:r=>r.done?'Yes':'No',fmt:(v,r)=>`<input type="checkbox" data-done="${esc(r.id)}" ${r.done?'checked':''} aria-label="Completed">`},
-        {k:'doneOn',l:'Shipped',get:r=>r.done?(r.doneOn||''):'',fmt:v=>v?fmtDate(v):''},
+        {k:'doneOn',l:'Completed on',get:r=>r.done?(r.doneOn||''):'',fmt:v=>v?fmtDate(v):''},
+        {k:'carrier',l:'Carrier',get:r=>r.carrier||''},
+        {k:'shipDate',l:'Ship date',get:r=>r.shipDate||'',fmt:v=>v?fmtDate(v):''},
+        {k:'freight',l:'Freight',num:1,get:r=>r.freight??'',fmt:v=>v===''?'':'$'+fmtN(v,2)},
         {k:'notes',l:'Notes',get:r=>r.notes||''},
       ]},
   }
@@ -1313,11 +1321,11 @@ function bioActiveOrders(){
 function orcActiveOrders(){
   const open=rankedOrchid();
   return `<section class="ao"><div class="ao-h"><h3>Active orders</h3><span class="muted">${open.length}</span></div>
-    ${open.length?`<table class="grid ao-t"><thead><tr><th class="ao-g"></th><th class="rn">#</th><th>Customer</th><th>Sales order #</th><th>Products</th><th>Load</th><th>Order date</th><th>Notes</th><th class="ao-mvh"></th></tr></thead><tbody id="aoList">
+    ${open.length?`<table class="grid ao-t"><thead><tr><th class="ao-g"></th><th class="rn">#</th><th>Customer</th><th>Sales order #</th><th>Products</th><th>Load</th><th>Order date</th><th class="c">Ready</th><th>Ship date</th><th>Carrier</th><th>Notes</th><th class="ao-mvh"></th></tr></thead><tbody id="aoList">
     ${open.map((o,i)=>`<tr class="ao-row" draggable="true" data-oid="${esc(o.id)}">
       <td class="ao-g"><span class="ao-grip" aria-hidden="true">⋮⋮</span></td><td class="rn num">${i+1}</td>
       <td>${esc(o.customer||'')}</td><td class="num">${esc(o.so||'')}</td><td>${esc(orderSummary(o))}</td>
-      <td>${esc([...new Set(o.lines.map(l=>l.load).filter(Boolean))].join(', '))}</td><td>${fmtDate(o.date)}</td><td>${esc(o.notes||'')}</td>
+      <td>${esc([...new Set(o.lines.map(l=>l.load).filter(Boolean))].join(', '))}</td><td>${fmtDate(o.date)}</td><td class="c"><input type="checkbox" data-ready="${esc(o.id)}" ${o.ready?'checked':''} aria-label="Ready"></td><td>${o.shipDate?fmtDate(o.shipDate):''}</td><td>${esc(o.carrier||'')}</td><td>${esc(o.notes||'')}</td>
       <td class="ao-mv"><button type="button" class="btn ghost" data-mv="-1" ${i?'':'disabled'} aria-label="Move ${esc(o.customer)} up">↑</button><button type="button" class="btn ghost" data-mv="1" ${i<open.length-1?'':'disabled'} aria-label="Move ${esc(o.customer)} down">↓</button></td></tr>`).join('')}
     </tbody></table>`:'<span class="muted">No open orders.</span>'}
   </section>`;
@@ -1677,8 +1685,11 @@ function openOrderForm(rec,line){
     <div class="in-form">
       ${L==='orchid'?`<label class="field full"><span>Customer</span><input type="text" name="customer" list="custList" value="${esc(d.customer)}" autocomplete="off"><datalist id="custList">${customers.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label>`:''}
       <label class="field"><span>Order date</span><input type="date" name="date" value="${d.date}"></label>
-      ${L==='orchid'?`<label class="field"><span>Sales order #</span><input type="text" name="so" value="${esc(d.so||'')}" autocomplete="off"></label>`:''}
-      ${isNew?'':`<label class="field ord-done"><span>Completed</span><span class="ord-chk"><input type="checkbox" name="done" ${d.done?'checked':''}> ${d.done&&d.doneOn?'Shipped '+fmtDate(d.doneOn):''}</span></label>`}
+      ${L==='orchid'?`<label class="field"><span>Sales order #</span><input type="text" name="so" value="${esc(d.so||'')}" autocomplete="off"></label>
+      <label class="field"><span>PO</span><input type="text" name="po" value="${esc(d.po||'')}" autocomplete="off"></label>`:''}
+      ${isNew||L!=='orchid'?'':`<label class="field ord-done"><span>Ready</span><span class="ord-chk"><input type="checkbox" name="ready" ${d.ready?'checked':''}> ${d.ready&&d.readyOn?fmtDate(d.readyOn):''}</span></label>`}
+      ${isNew?'':`<label class="field ord-done"><span>Completed</span><span class="ord-chk"><input type="checkbox" name="done" ${d.done?'checked':''}> ${d.done&&d.doneOn?fmtDate(d.doneOn):''}</span></label>`}
+      ${!isNew&&L==='orchid'&&(d.carrier||d.shipDate||d.freight!=null)?`<div class="field full ord-ship"><span>Shipping</span><div>${[d.carrier,d.shipDate?'Ships '+fmtDate(d.shipDate):'',d.freight!=null?'Freight $'+fmtN(d.freight,2):''].filter(Boolean).map(esc).join(' · ')}</div></div>`:''}
       <div class="field full">
         <table class="ord-lines"><thead><tr><th>Product</th><th>Qty</th>${L==='orchid'?'<th>Load</th>':''}<th></th></tr></thead><tbody id="ordLines">${d.lines.map(lineRow).join('')}</tbody></table>
         <button type="button" class="btn" id="addLine">Add +</button></div>
@@ -1690,7 +1701,7 @@ function openOrderForm(rec,line){
   const m=$('#modalRoot'),tb=$('#ordLines');
   m.querySelectorAll('[data-oline]').forEach(b=>b.onclick=()=>{if(b.dataset.oline!==L)openOrderForm(null,b.dataset.oline)});
   const val=n=>m.querySelector(`[name=${n}]`);
-  const grab=()=>{d.date=val('date').value;if(val('customer'))d.customer=val('customer').value;if(val('so'))d.so=val('so').value;d.notes=val('notes').value;d.done=val('done')?val('done').checked:d.done;
+  const grab=()=>{d.date=val('date').value;if(val('customer'))d.customer=val('customer').value;if(val('so'))d.so=val('so').value;if(val('po'))d.po=val('po').value;if(val('ready'))d.ready=val('ready').checked;d.notes=val('notes').value;d.done=val('done')?val('done').checked:d.done;
     tb.querySelectorAll('tr[data-i]').forEach(tr=>{const l=d.lines[+tr.dataset.i];tr.querySelectorAll('[data-f]').forEach(el=>{l[el.dataset.f]=el.value})})};
   const redraw=()=>{tb.innerHTML=d.lines.map(lineRow).join('')};
   tb.addEventListener('change',e=>{if(e.target.dataset.f==='key'){grab();redraw()}});
@@ -1707,11 +1718,18 @@ function openOrderForm(rec,line){
     if(lines.some(l=>!l.key))return err('Pick a product for each line.');
     if(lines.some(l=>!(+l.qty>0)))return err('Enter a quantity for each line.');
     const wasDone=!isNew&&rec.done;
-    const out={id:isNew?crypto.randomUUID():rec.id,line:L,date:d.date,customer:String(d.customer).trim(),so:String(d.so||'').trim(),notes:d.notes.trim(),done:d.done,
+    const keep=isNew?{}:{priority:rec.priority??null,readyOn:rec.readyOn||null,carrier:rec.carrier||'',shipDate:rec.shipDate||null,freight:rec.freight??null};
+    const out={...keep,id:isNew?crypto.randomUUID():rec.id,line:L,date:d.date,customer:String(d.customer).trim(),so:String(d.so||'').trim(),po:String(d.po||'').trim(),ready:!!d.ready,notes:d.notes.trim(),done:d.done,
       doneOn:d.done?(wasDone?(rec.doneOn||iso(TODAY)):iso(TODAY)):null,lines:lines.map(l=>({key:l.key,qty:+l.qty,...(L==='orchid'&&l.load?{load:l.load}:{})}))};
     if(isNew)DB.orders.push(out);else{Object.keys(rec).forEach(k=>delete rec[k]);Object.assign(rec,out)}
     UI.flash=out.id;saveDB();closeModal();render();UI.flash=null;toast(isNew?'Order saved':'Changes saved')};
 }
+/* tick "Ready" (orchid) right in the grid or the active orders */
+$('#gridWrap').addEventListener('click',e=>{
+  const cb=e.target.closest('[data-ready]');if(!cb)return;
+  e.stopPropagation();const s=DB.orders.find(x=>x.id===cb.dataset.ready);if(!s)return;
+  s.ready=!s.ready;s.readyOn=s.ready?iso(TODAY):null;UI.flash=s.id;saveDB();render();UI.flash=null;toast(s.ready?`${s.customer||'Order'} marked ready`:`${s.customer||'Order'} not ready`);
+},true);
 /* tick "Completed" right in the grid */
 $('#gridWrap').addEventListener('click',e=>{
   const cb=e.target.closest('[data-done]');if(!cb)return;
@@ -3029,7 +3047,9 @@ Live.load=async function(){
           ...bagging.map(b=>({id:b.id,type:'bag',date:b.production_date,material:bn(b.from_bin_id),yards:+b.yards_used,pallets:+b.pallets,hours:+b.hours,units:0,notes:b.notes||''}))];
   Live.hasPrio=!orders.length||'priority' in orders[0];
   if(!orders.length)Live.hasPrio=!(await sb.from('orders').select('priority').limit(1)).error;
+  Live.hasShip=orders.length?'ready' in orders[0]:!(await sb.from('orders').select('ready').limit(1)).error;
   DB.orders=orders.map(o=>({id:o.id,line:o.line,date:o.order_date,customer:o.customer,so:o.sales_order_no||'',notes:o.notes||'',done:o.completed,doneOn:o.completed_on||null,priority:o.priority??null,
+    po:o.po||'',ready:!!o.ready,readyOn:o.ready_on||null,carrier:o.carrier||'',shipDate:o.ship_date||null,freight:o.freight_cost!=null?+o.freight_cost:null,
     lines:(o.order_lines||[]).map(l=>({key:l.bin_id?'O:'+bn(l.bin_id):countKeyOf(Live.item(l.item_id),l.custom_size_ft,l.custom_name),qty:+l.qty,...(l.load_type?{load:l.load_type}:{})}))}));
   DB.purch=purch.map(p=>({id:p.id,date:p.purchase_date,material:p.bin_id?bn(p.bin_id):PURCH_RAW[keyOfLine(Live.item(p.item_id))]||'',amount:+p.amount,po:p.po||'',notes:p.notes||''}));
   try{DB.cal=(await fetchAll('calendar_days')).map(c=>({id:c.id,kind:c.kind,day:c.day,note:c.note||'',off:!!c.off}));Live.hasCal=true}catch(e){DB.cal=[];Live.hasCal=false}
@@ -3085,7 +3105,8 @@ const ROW={
   pick:r=>({id:r.id,production_date:r.date,material_bin_id:Live.binId(r.material),units:+r.units,hours:+r.hours||0,notes:r.notes||null,
     ...(Live.hasGrates&&r.pct?{grate_profile:r.grate||1,small_pct:r.pct.small,medium_pct:r.pct.medium,lost_pct:r.pct.lost}:{})}),
   bag:r=>({id:r.id,production_date:r.date,from_bin_id:Live.binId(r.material),yards_used:+r.yards,pallets:+r.pallets,hours:+r.hours||0,notes:r.notes||null}),
-  orders:r=>({id:r.id,line:r.line,order_date:r.date,customer:r.customer,sales_order_no:r.so||null,notes:r.notes||null,completed:!!r.done,completed_on:r.done?(r.doneOn||iso(TODAY)):null,...(Live.hasPrio?{priority:r.done?null:(r.priority??null)}:{})}),
+  orders:r=>({id:r.id,line:r.line,order_date:r.date,customer:r.customer,sales_order_no:r.so||null,notes:r.notes||null,completed:!!r.done,completed_on:r.done?(r.doneOn||iso(TODAY)):null,...(Live.hasPrio?{priority:r.done?null:(r.priority??null)}:{}),
+    ...(Live.hasShip?{po:r.po||null,ready:!!r.ready}:{})}),
   purch:r=>{const raw=Object.entries(PURCH_RAW).find(([,n])=>n===r.material);
     return raw?{id:r.id,purchase_date:r.date,line:'biochar',item_id:itemOfKey(raw[0]).item_id,bin_id:null,amount:+r.amount,po:r.po||null,notes:r.notes||null}
               :{id:r.id,purchase_date:r.date,line:'orchid',item_id:null,bin_id:Live.binId(r.material),amount:+r.amount,po:r.po||null,notes:r.notes||null}},
