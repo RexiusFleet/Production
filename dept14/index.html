@@ -852,7 +852,9 @@ const TABLES={
     inventory:{label:'Inventory',view:'orcinv',cols:[],groups:{},rows:()=>[]},
     sales:{label:'Sales',simple:true,rows:()=>DB.orders.filter(o=>o.line===UI.line),addable:true,addLabel:'+ Add order',onAdd:()=>openOrderForm(null,UI.line),
       groups:{'':'None',customer:'Customer',done:'Completed',month:'Month'},
-      cols:[
+      /* biochar sales only need the date, products and notes */
+      get cols(){return UI.line==='biochar'?this.allCols.filter(c=>c.k!=='customer'&&c.k!=='so'):this.allCols},
+      allCols:[
         {k:'date',l:'Order date',get:r=>r.date,fmt:v=>fmtDate(v)},
         {k:'customer',l:'Customer',get:r=>r.customer},
         {k:'so',l:'Sales order #',get:r=>r.so||''},
@@ -1466,12 +1468,12 @@ function openOrderForm(rec,line){
       <td><span class="in-sfx"><input type="number" data-f="qty" min="0" step="0.5" value="${l.qty??''}" aria-label="Quantity" inputmode="decimal"><i>${u}</i></span></td>
       ${L==='orchid'?`<td class="ord-load"><select data-f="load" aria-label="Load type"><option value="">—</option>${['BULK','BAGS','TOTES'].map(x=>`<option ${x===l.load?'selected':''}>${x}</option>`).join('')}</select></td>`:''}
       <td>${d.lines.length>1?`<button type="button" class="btn icon ghost" data-rmline="${i}" aria-label="Remove line">✕</button>`:''}</td></tr>`};
-  modal(isNew?'New order':`Order · ${d.customer||''}`,`
+  modal(isNew?'New order':L==='biochar'?`Order · ${fmtDate(d.date)}`:`Order · ${d.customer||''}`,`
     <div class="in-form">
       <label class="field"><span>Order date</span><input type="date" name="date" value="${d.date}"></label>
-      <label class="field"><span>Customer</span><input type="text" name="customer" list="custList" value="${esc(d.customer)}" autocomplete="off"><datalist id="custList">${customers.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label>
-      <label class="field"><span>Sales order #</span><input type="text" name="so" value="${esc(d.so||'')}" autocomplete="off"></label>
-      <label class="field ord-done"><span>Completed</span><span class="ord-chk"><input type="checkbox" name="done" ${d.done?'checked':''}> ${d.done&&d.doneOn?'Shipped '+fmtDate(d.doneOn):''}</span></label>
+      ${L==='orchid'?`<label class="field"><span>Customer</span><input type="text" name="customer" list="custList" value="${esc(d.customer)}" autocomplete="off"><datalist id="custList">${customers.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label>
+      <label class="field"><span>Sales order #</span><input type="text" name="so" value="${esc(d.so||'')}" autocomplete="off"></label>`:''}
+      ${isNew?'':`<label class="field ord-done"><span>Completed</span><span class="ord-chk"><input type="checkbox" name="done" ${d.done?'checked':''}> ${d.done&&d.doneOn?'Shipped '+fmtDate(d.doneOn):''}</span></label>`}
       <div class="field full"><span>Products</span>
         <table class="ord-lines"><tbody id="ordLines">${d.lines.map(lineRow).join('')}</tbody></table>
         <button type="button" class="btn" id="addLine">Add +</button></div>
@@ -1481,7 +1483,8 @@ function openOrderForm(rec,line){
     `${isNew?'':'<button class="btn danger" id="delOrder" style="margin-right:auto">Delete</button>'}<button class="btn" data-close>Cancel</button><button class="btn primary" id="saveOrder">${isNew?'Save order':'Save changes'}</button>`);
   $('#modalRoot .modal').classList.add('in-modal','ord-modal');
   const m=$('#modalRoot'),tb=$('#ordLines');
-  const grab=()=>{d.date=m.querySelector('[name=date]').value;d.customer=m.querySelector('[name=customer]').value;d.so=m.querySelector('[name=so]').value;d.notes=m.querySelector('[name=notes]').value;d.done=m.querySelector('[name=done]').checked;
+  const val=n=>m.querySelector(`[name=${n}]`);
+  const grab=()=>{d.date=val('date').value;if(val('customer'))d.customer=val('customer').value;if(val('so'))d.so=val('so').value;d.notes=val('notes').value;d.done=val('done')?val('done').checked:d.done;
     tb.querySelectorAll('tr[data-i]').forEach(tr=>{const l=d.lines[+tr.dataset.i];tr.querySelectorAll('[data-f]').forEach(el=>{l[el.dataset.f]=el.value})})};
   const redraw=()=>{tb.innerHTML=d.lines.map(lineRow).join('')};
   tb.addEventListener('change',e=>{if(e.target.dataset.f==='key'){grab();redraw()}});
@@ -1491,13 +1494,14 @@ function openOrderForm(rec,line){
     DB.orders=DB.orders.filter(x=>x.id!==rec.id);saveDB();closeModal();render();toast('Order deleted')};
   $('#saveOrder').onclick=()=>{grab();const err=t=>{const e=$('#formErr');e.textContent=t;e.hidden=false};
     if(!d.date)return err('Pick the order date.');
-    if(!d.customer.trim())return err('Enter the customer.');
+    if(L==='biochar'&&!String(d.customer||'').trim())d.customer='Stormwater Biochar';
+    if(!String(d.customer||'').trim())return err('Enter the customer.');
     const lines=d.lines.filter(l=>l.key||+l.qty);
     if(!lines.length)return err('Add at least one product.');
     if(lines.some(l=>!l.key))return err('Pick a product for each line.');
     if(lines.some(l=>!(+l.qty>0)))return err('Enter a quantity for each line.');
     const wasDone=!isNew&&rec.done;
-    const out={id:isNew?crypto.randomUUID():rec.id,line:L,date:d.date,customer:d.customer.trim(),so:d.so.trim(),notes:d.notes.trim(),done:d.done,
+    const out={id:isNew?crypto.randomUUID():rec.id,line:L,date:d.date,customer:String(d.customer).trim(),so:String(d.so||'').trim(),notes:d.notes.trim(),done:d.done,
       doneOn:d.done?(wasDone?(rec.doneOn||iso(TODAY)):iso(TODAY)):null,lines:lines.map(l=>({key:l.key,qty:+l.qty,...(L==='orchid'&&l.load?{load:l.load}:{})}))};
     if(isNew)DB.orders.push(out);else{Object.keys(rec).forEach(k=>delete rec[k]);Object.assign(rec,out)}
     UI.flash=out.id;saveDB();closeModal();render();UI.flash=null;toast(isNew?'Order saved':'Changes saved')};
