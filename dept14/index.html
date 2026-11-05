@@ -416,7 +416,17 @@ table.grid.me{width:100%}
 .me-foot{font-size:.82rem;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
 .ratios{display:flex;gap:12px}
 .ratios input{width:64px;margin:0 3px}
-.set-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:440px;gap:16px}
+.set-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.set-grid>.set-card{height:440px}
+.set-grid>.set-card.wide{height:auto}
+.grates td,.grates th{vertical-align:middle}
+.grates .gr-m{font-weight:600}
+.grates tbody+tbody{border-top:2px solid var(--line-strong)}
+.grates tr.on td:not(.gr-m){background:var(--accent-soft)}
+.grates input[type=number]{width:72px;text-align:right}
+.grates input.bad{border-color:var(--bad);color:var(--bad)}
+.qr-btns{display:flex;gap:6px}
+.qr-btns a.btn{text-decoration:none;color:inherit}
 .set-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;display:flex;flex-direction:column;gap:12px;min-height:0}
 .set-body{flex:1;min-height:0;overflow:auto;display:grid;gap:12px;align-content:start}
 .crew .crew-name{display:block;padding:7px 2px;font-weight:600}
@@ -440,7 +450,7 @@ table.grid.me{width:100%}
 .qr img,.qr canvas{width:150px;height:150px}
 .qr-box .url{font-size:.78rem;text-align:center;color:var(--muted)}
 #printArea{display:none}
-@media (max-width:900px){.set-grid{grid-template-columns:1fr;grid-auto-rows:auto}.set-body{overflow:visible}}
+@media (max-width:900px){.set-grid{grid-template-columns:1fr}.set-grid>.set-card{height:auto}.set-body{overflow:visible}}
 @media (max-width:520px){.qr-pair{grid-template-columns:1fr}}
 @media print{body.printing-qr>*:not(#printArea){display:none!important} body.printing-qr #printArea{display:block}
   .sign{text-align:center;padding:40px 20px;color:#000;font-family:var(--f-body)} .sign h1{font:700 3rem/1.1 var(--f-display);text-transform:uppercase;margin:10px 0}
@@ -455,10 +465,6 @@ table.grid.me{width:100%}
 .field>span{font:500 .72rem/1.2 var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .field.full{grid-column:1/-1}
 .chk{display:flex;flex-wrap:wrap;gap:6px}
-.sheet-modal{width:min(640px,100%)}
-.sheet-modal a.btn{text-decoration:none;color:inherit}
-.sheet-modal .modal-b{padding:0;display:block}
-.sheet-frame{display:block;width:100%;height:min(720px,calc(100vh - 190px));border:0;background:var(--bg)}
 .chk label{display:flex;gap:6px;align-items:center;border:1px solid var(--line-strong);border-radius:99px;padding:4px 10px;font-size:.88rem;cursor:pointer}
 .chk input:checked+span{font-weight:600}
 .sect{font:600 .95rem var(--f-display);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-top:1px solid var(--line);padding-top:12px}
@@ -495,9 +501,10 @@ table.grid.me{width:100%}
   <nav class="lines" role="tablist" id="lines">
     <button role="tab" data-line="biochar" aria-selected="true">Biochar</button>
     <button role="tab" data-line="orchid" aria-selected="false">Orchid bark</button>
-    <button type="button" class="input-btn" id="inputBtn">+ Input</button>
-    <button role="tab" data-line="purch" aria-selected="false" style="margin-left:auto">Purchased material</button>
-    <button role="tab" data-line="settings" aria-selected="false">Settings</button>
+    <button type="button" class="input-btn" id="prodBtn">Production input</button>
+    <button type="button" class="input-btn" id="salesBtn">Sales input</button>
+    <button type="button" class="input-btn" id="buyBtn">Purchased input</button>
+    <button role="tab" data-line="settings" aria-selected="false" style="margin-left:auto">Settings</button>
   </nav>
 </header>
 
@@ -556,9 +563,11 @@ const SETTINGS=Object.assign({ratio:{wash:.85,sock:.2,bag:.2},bonusPerYardIn:.5,
 });
 const CORE_BLENDS=['Basic','Washed','Peat','Zapt','Revd'],CORE_SOCKS=[3,6,10]; // top three, then the two custom blends; odd mixes are typed in as custom
 SETTINGS.orc=Object.assign({yardsPerUnit:7.5,ratios:{'Jumbo Orchid':{small:60,medium:30,lost:10},'#1 Medium Green':{small:75,medium:15,lost:10}}},SETTINGS.orc||{});
+/* Picker grates: two % profiles per input product; the active one is what ratios[] (and the database view) use. */
+function gratesInit(){const O=SETTINGS.orc;O.profiles=O.profiles||{};O.active=O.active||{};
+  Object.keys(O.ratios).forEach(m=>{if(!Array.isArray(O.profiles[m])||O.profiles[m].length<2)O.profiles[m]=[{...O.ratios[m]},{...O.ratios[m]}];if(O.active[m]!==1)O.active[m]=0;O.ratios[m]={...O.profiles[m][O.active[m]]}})}
+gratesInit();
 SETTINGS.catalog=Object.assign({blends:CORE_BLENDS.slice(),bagTypes:['Basic','Washed','Peat'],sockSizes:CORE_SOCKS.slice(),materials:['Pallets','Blank white totes'],hidden:{}},SETTINGS.catalog||{});
-SETTINGS.sheets={char:{title:'Biochar production sheet',jobs:['wash','sock','bag'],hiddenBlends:[],blendOrder:[],hiddenSocks:[],questions:{totes:true,pallets:true,orders:true,notes:true,customBlend:true,customSock:true}},
-  dryer:{title:'Dryer production sheet',hiddenProducts:[],productOrder:[],hiddenBins:[],binOrder:[],dest:['Totes','Bin'],questions:{notes:true}}};
 const BLENDS=SETTINGS.catalog.blends,SOCK_SIZES=SETTINGS.catalog.sockSizes,BAG_TYPES=SETTINGS.catalog.bagTypes; // bags have their own list (a subset of the blends that get bagged)
 const CORE_BAGS=['Basic','Washed','Peat'];
 const crewFor=(line,keep=[])=>[...new Set([...SETTINGS.crew.filter(c=>c.name&&c[line]).map(c=>c.name),...keep])];
@@ -692,7 +701,7 @@ const DEFAULT_CARDS={
 };
 
 /* ---------- state ---------- */
-const UI={line:store.get('line','biochar'),table:{biochar:'inventory',orchid:'inventory'},flash:null,editCards:false,
+const UI={line:['biochar','orchid','settings'].includes(store.get('line'))?store.get('line'):'biochar',table:{biochar:'inventory',orchid:'inventory'},flash:null,editCards:false,
   q:'',sort:{},group:{},hidden:store.get('hidden',{}),filterJob:'',openPop:null};
 let CARDS=store.get('cards',DEFAULT_CARDS);
 
@@ -796,7 +805,7 @@ const tags=a=>(a||[]).map(t=>`<span class="pill">${esc(t)}</span>`).join('');
 const TABLES={
   biochar:{
     inventory:{label:'Inventory',view:'inventory',cols:[],groups:{},rows:()=>[]},
-    runs:{label:'Production sheets',rows:()=>DB.bio,addable:true,canVoid:true,
+    runs:{label:'Production log',rows:()=>DB.bio,addable:true,canVoid:true,
       groups:{'':'None',job:'Job type',month:'Month',crew:'Crew'},
       cols:[
         {k:'date',l:'Date',t:'📅',get:r=>r.date,fmt:v=>fmtDate(v)},
@@ -819,7 +828,7 @@ const TABLES={
     monthend:{label:'Reports',report:true,cols:[],groups:{},rows:()=>[]},
   },
   orchid:{
-    dryer:{label:'Dryer',rows:()=>DB.orc,addable:true,canVoid:true,
+    dryer:{label:'Dryer log',rows:()=>DB.orc,addable:true,canVoid:true,
       groups:{'':'None',product:'Product in',dest:'Destination',month:'Month',crew:'Crew'},
       cols:[
         {k:'date',l:'Date',t:'📅',get:r=>r.date,fmt:v=>fmtDate(v)},
@@ -834,7 +843,7 @@ const TABLES={
         {k:'crew',l:'Crew',t:'👥',get:r=>r.crew.join(', '),fmt:(v,r)=>tags(r.crew)},
         {k:'notes',l:'Notes',t:'¶',get:r=>r.notes},
       ]},
-    picker:{label:'Picker production',simple:true,rows:()=>DB.oin.filter(e=>e.type==='pick'),addable:true,addLabel:'+ Add',onAdd:()=>openInputForm(null,'pick'),pre:()=>grateRatioPanel(),
+    picker:{label:'Picker log',simple:true,rows:()=>DB.oin.filter(e=>e.type==='pick'),addable:true,addLabel:'+ Add',onAdd:()=>openInputForm(null,'pick'),
       groups:{},
       cols:[
         {k:'date',l:'Date',get:r=>r.date,fmt:v=>fmtDate(v)},
@@ -847,7 +856,7 @@ const TABLES={
         {k:'hours',l:'Hours',num:1,get:r=>r.hours||'',sum:1},
         {k:'notes',l:'Notes',get:r=>r.notes||''},
       ]},
-    bagging:{label:'Bagging production',simple:true,rows:()=>DB.oin.filter(e=>e.type==='bag'),addable:true,addLabel:'+ Add',onAdd:()=>openInputForm(null,'bag'),
+    bagging:{label:'Bagging log',simple:true,rows:()=>DB.oin.filter(e=>e.type==='bag'),addable:true,addLabel:'+ Add',onAdd:()=>openInputForm(null,'bag'),
       groups:{},
       cols:[
         {k:'date',l:'Date',get:r=>r.date,fmt:v=>fmtDate(v)},
@@ -858,7 +867,7 @@ const TABLES={
         {k:'notes',l:'Notes',get:r=>r.notes||''},
       ]},
     inventory:{label:'Inventory',view:'orcinv',cols:[],groups:{},rows:()=>[]},
-    sales:{label:'Sales',simple:true,rows:()=>DB.orders.filter(o=>o.line===UI.line),addable:true,addLabel:'+ Add order',onAdd:()=>openOrderForm(null,UI.line),
+    sales:{label:'Sales log',simple:true,rows:()=>DB.orders.filter(o=>o.line===UI.line),addable:true,addLabel:'+ Add order',onAdd:()=>openOrderForm(null,UI.line),
       groups:{'':'None',customer:'Customer',done:'Completed',month:'Month'},
       /* biochar sales only need the date, products and notes */
       get cols(){return UI.line==='biochar'?this.allCols.filter(c=>c.k!=='customer'&&c.k!=='so'):this.allCols},
@@ -875,23 +884,22 @@ const TABLES={
 };
 
 TABLES.orchid.reports={label:'Reports',report:true,cols:[],groups:{},rows:()=>[]};
-/* Purchased material: one list for the whole department (both lines). */
-TABLES.purch={purchased:{label:'Purchased material',simple:true,rows:()=>DB.purch,addable:true,addLabel:'+ Add',onAdd:()=>openInputForm(null,'buy'),groups:{},
+/* Purchased log: one per line (biochar raw char; orchid green products). */
+const purchTable=line=>({label:'Purchased log',simple:true,rows:()=>DB.purch.filter(r=>purchMat(r.material).line===line),addable:true,addLabel:'+ Add',onAdd:()=>openInputForm(null,'buy',line),groups:{},
   cols:[
     {k:'date',l:'Date',get:r=>r.date,fmt:v=>fmtDate(v)},
-    {k:'line',l:'Department',get:r=>purchMat(r.material).line==='biochar'?'Biochar':'Orchid bark',fmt:v=>`<span class="pill ${v==='Biochar'?'wash':'bag'}">${v}</span>`},
     {k:'material',l:'Material',get:r=>r.material},
     {k:'amount',l:'Amount',num:1,get:r=>+r.amount||0},
     {k:'unit',l:'Unit',get:r=>purchMat(r.material).unit},
     {k:'po',l:'PO',get:r=>r.po||''},
     {k:'notes',l:'Notes',get:r=>r.notes||''},
-  ]}};
-UI.table.purch='purchased';
-/* Orchid tab order: Inventory · Sales · Dryer · Picker production · Bagging production · Reports */
-TABLES.orchid=Object.fromEntries(['inventory','sales','dryer','picker','bagging','reports'].map(k=>[k,TABLES.orchid[k]]));
-/* Biochar gets the same Sales tab: Inventory · Production sheets · Sales · Reports */
+  ]});
+TABLES.biochar.purchased=purchTable('biochar');TABLES.orchid.purchased=purchTable('orchid');
+/* Orchid tab order: Inventory · Sales log · Dryer log · Picker log · Bagging log · Purchased log · Reports */
+TABLES.orchid=Object.fromEntries(['inventory','sales','dryer','picker','bagging','purchased','reports'].map(k=>[k,TABLES.orchid[k]]));
+/* Biochar: Inventory · Production log · Sales log · Purchased log · Reports */
 TABLES.biochar.sales=TABLES.orchid.sales;
-TABLES.biochar=Object.fromEntries(['inventory','runs','sales','monthend'].map(k=>[k,TABLES.biochar[k]]));
+TABLES.biochar=Object.fromEntries(['inventory','runs','sales','purchased','monthend'].map(k=>[k,TABLES.biochar[k]]));
 function curTable(){const T=TABLES[UI.line];if(T&&!T[UI.table[UI.line]])UI.table[UI.line]=Object.keys(T)[0];return T[UI.table[UI.line]]}
 function tkey(){return UI.line+'.'+UI.table[UI.line]}
 
@@ -947,21 +955,19 @@ function viewRows(){
   const T=curTable(),k=tkey(),s=UI.sort[k];
   let rs=T.rows().slice();
   if(UI.filterJob&&UI.line==='biochar'&&UI.table.biochar==='runs')rs=rs.filter(r=>r.job===UI.filterJob);
-  /* Sales: completed orders fold away under one row; they come back on request or when a search matches them. */
-  if(isSales()&&!UI.showDone&&!UI.q)rs=rs.filter(r=>!r.done);
   if(UI.q){const q=UI.q.toLowerCase();rs=rs.filter(r=>T.cols.some(c=>String(c.get(r)).toLowerCase().includes(q)))}
   if(s){const c=T.cols.find(c=>c.k===s.k);rs.sort((a,b)=>{const x=c.get(a),y=c.get(b);return (c.num?(+x||0)-(+y||0):String(x).localeCompare(String(y)))*s.d})}
   else if(T.cols[0].k==='date')rs.sort((a,b)=>b.date.localeCompare(a.date));
   return rs;
 }
-function updateCount(){const c=$('#count');if(!c)return;if(isSales()&&!UI.q){const o=VIEW.filter(r=>!r.done).length;c.textContent=`${o} open order${o===1?'':'s'}`;return}c.textContent=`${VIEW.length} record${VIEW.length===1?'':'s'}`}
+function updateCount(){const c=$('#count');if(!c)return;if(isSales()&&!UI.q){const o=VIEW.filter(r=>!r.done).length,dn=VIEW.length-o;c.textContent=`${o} open · ${dn} completed`;return}c.textContent=`${VIEW.length} record${VIEW.length===1?'':'s'}`}
 function renderGrid(){if(curTable().report){renderReports();return}if(curTable().view==='inventory'){renderInventory();return}if(curTable().view==='orcinv'){renderOrcInventory();return}renderToolbar();drawRows()}
 function drawRows(){
   const T=curTable(),k=tkey(),hidden=UI.hidden[k]||[],grp=UI.group[k]||'',sort=UI.sort[k];
   const cols=T.cols.filter(c=>!hidden.includes(c.k));
   VIEW=viewRows();updateCount();
   const pre=T.pre?T.pre():'';
-  if(!VIEW.length&&!(isSales()&&!UI.q&&DB.orders.some(r=>r.line===UI.line&&r.done))){$('#gridWrap').innerHTML=pre+`<div class="empty">No records.</div>`;return}
+  if(!VIEW.length){$('#gridWrap').innerHTML=pre+`<div class="empty">No records.</div>`;return}
   const cell=(c,r)=>{const v=c.get(r);const shown=c.fmt?c.fmt(v,r):(c.num&&v!==''?fmtN(v,1):esc(v));return `<td class="${c.num?'r':''}" title="${esc(typeof v==='number'?fmtN(v,2):v)}">${shown}</td>`};
   const groupKey=r=>grp==='month'?(r.month||r.date).slice(0,7):grp==='crew'?r.crew.join(', '):grp==='done'?(r.done?'Completed':'Open'):grp==='type'?IN_TYPES[r.type]:String(r[grp]??'');
   const groupLabel=g=>grp==='month'?new Date(g+'-15').toLocaleDateString('en-US',{month:'long',year:'numeric'}):grp==='job'?jobPill(g):esc(g||'—');
@@ -969,14 +975,7 @@ function drawRows(){
   if(grp){const order=[];const by={};VIEW.forEach(r=>{const g=groupKey(r);if(!by[g]){by[g]=[];order.push(g)}by[g].push(r)});
     order.forEach(g=>{body+=`<tr class="grp"><td class="rn"></td><td colspan="${cols.length}">${groupLabel(g)} <span class="muted" style="font-weight:400">· ${by[g].length}</span></td></tr>`;
       by[g].forEach(r=>body+=rowHtml(r,++n))})}
-  else if(isSales()){
-    const open=VIEW.filter(r=>!r.done),done=VIEW.filter(r=>r.done),allDone=DB.orders.filter(r=>r.line===UI.line&&r.done).length;
-    open.forEach(r=>body+=rowHtml(r,++n));
-    const shown=UI.showDone||UI.q;
-    const cnt=UI.q?done.length:allDone;
-    if(cnt)body+=`<tr class="grp fold" data-fold><td class="rn">${shown?'▾':'▸'}</td><td colspan="${cols.length}">✓ Completed <span class="muted" style="font-weight:400">· ${cnt}${UI.q?' matching':''}</span> ${UI.q?'':`<span class="fold-act">${shown?'Collapse':'Show'}</span>`}</td></tr>`;
-    if(shown)done.forEach(r=>body+=rowHtml(r,++n));
-  }
+  else if(isSales()){VIEW.filter(r=>!r.done).forEach(r=>body+=rowHtml(r,++n));VIEW.filter(r=>r.done).forEach(r=>body+=rowHtml(r,++n))}
   else VIEW.forEach(r=>body+=rowHtml(r,++n));
   function rowHtml(r,i){return `<tr data-id="${esc(r.id)}" class="${r.status==='void'?'void':''} ${isSales()&&r.done?'arch':''} ${UI.flash===r.id?'flash':''}"><td class="rn">${i}</td>${cols.map(c=>cell(c,r)).join('')}</tr>`}
   const foot=cols.some(c=>c.sum)?`<tfoot><tr><td class="rn"></td>${cols.map(c=>c.sum?`<td class="r num">${fmtN(VIEW.filter(r=>r.status!=='void').reduce((a,r)=>a+(+c.get(r)||0),0),1)}</td>`:'<td></td>').join('')}</tr></tfoot>`:'';
@@ -985,7 +984,6 @@ function drawRows(){
 $('#gridWrap').addEventListener('click',e=>{
   const th=e.target.closest('th[data-sort]');
   if(th){const k=tkey(),cur=UI.sort[k];UI.sort[k]=cur&&cur.k===th.dataset.sort?(cur.d>0?{k:cur.k,d:-1}:undefined):{k:th.dataset.sort,d:1};if(!UI.sort[k])delete UI.sort[k];renderGrid();return}
-  if(e.target.closest('tr[data-fold]')){if(!UI.q){UI.showDone=!UI.showDone;drawRows()}return}
   const tr=e.target.closest('tbody tr[data-id]');if(tr)openRecord(tr.dataset.id);
 });
 
@@ -1009,11 +1007,11 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#modalRoot').inn
 
 function openRecord(id){
   const T=curTable();const r=T.rows().find(x=>String(x.id)===id);if(!r)return;
+  if(UI.table[UI.line]==='purchased')return openInputForm(r,'buy');
   if(UI.line==='biochar'&&UI.table.biochar==='runs')return openRunEditor(r);
   if(UI.line==='biochar'&&UI.table.biochar==='inventory')return openItemHistory(r);
   if(UI.line==='orchid'&&UI.table.orchid==='dryer')return openOrchidForm(r);
   if(UI.line==='orchid'&&(UI.table.orchid==='picker'||UI.table.orchid==='bagging'))return openInputForm(r);
-  if(UI.line==='purch')return openInputForm(r,'buy');
   if(isSales())return openOrderForm(r,UI.line);
   const dl=T.cols.map(c=>{const v=c.get(r);if(v===''||v==null)return '';return `<dt>${c.l}</dt><dd>${c.fmt?c.fmt(v,r):(c.num?fmtN(v,2):esc(v))}</dd>`}).join('');
   const isRun=T.canVoid;
@@ -1385,9 +1383,9 @@ const purchMat=name=>purchMats().find(m=>m.name===name)||{name,line:'orchid',uni
    Purchased material (both departments): material · amount · PO · notes
    Picker production: date · material + units · hours · notes
    Bagging production: date · bagged from + yards used · pallets + hours · notes */
-function openInputForm(rec,type){
+function openInputForm(rec,type,line){
   const isNew=!rec,isBuy=type==='buy'||(rec&&DB.purch.includes(rec));
-  const d=isNew?{type:type||UI.lastInType||'buy',date:iso(TODAY),material:'',hours:'',units:'',yards:'',pallets:'',amount:'',po:'',notes:''}:{...rec,type:isBuy?'buy':rec.type};
+  const d=isNew?{type:type||(UI.lastInType==='bag'?'bag':'pick'),date:iso(TODAY),material:isNew&&type==='buy'&&line?(purchMats().find(m=>m.line===line)||{}).name||'':'',hours:'',units:'',yards:'',pallets:'',amount:'',po:'',notes:''}:{...rec,type:isBuy?'buy':rec.type};
   const draw=()=>{
     const pm=purchMats();
     const mats=d.type==='pick'?ORC_PICK:d.type==='buy'?pm.map(m=>m.name):['Small Dried','#1 Medium Dried',...extraBins().filter(b=>b.kind==='dried').map(b=>b.name)];
@@ -1403,8 +1401,8 @@ function openInputForm(rec,type){
     if(d.type==='buy')body=F('Material',sel,'full')+F('Amount',sfx('amount','0.5',d.amount,'Amount',purchMat(d.material).unit))+F('PO',`<input type="text" name="po" value="${esc(d.po||'')}" autocomplete="off" placeholder="PO number">`);
     else if(d.type==='pick')body=date+F('Hours',sfx('hours','0.5',d.hours,'Hours','hours'))+F('Material',sel)+F('Units',sfx('units','0.1',d.units,'Units','units'));
     else body=date+F('Hours',sfx('hours','0.5',d.hours,'Hours','hours'))+F('Bagged from',sel)+F('Yards used',sfx('yards','0.5',d.yards,'Yards used','yd'))+F('Pallets bagged',sfx('pallets','1',d.pallets,'Pallets bagged','pallets'));
-    modal(isNew?'New input':`Edit ${IN_TYPES[d.type].toLowerCase()}`,`
-      ${isNew?`<div class="seg in-type" role="group" aria-label="Input type">${Object.entries(IN_TYPES).map(([k,l])=>`<button type="button" data-itype="${k}" aria-pressed="${d.type===k}">${l}</button>`).join('')}</div>`:''}
+    modal(isNew?(d.type==='buy'?'Purchased input':'Production input'):`Edit ${IN_TYPES[d.type].toLowerCase()}`,`
+      ${isNew&&d.type!=='buy'?`<div class="seg in-type" role="group" aria-label="Input type">${Object.entries(IN_TYPES).filter(([k])=>k!=='buy').map(([k,l])=>`<button type="button" data-itype="${k}" aria-pressed="${d.type===k}">${l}</button>`).join('')}</div>`:''}
       <form class="in-form" id="inForm" novalidate>
         ${body}
         ${F('Notes',`<textarea name="notes" rows="2">${esc(d.notes||'')}</textarea>`,'full')}
@@ -1438,23 +1436,6 @@ function openInputForm(rec,type){
   };
   draw();
 }
-/* Picker grate ratios: collapsed to just its title; expand to change them.
-   Yards per unit (7.5) is fixed and not editable. */
-function grateRatioPanel(){
-  const O=SETTINGS.orc;
-  return `<details class="ratio-panel" id="grPanel" ${UI.grOpen?'open':''}>
-    <summary><b>Picker grate ratios</b></summary>
-    <div class="ratio-body">
-    ${ORC_PICK.map(m=>{const r=O.ratios[m];return `<div class="ratio-row"><span>${esc(m)}</span>${['small','medium','lost'].map(k=>`<label>${cap(k)} <input type="number" min="0" max="100" step="1" data-gr="${esc(m)}|${k}" value="${r[k]}">%</label>`).join('')}${r.small+r.medium+r.lost!==100?'<span class="neg">Adds up to '+(r.small+r.medium+r.lost)+'%</span>':''}</div>`}).join('')}
-    </div>
-  </details>`;
-}
-$('#gridWrap').addEventListener('toggle',e=>{if(e.target.id==='grPanel')UI.grOpen=e.target.open},true);
-$('#gridWrap').addEventListener('change',e=>{
-  const t=e.target;
-  if(t.dataset.gr){const [m,k]=t.dataset.gr.split('|');SETTINGS.orc.ratios[m][k]=Math.max(0,Math.min(100,+t.value||0));store.set('settings',SETTINGS);renderGrid();toast('Ratio updated')}
-});
-
 /* ---- Sales: an order has a date, customer, sales order #, notes and any number of product lines.
    Open orders don't move inventory; Completed takes the lines out on the day it's ticked. ---- */
 function saleProducts(line){
@@ -1476,7 +1457,8 @@ function openOrderForm(rec,line){
       <td><span class="in-sfx"><input type="number" data-f="qty" min="0" step="0.5" value="${l.qty??''}" aria-label="Quantity" inputmode="decimal"><i>${u}</i></span></td>
       ${L==='orchid'?`<td class="ord-load"><select data-f="load" aria-label="Load type"><option value="">—</option>${['BULK','BAGS','TOTES'].map(x=>`<option ${x===l.load?'selected':''}>${x}</option>`).join('')}</select></td>`:''}
       <td>${d.lines.length>1?`<button type="button" class="btn icon ghost" data-rmline="${i}" aria-label="Remove line">✕</button>`:''}</td></tr>`};
-  modal(isNew?'New order':L==='biochar'?`Order · ${fmtDate(d.date)}`:`Order · ${d.customer||''}`,`
+  modal(isNew?'Sales input':L==='biochar'?`Order · ${fmtDate(d.date)}`:`Order · ${d.customer||''}`,`
+    ${isNew?`<div class="seg in-type" role="group" aria-label="Line">${[['biochar','Biochar'],['orchid','Orchid bark']].map(([k,l])=>`<button type="button" data-oline="${k}" aria-pressed="${L===k}">${l}</button>`).join('')}</div>`:''}
     <div class="in-form">
       <label class="field"><span>Order date</span><input type="date" name="date" value="${d.date}"></label>
       ${L==='orchid'?`<label class="field"><span>Customer</span><input type="text" name="customer" list="custList" value="${esc(d.customer)}" autocomplete="off"><datalist id="custList">${customers.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label>
@@ -1491,6 +1473,7 @@ function openOrderForm(rec,line){
     `${isNew?'':'<button class="btn danger" id="delOrder" style="margin-right:auto">Delete</button>'}<button class="btn" data-close>Cancel</button><button class="btn primary" id="saveOrder">${isNew?'Save order':'Save changes'}</button>`);
   $('#modalRoot .modal').classList.add('in-modal','ord-modal');
   const m=$('#modalRoot'),tb=$('#ordLines');
+  m.querySelectorAll('[data-oline]').forEach(b=>b.onclick=()=>{if(b.dataset.oline!==L)openOrderForm(null,b.dataset.oline)});
   const val=n=>m.querySelector(`[name=${n}]`);
   const grab=()=>{d.date=val('date').value;if(val('customer'))d.customer=val('customer').value;if(val('so'))d.so=val('so').value;d.notes=val('notes').value;d.done=val('done')?val('done').checked:d.done;
     tb.querySelectorAll('tr[data-i]').forEach(tr=>{const l=d.lines[+tr.dataset.i];tr.querySelectorAll('[data-f]').forEach(el=>{l[el.dataset.f]=el.value})})};
@@ -1518,7 +1501,7 @@ function openOrderForm(rec,line){
 $('#gridWrap').addEventListener('click',e=>{
   const cb=e.target.closest('[data-done]');if(!cb)return;
   e.stopPropagation();const s=DB.orders.find(x=>x.id===cb.dataset.done);if(!s)return;
-  s.done=!s.done;s.doneOn=s.done?iso(TODAY):null;UI.flash=s.id;saveDB();render();UI.flash=null;toast(s.done?(UI.showDone?'Marked completed':'Completed. It’s folded under ✓ Completed.'):'Marked open');
+  s.done=!s.done;s.doneOn=s.done?iso(TODAY):null;UI.flash=s.id;saveDB();render();UI.flash=null;toast(s.done?'Marked completed':'Marked open');
 },true);
 
 /* demo data for the orchid tabs */
@@ -2366,8 +2349,7 @@ function renderSettings(){
           <div class="qr-title">${FORM_NAME[k]}</div>
           <div class="qr" id="qr-${k}"></div>
           <a class="url num" href="${esc(formUrl(k))}" target="_blank" rel="noopener">/${FORM_PATH[k]}</a>
-          <button class="btn" data-printqr="${k}">Print QR</button>
-          <button class="btn" data-editsheet="${k}">Customize sheet</button>
+          <span class="qr-btns"><a class="btn" href="${esc(formUrl(k))}" target="_blank" rel="noopener">View sheet</a><button class="btn" data-printqr="${k}">Print QR</button></span>
         </div>`).join('')}
       </div>
     </div>
@@ -2385,40 +2367,25 @@ function renderSettings(){
     </div>
 
     <div class="set-card">
-      <div class="set-h"><h2>Equipment hours</h2></div>
+      <div class="set-h"><h2>Picker grates</h2></div>
+      <div class="set-body">
+        <table class="lines grates"><thead><tr><th>Product</th><th>Profile</th><th class="c">Active</th><th class="n">Small %</th><th class="n">Medium %</th><th class="n">Lost %</th></tr></thead>
+        ${ORC_PICK.map(m=>`<tbody>${S.orc.profiles[m].map((p,i)=>{const t=p.small+p.medium+p.lost;return `<tr class="${S.orc.active[m]===i?'on':''}">
+          ${i?'':`<td rowspan="2" class="gr-m">${esc(m)}</td>`}<td>${i+1}</td>
+          <td class="c"><input type="radio" name="gr-${esc(m)}" data-gract="${esc(m)}" value="${i}" ${S.orc.active[m]===i?'checked':''} aria-label="${esc(m)} profile ${i+1} active"></td>
+          ${['small','medium','lost'].map(k=>`<td class="n"><input type="number" min="0" max="100" step="1" data-grp="${esc(m)}|${i}|${k}" value="${p[k]}" aria-label="${esc(m)} profile ${i+1} ${k} %" class="${t!==100?'bad':''}"></td>`).join('')}</tr>`}).join('')}</tbody>`).join('')}
+        </table>
+      </div>
+    </div>
+
+    <div class="set-card wide">
+      <div class="set-h"><h2>Biochar equipment hours</h2></div>
       <div class="set-body">
         <div class="fields">${['wash','sock','bag'].map(j=>`<label class="field"><span>${cap(j)} %</span><input type="number" min="0" max="100" step="5" data-ratio="${j}" value="${Math.round(S.ratio[j]*100)}"></label>`).join('')}</div>
       </div>
     </div>
   </div>`;
   ['char','dryer'].forEach(k=>{const el=$('#qr-'+k);if(window.QRCode){new QRCode(el,{text:formUrl(k),width:150,height:150,correctLevel:QRCode.CorrectLevel.M})}else el.innerHTML='<div class="muted" style="font-size:.8rem;padding:20px">QR code didn’t load</div>'});
-}
-/* Customize sheet: a window onto the real crew sheet (?edit view). The manager hides, orders and adds right on the sheet;
-   Save stores the layout in settings sheet_char / sheet_dryer, which the open sheets read through form_options.
-   Added blends, sock sizes, products and bins are real catalog entries and save straight away. */
-function openSheetEditor(k){
-  window.SheetEdit={k,L:JSON.parse(JSON.stringify(SETTINGS.sheets[k])),check:null,
-    add(kind,raw){
-      const name=String(raw||'').trim().replace(/\s+/g,' ');
-      if(kind==='blend'||kind==='sock'){
-        const sec=INV_SECTIONS.find(x=>x.key===(kind==='blend'?'washed':'socks'));
-        const val=kind==='sock'?+name:name;
-        if(kind==='sock'?!(val>0):!val)return kind==='sock'?'Enter a size in feet.':'Type a name.';
-        const list=sec.list();if(list.some(v=>String(v).toLowerCase()===String(val).toLowerCase()))return 'That one is already on the list.';
-        list.push(val);if(kind==='sock')list.sort((x,y)=>x-y);delete HIDDEN()[sec.prefix+val];
-      }else{
-        if(!name)return 'Type a name.';
-        if([...allBinNames(),...bagMap().map(x=>x[0]),...ORC_SALE_PRODUCTS,...ORC_PICK].some(n=>n.toLowerCase()===name.toLowerCase()))return 'There’s already a bin or product with that name.';
-        extraBins().push({name,kind,note:''});
-      }
-      store.set('settings',SETTINGS);toast(`${kind==='sock'?name+' ft':name} added`);return '';
-    }};
-  modal(`Customize ${FORM_NAME[k].toLowerCase()}`,`<iframe class="sheet-frame" src="${FORM_PATH[k]}/?edit" title="${esc(FORM_NAME[k])}"></iframe>`,
-    `<a class="btn" href="${esc(formUrl(k))}" target="_blank" rel="noopener">Open sheet</a><span class="err" id="formErr" style="margin:0 auto 0 8px"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="slSave">Save</button>`);
-  $('#modalRoot .modal').classList.add('sheet-modal');
-  $('#slSave').onclick=()=>{const E=window.SheetEdit;if(!E||!E.check)return;
-    const e=E.check();if(e){$('#formErr').textContent=e;return}
-    E.L.title=String(E.L.title).trim();SETTINGS.sheets[k]=E.L;closeModal();render();saveSettings(`${E.L.title} saved`)};
 }
 function saveSettings(msg){store.set('settings',SETTINGS);if(msg)toast(msg)}
 $('#settingsSec').addEventListener('change',e=>{
@@ -2428,6 +2395,9 @@ $('#settingsSec').addEventListener('change',e=>{
       if(S.crew.some(x=>x!==c&&x.name.toLowerCase()===v.toLowerCase())){t.value='';return toast(`${v} is already on the crew`)}c.name=v}else c[t.dataset.f]=t.checked;
     saveSettings('Crew updated');return}
   if(t.dataset.ratio){S.ratio[t.dataset.ratio]=Math.min(100,Math.max(0,+t.value||0))/100;saveSettings('Ratio updated');return}
+  if(t.dataset.gract){const m=t.dataset.gract;S.orc.active[m]=+t.value;S.orc.ratios[m]={...S.orc.profiles[m][+t.value]};saveSettings(`${m}: profile ${+t.value+1} active`);renderSettings();return}
+  if(t.dataset.grp){const [m,i,k]=t.dataset.grp.split('|');S.orc.profiles[m][+i][k]=Math.max(0,Math.min(100,Math.round(+t.value||0)));
+    if(S.orc.active[m]===+i)S.orc.ratios[m]={...S.orc.profiles[m][+i]};saveSettings('Grates updated');renderSettings();return}
   if(t.dataset.set){S[t.dataset.set]=Math.max(0,+t.value||0);saveSettings('Saved');renderSettings()}
 });
 $('#settingsSec').addEventListener('click',e=>{
@@ -2436,7 +2406,6 @@ $('#settingsSec').addEventListener('click',e=>{
     if(c.name&&!confirm(`Delete ${c.name} from the crew? They come off both crew sheets. Past production sheets keep their name.`))return;
     SETTINGS.crew.splice(i,1);saveSettings(c.name?`${c.name} deleted`:'');renderSettings();return}
   if(b.id==='addCrew'){SETTINGS.crew.push({name:'',biochar:true,orchid:false});renderSettings();const ins=document.querySelectorAll('[data-crew][data-f=name]');ins[ins.length-1].focus();return}
-  if(b.dataset.editsheet){openSheetEditor(b.dataset.editsheet);return}
   if(b.dataset.printqr){const k=b.dataset.printqr;const src=$('#qr-'+k+' canvas')?.toDataURL()||$('#qr-'+k+' img')?.src||'';
     $('#printArea').innerHTML=`<div class="sign"><div class="sign-dept">Rexius · Dept 14</div><h1>${esc(FORM_NAME[k])}</h1><p>Scan with your phone camera to fill out today’s production sheet.</p>${src?`<img src="${src}" alt="QR code">`:''}<div class="num">${esc(formUrl(k))}</div></div>`;
     document.body.classList.add('printing-qr');window.print();setTimeout(()=>document.body.classList.remove('printing-qr'),500)}
@@ -2456,7 +2425,9 @@ function openSuggestions(){
       closeModal();toast('✓ Suggestion sent.')})};
 }
 $('#suggBtn').onclick=openSuggestions;
-$('#inputBtn').onclick=()=>openInputForm(null);
+$('#prodBtn').onclick=()=>openInputForm(null);
+$('#buyBtn').onclick=()=>openInputForm(null,'buy',UI.line==='orchid'?'orchid':'biochar');
+$('#salesBtn').onclick=()=>openOrderForm(null,UI.line==='orchid'?'orchid':'biochar');
 
 /* =============================================================
    Undo / redo / version history (like Google Sheets).
@@ -2553,7 +2524,7 @@ function vhDiff(k,c){
   return out;
 }
 /* A short title for a version, written from what changed. */
-const VH_SET={bonusPerYardIn:'bonus $ per yard',bonusPerTote:'bonus $ per tote',bonusYdPerTote:'yards per tote',ratio:'equipment hours',crew:'crew',orc:'orchid settings',catalog:'inventory items',siteUrl:'site link',forms:'crew sheets',sheets:'crew sheet layout',reports:'saved reports'};
+const VH_SET={bonusPerYardIn:'bonus $ per yard',bonusPerTote:'bonus $ per tote',bonusYdPerTote:'yards per tote',ratio:'equipment hours',crew:'crew',orc:'orchid settings',catalog:'inventory items',siteUrl:'site link',forms:'crew sheets',reports:'saved reports'};
 const VH_ONE={bio:'production sheet',orc:'dryer run',oin:'input',purch:'purchase',orders:'sales order',adj:'inventory adjustment'};
 function vhSummary(v){
   if(v.label)return v.label;
@@ -2702,10 +2673,8 @@ Live.load=async function(){
   const S=Object.fromEntries(settings.map(r=>[r.key,r.value]));
   if(S.equipment_ratio)SETTINGS.ratio={wash:+S.equipment_ratio.wash,sock:+S.equipment_ratio.sock,bag:+S.equipment_ratio.bag};
   if(S.bonus){SETTINGS.bonusPerYardIn=+S.bonus.per_yard_in;SETTINGS.bonusPerTote=+S.bonus.per_tote;SETTINGS.bonusYdPerTote=+S.bonus.yards_per_tote}
-  if(S.orchid)SETTINGS.orc={...SETTINGS.orc,yardsPerUnit:+S.orchid.yards_per_unit,ratios:S.orchid.ratios,extraBins:[]};
+  if(S.orchid){SETTINGS.orc={...SETTINGS.orc,yardsPerUnit:+S.orchid.yards_per_unit,ratios:S.orchid.ratios,profiles:S.orchid.profiles,active:S.orchid.active,extraBins:[]};gratesInit()}
   if(S.dashboard){const D=S.dashboard;if(D.siteUrl)SETTINGS.siteUrl=D.siteUrl;if(D.forms)SETTINGS.forms=D.forms;if(D.hidden)SETTINGS.catalog.hidden=D.hidden}
-  if(S.sheet_char)SETTINGS.sheets.char={...SETTINGS.sheets.char,...S.sheet_char};
-  if(S.sheet_dryer)SETTINGS.sheets.dryer={...SETTINGS.sheets.dryer,...S.sheet_dryer};
   SETTINGS.crew=emp.filter(e=>e.active).map(e=>({id:e.id,name:e.name,biochar:e.on_biochar_sheet,orchid:e.on_dryer_sheet,active:true}));
   const blends=items.filter(i=>i.kind==='blend'&&!i.is_custom&&i.active).sort((a,b)=>a.sort-b.sort).map(i=>i.blend);
   BLENDS.splice(0,BLENDS.length,...blends);
@@ -2731,8 +2700,8 @@ Live.seedReports=async function(){
 const COLS=['bio','orc','oin','orders','purch','adj'];
 Live.snap=()=>{const o={};COLS.forEach(c=>{o[c]=new Map((DB[c]||[]).map(r=>[r.id,JSON.stringify(r)]))});o.counts=JSON.stringify(DB.counts||{});return o};
 Live.ssnap=()=>JSON.stringify({ratio:{wash:SETTINGS.ratio.wash,sock:SETTINGS.ratio.sock,bag:SETTINGS.ratio.bag},bonus:[SETTINGS.bonusPerYardIn,SETTINGS.bonusPerTote,SETTINGS.bonusYdPerTote],
-  orc:{y:SETTINGS.orc.yardsPerUnit,r:SETTINGS.orc.ratios},binNotes:SETTINGS.orc.binNotes||{},crew:SETTINGS.crew,blends:[...BLENDS],bags:[...BAG_TYPES],socks:[...SOCK_SIZES],bins:SETTINGS.orc.extraBins||[],reports:SETTINGS.reports||[],
-  dash:{siteUrl:SETTINGS.siteUrl,forms:SETTINGS.forms,hidden:SETTINGS.catalog.hidden},sheets:SETTINGS.sheets});
+  orc:{y:SETTINGS.orc.yardsPerUnit,r:SETTINGS.orc.ratios,p:SETTINGS.orc.profiles,a:SETTINGS.orc.active},binNotes:SETTINGS.orc.binNotes||{},crew:SETTINGS.crew,blends:[...BLENDS],bags:[...BAG_TYPES],socks:[...SOCK_SIZES],bins:SETTINGS.orc.extraBins||[],reports:SETTINGS.reports||[],
+  dash:{siteUrl:SETTINGS.siteUrl,forms:SETTINGS.forms,hidden:SETTINGS.catalog.hidden}});
 
 /* ---- dashboard record → table row ---- */
 const ROW={
@@ -2763,7 +2732,7 @@ Live.sync=async function(){
       Live.again=false;
       /* give records made by the screens a real id */
       COLS.forEach(c=>(DB[c]||[]).forEach(r=>{if(!isUuid(r.id))r.id=newId()}));
-      const B=Live.base;
+      const B=Live.base,S0=Live.snap(); // what this pass saves; edits made while it runs differ from it and get the next pass
       for(const c of COLS){
         const cur=new Map((DB[c]||[]).map(r=>[r.id,r]));
         for(const [id,r] of cur){const was=B[c].get(id);if(was===JSON.stringify(r))continue;
@@ -2802,7 +2771,7 @@ Live.sync=async function(){
         q=t.custom_size_ft?q.eq('custom_size_ft',t.custom_size_ft):q.is('custom_size_ft',null);
         await must(q)}
       await Live.syncSettings();
-      Live.base=Live.snap();
+      Live.base=S0;
       if(UI.line==='settings'&&[...document.querySelectorAll('#settingsSec [data-crew][data-f=name]')].some(el=>(SETTINGS.crew[+el.dataset.crew]||{}).id))renderSettings();
     }while(Live.again);
   }catch(e){
@@ -2811,14 +2780,13 @@ Live.sync=async function(){
   }finally{Live.running=false}
 };
 Live.syncSettings=async function(){
-  const now=Live.ssnap();if(now===Live.sbase)return;
+  const now=Live.ssnap();if(now===Live.sbase)return; // snapshot first: edits made during the awaits below stay unsaved for the next pass
   const old=JSON.parse(Live.sbase),cur=JSON.parse(now);
   const up=(key,value)=>must(sb.from('settings').upsert({key,value}));
   if(JSON.stringify(old.ratio)!==JSON.stringify(cur.ratio))await up('equipment_ratio',cur.ratio);
   if(JSON.stringify(old.bonus)!==JSON.stringify(cur.bonus))await up('bonus',{per_yard_in:cur.bonus[0],per_tote:cur.bonus[1],yards_per_tote:cur.bonus[2]});
-  if(JSON.stringify(old.orc)!==JSON.stringify(cur.orc))await up('orchid',{yards_per_unit:cur.orc.y,ratios:cur.orc.r});
+  if(JSON.stringify(old.orc)!==JSON.stringify(cur.orc))await up('orchid',{yards_per_unit:cur.orc.y,ratios:cur.orc.r,profiles:cur.orc.p,active:cur.orc.a});
   if(JSON.stringify(old.dash)!==JSON.stringify(cur.dash))await up('dashboard',cur.dash);
-  for(const k of ['char','dryer'])if(JSON.stringify((old.sheets||{})[k])!==JSON.stringify(cur.sheets[k]))await up('sheet_'+k,cur.sheets[k]);
   /* crew */
   for(const c of SETTINGS.crew){if(!c.name)continue;
     const row={name:c.name,on_biochar_sheet:!!c.biochar,on_dryer_sheet:!!c.orchid,active:true};
@@ -2858,7 +2826,7 @@ Live.syncSettings=async function(){
       if(UI.rb)Object.values(UI.rb).forEach(c=>{if(c&&c.id===id)c.id=nid})}
     await must(sb.from('saved_reports').upsert({id:r.id,line:r.line,name:r.name,config:r.cfg}))}
   for(const id of oR.keys())if(!cR.has(id)&&isUuid(id))await must(sb.from('saved_reports').delete().eq('id',id));
-  Live.sbase=Live.ssnap();
+  Live.sbase=now;
 };
 let syncTimer=null;
 Live.queue=()=>{clearTimeout(syncTimer);syncTimer=setTimeout(()=>Live.sync(),0)};
