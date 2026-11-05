@@ -429,6 +429,15 @@ table.eom-t{width:100%;border-collapse:collapse;table-layout:fixed}
 .cal-crew{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.72rem}
 .cal-o{margin-top:auto;font-size:.7rem;background:color-mix(in srgb,#E3A94B 22%,transparent);border-radius:4px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cal-o.done{opacity:.55}
+.cal-d.dayoff{background:repeating-linear-gradient(135deg,var(--sunken) 0 6px,transparent 6px 12px)}
+.cal-off{margin-left:6px;font:600 .62rem/1 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border:1px solid var(--line-strong);border-radius:99px;padding:1px 5px;vertical-align:1px}
+.cal-note{font-size:.72rem;font-style:italic;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cal-menu{position:fixed;z-index:60;background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;box-shadow:0 8px 24px rgb(0 0 0 / .35);padding:4px;display:grid;min-width:170px}
+.cal-menu button{all:unset;cursor:pointer;padding:8px 12px;border-radius:5px;font-size:.88rem}
+.cal-menu button:hover,.cal-menu button:focus-visible{background:var(--accent-soft)}
+.cal-dayed{display:grid;gap:8px}
+.cal-offchk{display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer}
+.cal-offchk input{width:18px;height:18px;accent-color:var(--accent)}
 .cal-t tbody tr{cursor:pointer}
 .cal-t tbody tr:hover td{background:var(--accent-soft)}
 .cal-gr{display:flex;gap:12px;flex-wrap:wrap}
@@ -2415,6 +2424,13 @@ const CAL={bio:{line:'biochar',rows:()=>active(DB.bio)},dryer:{line:'orchid',row
 UI.cal=UI.cal||{};
 const calMonth=k=>UI.cal[k]||(UI.cal[k]=iso(TODAY).slice(0,7));
 const ymShift=(ym,n)=>{const [y,m]=ym.split('-').map(Number);const d=new Date(y,m-1+n,1,12);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`};
+DB.cal=DB.cal||[];
+const calRec=(k,ds)=>(DB.cal||[]).find(c=>c.kind===k&&c.day===ds);
+function setCal(k,ds,patch){
+  let c=calRec(k,ds);if(!c){c={id:crypto.randomUUID(),kind:k,day:ds,note:'',off:false};DB.cal.push(c)}
+  Object.assign(c,patch);if(!c.note&&!c.off)DB.cal=DB.cal.filter(x=>x!==c);
+  saveDB();renderGrid();
+}
 const crewOf=rs=>[...new Set(rs.flatMap(r=>r.crew||[]))];
 function calDay(k,rs){
   const hrs=rs.reduce((a,r)=>a+(+r.hours||0),0),L=[];
@@ -2438,10 +2454,11 @@ function calHTML(k){
   let cells='';
   for(let i=0;i<42;i++){const d=new Date(start);d.setDate(start.getDate()+i);const ds=iso(d),inM=d.getMonth()===m-1;
     if(i===35&&!inM)break;
-    const rs=by[ds]||[],we=d.getDay()===0||d.getDay()===6,miss=inM&&!rs.length&&!we&&ds<today&&first&&ds>=first;
+    const rs=by[ds]||[],we=d.getDay()===0||d.getDay()===6,cr=calRec(k,ds)||{},miss=inM&&!rs.length&&!we&&!cr.off&&ds<today&&first&&ds>=first;
     const os=ords[ds]||[];
-    cells+=`<button type="button" class="cal-d ${inM?'':'out'} ${miss?'miss':''} ${we?'we':''} ${ds===today?'today':''} ${rs.length?'has':''}" data-calday="${ds}" aria-label="${d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}${rs.length?', '+rs.length+' entries':miss?', no entry':''}">
-      <span class="cal-n">${d.getDate()}</span>
+    cells+=`<button type="button" class="cal-d ${inM?'':'out'} ${miss?'miss':''} ${we?'we':''} ${cr.off?'dayoff':''} ${ds===today?'today':''} ${rs.length?'has':''}" data-calday="${ds}" aria-label="${d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}${rs.length?', '+rs.length+' entries':cr.off?', off':miss?', no entry':''}">
+      <span class="cal-n">${d.getDate()}${cr.off?'<span class="cal-off">Off</span>':''}</span>
+      ${cr.note?`<span class="cal-note">${esc(cr.note)}</span>`:''}
       ${rs.length?calDay(k,rs).map(([c,t])=>`<span class="cal-l ${c?'c-'+c:''}">${esc(t)}</span>`).join('')+(crewOf(rs).length?`<span class="cal-crew">${esc(crewOf(rs).join(', '))}</span>`:''):''}
       ${os.map(o=>`<span class="cal-o ${o.done?'done':''}">${esc(o.line==='biochar'?(o.notes||'Order'):(o.customer||'Order'))}</span>`).join('')}
     </button>`}
@@ -2467,6 +2484,24 @@ $('#gridWrap').addEventListener('click',e=>{
   if(nav){const k=nav.closest('[data-cal]').dataset.cal,n=+nav.dataset.calnav;UI.cal[k]=n?ymShift(calMonth(k),n):iso(TODAY).slice(0,7);renderGrid();return}
   const d=e.target.closest('[data-calday]');if(d)openCalDay(d.closest('[data-cal]').dataset.cal,d.dataset.calday);
 });
+/* right-click a day: mark it off (or back on), or open it to write a note */
+$('#gridWrap').addEventListener('contextmenu',e=>{
+  const d=e.target.closest('[data-calday]');if(!d||!Live.hasCal)return;e.preventDefault();
+  const k=d.closest('[data-cal]').dataset.cal,ds=d.dataset.calday,cr=calRec(k,ds)||{};
+  calMenuClose();
+  const mnu=document.createElement('div');mnu.className='cal-menu';mnu.id='calMenu';mnu.setAttribute('role','menu');
+  mnu.innerHTML=`<button type="button" role="menuitem" data-cm="off">${cr.off?'Mark day back on':'Mark day off'}</button><button type="button" role="menuitem" data-cm="note">${cr.note?'Edit note':'Add note'}</button>`;
+  document.body.appendChild(mnu);
+  const w=mnu.offsetWidth,h=mnu.offsetHeight;mnu.style.left=Math.min(e.clientX,innerWidth-w-8)+'px';mnu.style.top=Math.min(e.clientY,innerHeight-h-8)+'px';
+  mnu.onclick=ev=>{const b=ev.target.closest('[data-cm]');if(!b)return;calMenuClose();
+    if(b.dataset.cm==='off'){setCal(k,ds,{off:!cr.off});toast(!cr.off?`${fmtDate(ds)} marked off`:`${fmtDate(ds)} back on`)}
+    else{openCalDay(k,ds);$('#calNote')?.focus()}};
+  mnu.querySelector('button').focus();
+});
+function calMenuClose(){document.getElementById('calMenu')?.remove()}
+document.addEventListener('click',e=>{if(!e.target.closest('#calMenu'))calMenuClose()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')calMenuClose()});
+addEventListener('scroll',calMenuClose,true);
 /* a day: its entries (click to open), Add for that day, and on the picker the day's grate profile */
 function openCalDay(k,ds){
   const rs=CAL[k].rows().filter(r=>r.date===ds);
@@ -2481,11 +2516,16 @@ function openCalDay(k,ds){
   if(k==='pick'&&rs.length){const mats=[...new Set(rs.map(r=>r.material))];
     grates=`<div class="cal-gr">${mats.map(mt=>{const g=[...new Set(rs.filter(r=>r.material===mt).map(r=>r.grate||1))],P=SETTINGS.orc.profiles[mt]||[];
       return `<label class="field"><span>${esc(mt)} grates</span><select data-daygrate="${esc(mt)}">${g.length>1?'<option value="">Mixed</option>':''}${P.map((p,i)=>`<option value="${i+1}" ${g.length===1&&g[0]===i+1?'selected':''}>Profile ${i+1} · ${p.small}/${p.medium}/${p.lost}</option>`).join('')}</select></label>`}).join('')}</div>`}
-  modal(title,`${grates}
+  const cr=calRec(k,ds)||{};
+  const dayBox=Live.hasCal!==false?`<div class="cal-dayed"><label class="cal-offchk"><input type="checkbox" id="calOff" ${cr.off?'checked':''}> Day off</label>
+    <label class="field"><span>Day notes</span><textarea id="calNote" rows="2" maxlength="1000">${esc(cr.note||'')}</textarea></label></div>`:'';
+  modal(title,`${dayBox}${grates}
     ${rs.length?`<table class="grid cal-t"><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rs.map(r=>`<tr data-calrec="${esc(r.id)}">${row(r).map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`:'<div class="muted">No entries.</div>'}
     ${os.length?`<div class="sect">Orders</div><table class="grid cal-t"><tbody>${os.map(o=>`<tr data-calord="${esc(o.id)}"><td>${esc(o.line==='biochar'?(o.notes||'Order'):o.customer)}</td><td>${esc(orderSummary(o))}</td><td>${o.done?'Completed':'Open'}</td></tr>`).join('')}</tbody></table>`:''}`,
     `<button class="btn" data-close>Close</button><button class="btn primary" id="calAdd">Add +</button>`);
   const m=$('#modalRoot');
+  const off=$('#calOff');if(off)off.onchange=()=>{setCal(k,ds,{off:off.checked});toast(off.checked?`${fmtDate(ds)} marked off`:`${fmtDate(ds)} back on`)};
+  const nt=$('#calNote');if(nt)nt.onchange=()=>{const v=nt.value.trim();if(v===((calRec(k,ds)||{}).note||''))return;setCal(k,ds,{note:v});toast('Note saved')};
   m.querySelectorAll('[data-calrec]').forEach(tr=>tr.onclick=()=>{const r=rs.find(x=>x.id===tr.dataset.calrec);closeModal();
     if(k==='bio')openRunEditor(r);else if(k==='dryer')openOrchidForm(r);else openInputForm(r)});
   m.querySelectorAll('[data-calord]').forEach(tr=>tr.onclick=()=>{const o=os.find(x=>x.id===tr.dataset.calord);closeModal();openOrderForm(o)});
@@ -2715,7 +2755,7 @@ $('#salesBtn').onclick=()=>openOrderForm(null,UI.line==='orchid'?'orchid':'bioch
    Prototype: kept in this browser (d14.versions, last 80). Live: a
    dept14 audit table written by the database, shared by every manager.
    ============================================================= */
-const VH_NAMES={bio:'Biochar production sheets',orc:'Dryer runs',oin:'Picker & bagging production',purch:'Purchased material',orders:'Sales',counts:'Inventory counts',adj:'Inventory adjustments',settings:'Settings'};
+const VH_NAMES={bio:'Biochar production sheets',orc:'Dryer runs',oin:'Picker & bagging production',purch:'Purchased material',orders:'Sales',counts:'Inventory counts',adj:'Inventory adjustments',cal:'Calendar notes',settings:'Settings'};
 const VH_MAX=80;
 const VH={list:[],ptr:-1,applying:false,pending:false};
 (function vhLoad(){try{const v=JSON.parse(localStorage.getItem('d14.versions')||'null');if(v&&Array.isArray(v.list)){VH.list=v.list;VH.ptr=Math.min(v.ptr,v.list.length-1)}}catch(e){}})();
@@ -2772,6 +2812,7 @@ function vhRowName(k,r){
   if(k==='purch')return `${r.material||''} · ${d}${r.po?' · PO '+r.po:''}`;
   if(k==='orders')return `${r.customer||'Order'} · ${d}${r.so?' · '+r.so:''}`;
   if(k==='adj')return `${(r.item||'').replace(/^O:/,'')} · ${d}`;
+  if(k==='cal')return `${{bio:'Production',dryer:'Dryer',pick:'Picker',bag:'Bagging'}[r.kind]||''} calendar · ${r.day?fmtDate(r.day):''}${r.off?' · off':''}`;
   return r.name||r.id||'';
 }
 const VH_FIELD={yardsIn:'yards in',yardsOut:'yards out',dest:'went to',voidReason:'void reason',so:'sales order #',done:'completed',per:'per'};
@@ -2944,6 +2985,7 @@ Live.load=async function(){
   DB.orders=orders.map(o=>({id:o.id,line:o.line,date:o.order_date,customer:o.customer,so:o.sales_order_no||'',notes:o.notes||'',done:o.completed,doneOn:o.completed_on||null,priority:o.priority??null,
     lines:(o.order_lines||[]).map(l=>({key:l.bin_id?'O:'+bn(l.bin_id):countKeyOf(Live.item(l.item_id),l.custom_size_ft,l.custom_name),qty:+l.qty,...(l.load_type?{load:l.load_type}:{})}))}));
   DB.purch=purch.map(p=>({id:p.id,date:p.purchase_date,material:p.bin_id?bn(p.bin_id):PURCH_RAW[keyOfLine(Live.item(p.item_id))]||'',amount:+p.amount,po:p.po||'',notes:p.notes||''}));
+  try{DB.cal=(await fetchAll('calendar_days')).map(c=>({id:c.id,kind:c.kind,day:c.day,note:c.note||'',off:!!c.off}));Live.hasCal=true}catch(e){DB.cal=[];Live.hasCal=false}
   DB.adj=adj.map(a=>({id:a.id,date:a.adj_date,item:a.bin_id?'O:'+bn(a.bin_id):countKeyOf(Live.item(a.item_id),a.custom_size_ft,a.custom_name),qty:+a.qty_delta,reason:a.reason,notes:a.notes||''}));
   DB.counts={};
   counts.forEach(c=>{const k=c.bin_id?'O:'+bn(c.bin_id):countKeyOf(Live.item(c.item_id),c.custom_size_ft,c.custom_name);if(!DB.counts[k])DB.counts[k]={qty:+c.qty,date:c.counted_on}});
@@ -2978,7 +3020,7 @@ Live.seedReports=async function(){
 };
 
 /* ---- snapshots used to work out what changed ---- */
-const COLS=['bio','orc','oin','orders','purch','adj'];
+const COLS=['bio','orc','oin','orders','purch','adj','cal'];
 Live.snap=()=>{const o={};COLS.forEach(c=>{o[c]=new Map((DB[c]||[]).map(r=>[r.id,JSON.stringify(r)]))});o.counts=JSON.stringify(DB.counts||{});return o};
 Live.ssnap=()=>JSON.stringify({ratio:{wash:SETTINGS.ratio.wash,sock:SETTINGS.ratio.sock,bag:SETTINGS.ratio.bag},bonus:[SETTINGS.bonusPerYardIn,SETTINGS.bonusPerTote,SETTINGS.bonusYdPerTote],
   orc:{y:SETTINGS.orc.yardsPerUnit,r:SETTINGS.orc.ratios,p:SETTINGS.orc.profiles,a:SETTINGS.orc.active},binNotes:SETTINGS.orc.binNotes||{},crew:SETTINGS.crew,blends:[...BLENDS],bags:[...BAG_TYPES],socks:[...SOCK_SIZES],bins:SETTINGS.orc.extraBins||[],reports:SETTINGS.reports||[],
@@ -2986,6 +3028,7 @@ Live.ssnap=()=>JSON.stringify({ratio:{wash:SETTINGS.ratio.wash,sock:SETTINGS.rat
 
 /* ---- dashboard record → table row ---- */
 const ROW={
+  cal:r=>({id:r.id,kind:r.kind,day:r.day,note:r.note||null,off:!!r.off,updated_at:new Date().toISOString()}),
   bio:r=>({id:r.id,line:'biochar',job_type:r.job,production_date:r.date,hours:+r.hours,boxes:r.boxes?Math.round(+r.boxes):null,pallets:r.pallets?Math.round(+r.pallets):null,
     order_refs:r.orders||[],notes:r.notes||null,source:r.source==='form'||r.source==='import'?r.source:'dashboard',status:r.status||'active',void_reason:r.status==='void'?(r.voidReason||null):null,
     ...(Live.hasTotes?{pending_totes:(r.pendingTotes||[]).map(p=>{const it=itemOfKey(p.key);return {item_id:it.item_id,custom_name:it.custom_name||null,count:+p.count}})}:{})}),
@@ -3002,7 +3045,7 @@ const ROW={
   adj:r=>r.item.startsWith('O:')?{id:r.id,bin_id:Live.binId(r.item.slice(2)),item_id:null,qty_delta:+r.qty,reason:r.reason,adj_date:r.date,notes:r.notes||null}
         :{id:r.id,...itemOfKey(r.item),bin_id:null,qty_delta:+r.qty,reason:r.reason,adj_date:r.date,notes:r.notes||null},
 };
-const TABLE={bio:'production_runs',orc:'dryer_runs',pick:'picker_runs',bag:'bagging_runs',orders:'orders',purch:'purchases',adj:'inventory_adjustments'};
+const TABLE={bio:'production_runs',orc:'dryer_runs',pick:'picker_runs',bag:'bagging_runs',orders:'orders',purch:'purchases',adj:'inventory_adjustments',cal:'calendar_days'};
 const must=async p=>{const {error}=await p;if(error)throw error};
 
 /* ---- write what changed ---- */
