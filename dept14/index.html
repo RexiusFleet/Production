@@ -899,7 +899,7 @@ function showCards(){const on=UI.line==='orchid'?UI.table.orchid==='reports':UI.
 function renderToolbar(){
   const T=curTable(),k=tkey(),hidden=UI.hidden[k]||[],grp=UI.group[k]||'',sort=UI.sort[k];
   const jobFilter=UI.line==='biochar'&&UI.table.biochar==='runs';
-  if(T.simple){$('#toolbar').innerHTML=`${sort?`<button class="btn on" data-clearsort>Sorted: ${T.cols.find(c=>c.k===sort.k)?.l} ${sort.d>0?'↑':'↓'} ✕</button>`:''}<span class="sp"></span><input type="search" id="q" placeholder="Search" value="${esc(UI.q)}">${T.addable?`<button class="btn primary" id="add">${T.addLabel}</button>`:''}`;return}
+  if(T.simple){$('#toolbar').innerHTML=`<input type="search" id="q" placeholder="Search" value="${esc(UI.q)}">${sort?`<button class="btn on" data-clearsort>Sorted: ${T.cols.find(c=>c.k===sort.k)?.l} ${sort.d>0?'↑':'↓'} ✕</button>`:''}<span class="sp"></span>${T.addable?`<button class="btn primary" id="add">${T.addLabel}</button>`:''}`;return}
   $('#toolbar').innerHTML=`
     ${jobFilter?`<div style="display:flex;gap:4px">${['','wash','sock','bag'].map(j=>`<button class="btn ${UI.filterJob===j?'on':''}" data-job="${j}">${j?j[0].toUpperCase()+j.slice(1):'All'}</button>`).join('')}</div>`:''}
     <div class="pop"><button class="btn ${hidden.length?'on':''}" data-pop="hide">Hide fields${hidden.length?` (${hidden.length})`:''}</button>
