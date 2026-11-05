@@ -93,6 +93,15 @@ select{width:100%;background:var(--surface);border:1.5px solid var(--line-strong
 .summary div{display:flex;justify-content:space-between;gap:12px}
 .summary span:first-child{color:var(--muted)}
 .ghostbtn{background:var(--surface);border:1.5px solid var(--line-strong);border-radius:var(--r);min-height:54px;font-weight:600;cursor:pointer}
+/* wash totes */
+.tote .tsel{width:auto;min-width:118px;min-height:50px}
+.ydout{font:600 1rem var(--f-mono);color:var(--muted)}
+/* photos */
+.ph-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.ph{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.ph img{width:100%;height:100%;object-fit:cover;display:block}
+.ph-x{position:absolute;top:4px;right:4px;width:34px;height:34px;border:0;border-radius:99px;background:rgba(0,0,0,.6);color:#fff;font-size:1rem;cursor:pointer}
+.ph-add{display:grid;place-items:center;aspect-ratio:1;border:1.5px dashed var(--line-strong);border-radius:8px;font-weight:600;color:var(--accent);cursor:pointer;text-align:center;padding:6px;background:var(--surface)}
 </style>
 </head>
 <body>
@@ -116,7 +125,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const store={get(k,d){try{const v=localStorage.getItem('d14.'+k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem('d14.'+k,JSON.stringify(v))}catch(e){}}};
 
 /* Sheet setup: crew on the biochar sheet and the active catalog, from Supabase. */
-const SHEET={title:'Biochar production sheet',crew:[],jobs:['wash','sock','bag'],blends:[],sockSizes:[],questions:['shipping','orders','notes']};
+const SHEET={title:'Biochar production sheet',crew:[],jobs:['wash','sock','bag'],blends:[],sockSizes:[],questions:['shipping','orders','notes'],toteSizes:[{name:'1 yd',yd:1},{name:'2 yd',yd:2,blends:['Washed']}]};
 const CAT={crew:{},items:[]};
 const CFG=window.MIX_BOARD_CONFIG||{};
 const sb=window.supabase&&CFG.SUPABASE_URL?window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{db:{schema:'dept14'},auth:{persistSession:false}}):null;
@@ -126,6 +135,7 @@ async function loadSheet(){
   if(error)throw error;
   (data.employees||[]).forEach(e=>CAT.crew[e.name]=e.id);SHEET.crew=(data.employees||[]).map(e=>e.name);
   CAT.items=data.items||[];
+  if(Array.isArray(data.tote_sizes)&&data.tote_sizes.length)SHEET.toteSizes=data.tote_sizes.filter(t=>+t.yd>0);
   SHEET.blends=CAT.items.filter(i=>i.kind==='blend'&&!i.is_custom).map(i=>i.blend);
   SHEET.sockSizes=CAT.items.filter(i=>i.kind==='sock'&&!i.is_custom).map(i=>+(i.name.match(/[\d.]+/)||[0])[0]).filter(Boolean);
 }
@@ -142,9 +152,27 @@ const LAST_CREW=store.get('sheet.lastCrew',[]);
 const today=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)};
 const cap=s=>s[0].toUpperCase()+s.slice(1);
 const fresh=()=>({date:today(),crew:LAST_CREW.filter(c=>SHEET.crew.includes(c)),hours:'',job:'',
-  raw:'',totes:'',washOut:{},washCustom:[],inputs:[{blend:'',yd:'',bags:''}],socks:{},custom:[],boxes:'',pallets:'',orders:'',notes:''});
+  raw:'',totes:'',washOut:{},washSize:{},washCustom:[],photos:[],inputs:[{blend:'',yd:'',bags:''}],socks:{},custom:[],boxes:'',pallets:'',orders:'',notes:''});
 let F=fresh(), errors={};
 
+/* ---------- wash totes: sizes come from settings (1 yd, 2 yd for Washed); Custom = size written in Notes ---------- */
+const sizesFor=b=>SHEET.toteSizes.filter(t=>!t.blends||!t.blends.length||(b&&t.blends.includes(b)));
+const defSize=b=>String((sizesFor(b)[0]||{yd:1}).yd);
+const sizeOf=b=>F.washSize[b]||defSize(b);
+const ydText=(n,size)=>size==='custom'?'Custom':(+n>0?`${Math.round(+n*+size*100)/100} yd`:'');
+const sizeSel=(key,b,cur)=>`<select class="tsel" data-k="${esc(key)}" aria-label="Tote size">${sizesFor(b).map(t=>`<option value="${t.yd}" ${String(t.yd)===String(cur)?'selected':''}>${esc(t.name)}</option>`).join('')}<option value="custom" ${cur==='custom'?'selected':''}>Custom</option></select>`;
+function updYards(){
+  document.querySelectorAll('[data-yd]').forEach(el=>{const [t,v]=el.dataset.yd.split(/:(.*)/s);
+    if(t==='b')el.textContent=ydText(F.washOut[v],sizeOf(v));else{const c=F.washCustom[+v];if(c)el.textContent=ydText(c.totes,c.size||defSize(null))}})}
+/* photos: shrunk to 1600px JPEGs on the phone before they're sent */
+async function shrink(file){
+  const url=URL.createObjectURL(file);
+  try{const img=await new Promise((ok,bad)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=bad;i.src=url});
+    const k=Math.min(1,1600/Math.max(img.naturalWidth,img.naturalHeight)),c=document.createElement('canvas');
+    c.width=Math.round(img.naturalWidth*k);c.height=Math.round(img.naturalHeight*k);c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    const blob=await new Promise(ok=>c.toBlob(ok,'image/jpeg',.82));return blob?{blob,url:URL.createObjectURL(blob)}:null}
+  catch(e){return null}finally{URL.revokeObjectURL(url)}
+}
 /* ---------- small builders ---------- */
 const stepper=(key,val,step=1,unit='',label='')=>`<div class="step"><button type="button" data-dec="${key}" data-step="${step}" aria-label="Less ${esc(label)}">−</button><input type="number" inputmode="decimal" min="0" step="${step}" data-k="${key}" value="${val??''}" aria-label="${esc(label)}" placeholder="0"><button type="button" data-inc="${key}" data-step="${step}" aria-label="More ${esc(label)}">+</button></div><span class="unit">${unit}</span>`;
 const chips=(group,opts,selected,multi)=>`<div class="chips" role="group">${opts.map(o=>`<button type="button" class="chip" data-chip="${group}" data-v="${esc(o)}" aria-pressed="${multi?selected.includes(o):selected===o}">${esc(o)}</button>`).join('')}</div>`;
@@ -162,9 +190,11 @@ function render(){
   if(j==='wash'){h+=`<div class="sect">Wash</div>
     ${q('raw','Raw biochar used',`<div class="row"><span class="name">Yards of unwashed used</span><div style="display:flex;align-items:center;gap:8px">${stepper('raw',F.raw,.5,'yd','raw yards')}</div></div>`)}
     ${q('totes','Blank white totes used',`<div class="row"><span class="name">Totes</span><div style="display:flex;align-items:center;gap:8px">${stepper('totes',F.totes,1,'','blank white totes')}</div></div>`)}
-    ${q('washOut','Washed char made',`<div class="rows">${SHEET.blends.map(b=>`<div class="row"><span class="name">${b}</span><div style="display:flex;align-items:center;gap:8px">${stepper('washOut.'+b,F.washOut[b],.5,'yd',b+' yards made')}</div></div>`).join('')}
-      ${F.washCustom.map((c,i)=>`<div class="charrow"><div class="charhead"><input type="text" data-k="washCustom.${i}.name" value="${esc(c.name)}" placeholder="What did you make?" aria-label="Custom blend name" autocomplete="off"><button type="button" class="rm" data-rmwash="${i}" aria-label="Remove custom blend">✕</button></div>
-        <div class="row"><span class="name">Yards made</span><div style="display:flex;align-items:center;gap:8px">${stepper(`washCustom.${i}.yd`,c.yd,.5,'yd','custom blend yards made')}</div></div></div>`).join('')}</div>
+    ${q('washOut','Washed char made',`<div class="rows">${SHEET.blends.map(b=>`<div class="charrow tote">
+        <div class="row"><span class="name">${b}</span><span class="ydout" data-yd="b:${esc(b)}">${ydText(F.washOut[b],sizeOf(b))}</span></div>
+        <div class="row">${sizeSel('washSize.'+b,b,sizeOf(b))}<div style="display:flex;align-items:center;gap:8px">${stepper('washOut.'+b,F.washOut[b],1,'',b+' totes filled')}</div></div></div>`).join('')}
+      ${F.washCustom.map((c,i)=>`<div class="charrow tote"><div class="charhead"><input type="text" data-k="washCustom.${i}.name" value="${esc(c.name)}" placeholder="Blend name" aria-label="Custom blend name" autocomplete="off"><button type="button" class="rm" data-rmwash="${i}" aria-label="Remove custom blend">✕</button></div>
+        <div class="row">${sizeSel(`washCustom.${i}.size`,null,c.size||defSize(null))}<span class="ydout" data-yd="c:${i}">${ydText(c.totes,c.size||defSize(null))}</span><div style="display:flex;align-items:center;gap:8px">${stepper(`washCustom.${i}.totes`,c.totes,1,'','custom blend totes filled')}</div></div></div>`).join('')}</div>
       <button type="button" class="link" id="addWashCustom">+ Add a custom blend</button>`)}`}
 
   if(j==='sock'||j==='bag'){
@@ -172,7 +202,7 @@ function render(){
     h+=`<div class="sect">${cap(j)}</div>`+q('inputs',j==='bag'?'Char used and bags made':'Char used',`<div class="rows">${F.inputs.map((x,i)=>`<div class="charrow">
       <div class="charhead"><select data-k="inputs.${i}.blend" aria-label="Char type"><option value="">Pick char type</option>${SHEET.blends.map(b=>`<option value="${b}" ${x.blend===b?'selected':''} ${taken(i).includes(b)?'disabled':''}>${b}</option>`).join('')}<option value="__custom" ${x.blend==='__custom'?'selected':''}>Custom</option></select>
         ${F.inputs.length>1?`<button type="button" class="rm" data-rminput="${i}" aria-label="Remove this char type">✕</button>`:''}</div>
-      ${x.blend==='__custom'?`<input type="text" data-k="inputs.${i}.cname" value="${esc(x.cname||'')}" placeholder="What's in it?" aria-label="Custom char description" autocomplete="off">`:''}
+      ${x.blend==='__custom'?`<input type="text" data-k="inputs.${i}.cname" value="${esc(x.cname||'')}" placeholder="Char type" aria-label="Custom char description" autocomplete="off">`:''}
       <div class="row"><span class="name">Yards used</span><div style="display:flex;align-items:center;gap:8px">${stepper(`inputs.${i}.yd`,x.yd,.5,'yd','yards used')}</div></div>
       ${j==='bag'?`<div class="row"><span class="name">${x.blend?esc(charName(x)||'Custom')+' bags':'Bags'} made<small>1.5cf</small></span><div style="display:flex;align-items:center;gap:8px">${stepper(`inputs.${i}.bags`,x.bags,1,'','bags made')}</div></div>`:''}
     </div>`).join('')}</div>
@@ -190,6 +220,8 @@ function render(){
         <div class="row"><span class="name">Pallets</span><div style="display:flex;align-items:center;gap:8px">${stepper('pallets',F.pallets,1,'','pallets')}</div></div></div>`);
       if(SHEET.questions.includes('orders'))h+=q('orders','Orders filled',`<input type="text" data-k="orders" value="${esc(F.orders)}" autocomplete="off">`);
     }
+    if(j==='sock'||j==='bag')h+=q('photos','Photos',`<div class="ph-grid">${F.photos.map((p,i)=>`<div class="ph"><img src="${p.url}" alt="Photo ${i+1}"><button type="button" class="ph-x" data-rmphoto="${i}" aria-label="Remove photo ${i+1}">✕</button></div>`).join('')}
+      ${F.photos.length<12?`<label class="ph-add">Take photo<input type="file" accept="image/*" capture="environment" class="phInput" hidden></label><label class="ph-add">Camera roll<input type="file" accept="image/*" multiple class="phInput" hidden></label>`:''}</div>${PH_ERR?`<div class="err">${esc(PH_ERR)}</div>`:''}`);
     if(SHEET.questions.includes('notes'))h+=q('notes','Notes',`<textarea data-k="notes">${esc(F.notes)}</textarea>`);
     h+=`<div class="formerr" id="formerr">${Object.keys(errors).length?'Fix the highlighted questions above.':''}</div>
     <button type="button" class="submit" id="submit">Submit</button>`;
@@ -205,20 +237,27 @@ function setPath(path,val){
   F[path]=val;
 }
 function getPath(path){const p=path.split('.');if(Array.isArray(F[p[0]]))return F[p[0]][+p[1]][p[2]];return p.length===2?F[p[0]][p[1]]:F[path]}
-const errFor={date:'date',crew:'crew',hours:'hours',job:'job',raw:'raw',washOut:'washOut',washCustom:'washOut',inputs:'inputs',socks:'socks',custom:'socks'};
+const errFor={date:'date',crew:'crew',hours:'hours',job:'job',raw:'raw',washOut:'washOut',washSize:'washOut',washCustom:'washOut',notes:'notes',inputs:'inputs',socks:'socks',custom:'socks'};
 function clearErr(path){const k=errFor[path.split('.')[0]];if(k&&errors[k]){delete errors[k];const el=$('#q-'+k);if(el){el.classList.remove('bad');el.querySelector('.err')?.remove()}if(!Object.keys(errors).length&&$('#formerr'))$('#formerr').textContent=''}}
 
 $('#app').addEventListener('input',e=>{const k=e.target.dataset.k;if(!k)return;
-  const v=e.target.type==='number'?(e.target.value===''?'':+e.target.value):e.target.value;setPath(k,v);clearErr(k);if(k.endsWith('.blend'))render()});
+  const v=e.target.type==='number'?(e.target.value===''?'':+e.target.value):e.target.value;setPath(k,v);clearErr(k);if(k.endsWith('.blend'))render();else if(/^wash/.test(k))updYards()});
+let PH_ERR='';
+$('#app').addEventListener('change',async e=>{if(!e.target.classList.contains('phInput'))return;
+  const files=[...e.target.files].slice(0,12-F.photos.length);e.target.value='';let bad=0;
+  for(const f of files){const p=await shrink(f);if(p)F.photos.push(p);else bad++}
+  PH_ERR=bad?`${bad} photo${bad===1?'':'s'} couldn’t be opened`:'';render()});
 $('#app').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
   if(b.dataset.inc||b.dataset.dec){const k=b.dataset.inc||b.dataset.dec,st=+b.dataset.step;const cur=+getPath(k)||0;
     const nv=Math.max(0,Math.round((cur+(b.dataset.inc?st:-st))*100)/100);setPath(k,nv||'');
-    const inp=b.parentElement.querySelector('input');inp.value=nv||'';clearErr(k);return}
+    const inp=b.parentElement.querySelector('input');inp.value=nv||'';clearErr(k);if(/^wash/.test(k))updYards();return}
   if(b.dataset.chip){const g=b.dataset.chip,v=b.dataset.v;
     if(g==='crew'){const i=F.crew.indexOf(v);i<0?F.crew.push(v):F.crew.splice(i,1);b.setAttribute('aria-pressed',i<0);clearErr('crew');return}
     F[g]=v;clearErr(g);render();return}
-  if(b.id==='addWashCustom'){F.washCustom.push({name:'',yd:''});render();const ins=document.querySelectorAll('[data-k$=".name"]');ins[ins.length-1]?.focus();return}
+  if(b.dataset.rmphoto!=null){PH_ERR='';const p=F.photos.splice(+b.dataset.rmphoto,1)[0];if(p)URL.revokeObjectURL(p.url);render();return}
+  if(b.id==='retryPhotos'){sendPhotos();return}
+  if(b.id==='addWashCustom'){F.washCustom.push({name:'',totes:'',size:defSize(null)});render();const ins=document.querySelectorAll('[data-k$=".name"]');ins[ins.length-1]?.focus();return}
   if(b.dataset.rmwash!=null){F.washCustom.splice(+b.dataset.rmwash,1);render();return}
   if(b.id==='addInput'){F.inputs.push({blend:'',yd:'',bags:''});render();return}
   if(b.dataset.rminput!=null){F.inputs.splice(+b.dataset.rminput,1);render();return}
@@ -235,8 +274,10 @@ function validate(){
   if(!F.crew.length)e.crew='Pick at least one name.';
   if(!(n(F.hours)>0))e.hours='Enter how many hours it took.';else if(n(F.hours)>24)e.hours='Hours can’t be more than 24.';
   if(!F.job)e.job='Pick Wash, Sock or Bag.';
-  if(F.job==='wash'){if(!(n(F.raw)>0))e.raw='Enter the raw yards used.';if(!SHEET.blends.some(b=>n(F.washOut[b])>0)&&!F.washCustom.some(c=>n(c.yd)>0))e.washOut='Enter at least one blend you made.';
-    else if(F.washCustom.some(c=>n(c.yd)>0&&!c.name.trim()))e.washOut='Type what each custom blend is.'}
+  if(F.job==='wash'){if(!(n(F.raw)>0))e.raw='Enter the raw yards used.';if(!SHEET.blends.some(b=>n(F.washOut[b])>0)&&!F.washCustom.some(c=>n(c.totes)>0))e.washOut='Enter the totes you filled.';
+    else if(F.washCustom.some(c=>n(c.totes)>0&&!c.name.trim()))e.washOut='Type what each custom blend is.';
+    const anyCustom=SHEET.blends.some(b=>n(F.washOut[b])>0&&sizeOf(b)==='custom')||F.washCustom.some(c=>n(c.totes)>0&&c.size==='custom');
+    if(anyCustom&&!F.notes.trim())e.notes='Write the custom tote size here.'}
   if(F.job==='sock'||F.job==='bag'){
     if(F.inputs.some(x=>!x.blend))e.inputs='Pick a char type for each row, or remove the empty row.';
     else if(F.inputs.some(x=>x.blend==='__custom'&&!charName(x)))e.inputs='Type what\'s in the custom char.';
@@ -248,18 +289,21 @@ function validate(){
   return e;
 }
 function payload(){
-  const n=v=>+v||0,lines=[];
+  const n=v=>+v||0,lines=[],pending=[];
   const raw=CAT.items.find(i=>i.kind==='raw'&&i.unit==='yd'),totes=CAT.items.find(i=>i.kind==='other'&&/blank white tote/i.test(i.name));
   if(F.job==='wash'){lines.push({direction:'in',item_id:raw?.id,qty:n(F.raw)});if(n(F.totes)&&totes)lines.push({direction:'in',item_id:totes.id,qty:n(F.totes)});
-    SHEET.blends.forEach(b=>n(F.washOut[b])&&lines.push(charLine('out','blend',b,n(F.washOut[b]))));
-    F.washCustom.forEach(c=>n(c.yd)&&lines.push(charLine('out','blend',c.name.trim(),n(c.yd),true)))}
+    const tote=(blendOrName,count,size,isCustom)=>{
+      if(size==='custom'){const l=charLine('out','blend',blendOrName,count,isCustom);pending.push({item_id:l.item_id,custom_name:l.custom_name||null,count})}
+      else lines.push({...charLine('out','blend',blendOrName,count*+size,isCustom),tote_count:count,tote_size_yd:+size})};
+    SHEET.blends.forEach(b=>n(F.washOut[b])&&tote(b,n(F.washOut[b]),sizeOf(b),false));
+    F.washCustom.forEach(c=>n(c.totes)&&tote(c.name.trim(),n(c.totes),c.size||defSize(null),true))}
   else{F.inputs.forEach(x=>lines.push(charLine('in','blend',charName(x),n(x.yd),x.blend==='__custom')));
     if(F.job==='sock'){SHEET.sockSizes.forEach(s=>{if(!n(F.socks[s]))return;const it=CAT.items.find(i=>i.kind==='sock'&&!i.is_custom&&+(i.name.match(/[\d.]+/)||[0])[0]===s);lines.push({direction:'out',item_id:it?.id,qty:n(F.socks[s])})});
       F.custom.forEach(c=>n(c.qty)&&lines.push({direction:'out',item_id:customOf('sock')?.id,qty:n(c.qty),custom_size_ft:n(c.len)}))}
     if(F.job==='bag')F.inputs.forEach(x=>lines.push(charLine('out','bag',charName(x),n(x.bags),x.blend==='__custom')))}
   return {production_date:F.date,job_type:F.job,hours:n(F.hours),worker_ids:F.crew.map(c=>CAT.crew[c]),
     boxes:null,pallets:F.job==='sock'?n(F.pallets):null,
-    order_refs:F.job!=='sock'?[]:F.orders.split(',').map(s=>s.trim()).filter(Boolean),notes:F.notes.trim(),lines};
+    order_refs:F.job!=='sock'?[]:F.orders.split(',').map(s=>s.trim()).filter(Boolean),notes:F.notes.trim(),lines,...(pending.length?{pending_totes:pending}:{})};
 }
 let sending=false;
 async function submit(){
@@ -268,19 +312,38 @@ async function submit(){
   if(Object.keys(errors).length){render();const first=$('.q.bad');first&&first.scrollIntoView({behavior:'smooth',block:'center'});return}
   const p=payload();
   const btn=$('#submit');sending=true;btn.disabled=true;btn.textContent='Sending…';$('#formerr').textContent='';
+  let runId;
   try{
-    const {error}=await sb.rpc('submit_biochar_run',{payload:p});
+    const {data,error}=await sb.rpc('submit_biochar_run',{payload:p});
     if(error)throw error;
+    runId=data;
   }catch(e){
     sending=false;btn.disabled=false;btn.textContent='Submit';
     $('#formerr').textContent=(e&&e.message&&!/fetch|network/i.test(e.message))?e.message+'.':'Couldn’t send. Check your signal and press Submit again. Nothing was lost.';
     return;
   }
-  sending=false;
   store.set('sheet.lastCrew',F.crew);
+  PHOTOS={runId,left:(F.job==='sock'||F.job==='bag')?F.photos.slice():[]};
+  if(PHOTOS.left.length){btn.textContent='Sending photos…';await uploadPhotos()}
+  sending=false;
+  doneScreen();
+}
+/* photos go up after the sheet is saved, into runs/<run id>/ */
+let PHOTOS={runId:null,left:[]};
+async function uploadPhotos(){
+  const still=[];
+  for(const p of PHOTOS.left){const name=`runs/${PHOTOS.runId}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}.jpg`;
+    try{const {error}=await sb.storage.from('dept14-photos').upload(name,p.blob,{contentType:'image/jpeg',upsert:false});if(error)throw error}
+    catch(e){still.push(p)}}
+  PHOTOS.left=still;
+}
+async function sendPhotos(){const b=$('#retryPhotos');if(b){b.disabled=true;b.textContent='Sending…'}await uploadPhotos();doneScreen()}
+function doneScreen(){
+  const n=PHOTOS.left.length;
   $('#app').innerHTML=`<div class="done">
     <div class="tick" aria-hidden="true">✓</div>
     <h2>Sent</h2>
+    ${n?`<div class="formerr">${n} photo${n===1?'':'s'} didn’t send</div><button type="button" class="ghostbtn" id="retryPhotos">Send photos again</button>`:''}
     <button type="button" class="ghostbtn" id="again">Submit another job</button>
   </div>`;
   scrollTo(0,0);

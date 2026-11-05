@@ -110,7 +110,7 @@ nav.lines{display:flex;gap:4px;padding:0 20px;width:100%}
 nav.lines button{background:none;border:0;color:inherit;opacity:.6;padding:10px 16px 9px;font:600 1.05rem/1 var(--f-display);text-transform:uppercase;letter-spacing:.08em;border-bottom:3px solid transparent;cursor:pointer}
 nav.lines button[aria-selected="true"]{opacity:1;border-bottom-color:var(--accent)}
 
-main{padding:20px 20px 60px;max-width:1500px;margin:0 auto;display:grid;gap:20px}
+main{padding:20px 20px 60px;margin:0 auto;display:grid;gap:20px}
 
 /* Highlight cards */
 .hl-head{display:flex;align-items:center;gap:10px}
@@ -170,7 +170,8 @@ nav.subtabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:va
 .pop-menu{position:absolute;top:calc(100% + 4px);left:0;z-index:15;background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--r);padding:8px;min-width:200px;display:grid;gap:4px;box-shadow:0 8px 24px rgb(0 0 0 / .12)}
 .pop-menu label{display:flex;gap:8px;align-items:center;font-size:.88rem;padding:3px 4px;border-radius:4px;cursor:pointer}
 .pop-menu label:hover{background:var(--sunken)}
-.grid-wrap{overflow:auto;max-height:62vh}
+.grid-wrap{overflow-x:auto}
+.base{min-height:calc(100vh - 210px)}
 table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:.88rem}
 .grid th,.grid td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:0 10px;height:36px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px;text-align:left}
 .grid th{position:sticky;top:0;z-index:2;background:var(--sunken);font-weight:600;font-size:.8rem;color:var(--muted);cursor:pointer;user-select:none}
@@ -347,6 +348,9 @@ table.eom-t{width:100%;border-collapse:collapse;table-layout:fixed}
 .ratio-row input{width:64px;margin:0 3px}
 .binmap-wrap{overflow-x:auto;padding:16px 18px}
 .binmap-wrap+.binmap-wrap{padding-top:0}
+.inv-div{border:0;border-top:1px solid var(--line-strong);margin:4px 18px}
+.binmap .bh.material{background:#6B4E2E}
+.binmap.mat{width:auto}
 .binmap{border-collapse:collapse;font-size:.88rem;min-width:100%}
 .binmap th,.binmap td{border:1px solid var(--line);padding:6px 10px;text-align:right;vertical-align:top}
 .binmap .lbl{text-align:left;font:600 .78rem var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);white-space:nowrap;background:var(--sunken);width:1%}
@@ -391,13 +395,85 @@ table.eom-t{width:100%;border-collapse:collapse;table-layout:fixed}
 .inv-h h3{font-size:1.5rem;text-transform:uppercase;letter-spacing:.05em}
 .inv-h .inv-tot{margin-left:auto;font-weight:600}
 .inv-h .btn{align-self:center}
-.inv-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.inv-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
 .inv-tile{display:grid;gap:2px;text-align:left;background:var(--surface);border:1px solid var(--line);min-height:96px;border-radius:var(--r);padding:12px 14px;cursor:pointer;color:inherit}
 .inv-tile:hover{border-color:var(--accent)}
 .inv-tile.custom{border-style:dashed}
 .inv-tile .t-name{font:600 .8rem/1.2 var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .inv-tile .t-val{font:700 2.2rem/1.05 var(--f-display)}
 .inv-tile .t-val small{font:500 .85rem var(--f-body);color:var(--muted);margin-left:4px}
+.run-ph{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
+.run-ph .ph{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.run-ph img{width:100%;height:100%;object-fit:cover;display:block}
+.run-ph .ph-x{position:absolute;top:4px;right:4px;width:26px;height:26px;border:0;border-radius:99px;background:rgba(0,0,0,.6);color:#fff;cursor:pointer}
+.ao.ct{background:color-mix(in srgb,#E3A94B 10%,transparent)}
+.ct-t td{vertical-align:middle}
+.cal{padding:14px 18px 16px;border-bottom:1px solid var(--line);display:grid;gap:8px}
+.cal-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cal-h h3{margin:0 4px;min-width:150px;text-align:center;font-size:1.1rem;text-transform:uppercase;letter-spacing:.05em}
+.cal-stats{margin-left:auto;display:flex;gap:16px;flex-wrap:wrap;font-size:.85rem;color:var(--muted)}
+.cal-stats b{color:var(--ink);font-size:1rem}
+.cal-w,.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cal-w span{font:600 .72rem var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:0 6px}
+.cal-d{all:unset;box-sizing:border-box;cursor:pointer;min-height:92px;border:1px solid var(--line);border-radius:6px;padding:5px 7px;display:flex;flex-direction:column;gap:1px;background:var(--surface);font-size:.78rem;line-height:1.3;overflow:hidden;min-width:0}
+.cal-d:hover,.cal-d:focus-visible{border-color:var(--accent)}
+.cal-d.out{opacity:.4}
+.cal-d.we{background:var(--sunken)}
+.cal-d.miss{background:color-mix(in srgb,var(--bad) 16%,var(--surface));border-color:color-mix(in srgb,var(--bad) 55%,transparent)}
+.cal-d.today{box-shadow:inset 0 0 0 2px var(--accent)}
+.cal-n{font:700 .85rem/1.2 var(--f-mono);margin-bottom:2px}
+.cal-d.miss .cal-n{color:var(--bad)}
+.cal-l{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-l.c-wash{color:#2C8FA3}.cal-l.c-sock{color:#6A5BC2}.cal-l.c-bag{color:#C07A3A}
+.cal-l.c-h,.cal-l.c-g{color:var(--muted)}
+.cal-crew{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.72rem}
+.cal-o{margin-top:auto;font-size:.7rem;background:color-mix(in srgb,#E3A94B 22%,transparent);border-radius:4px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-o.done{opacity:.55}
+.cal-d.dayoff{background:repeating-linear-gradient(135deg,var(--sunken) 0 6px,transparent 6px 12px)}
+.cal-off{margin-left:6px;font:600 .62rem/1 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border:1px solid var(--line-strong);border-radius:99px;padding:1px 5px;vertical-align:1px}
+.cal-note{font-size:.72rem;font-style:italic;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cal-menu{position:fixed;z-index:60;background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;box-shadow:0 8px 24px rgb(0 0 0 / .35);padding:4px;display:grid;min-width:170px}
+.cal-menu button{all:unset;cursor:pointer;padding:8px 12px;border-radius:5px;font-size:.88rem}
+.cal-menu button:hover,.cal-menu button:focus-visible{background:var(--accent-soft)}
+.cal-dayed{display:grid;gap:8px}
+.cal-offchk{display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer}
+.cal-offchk input{width:18px;height:18px;accent-color:var(--accent)}
+.cal-ph{font:600 .62rem/1.3 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}
+.run-ph .ph-dl{position:absolute;bottom:4px;right:4px;width:28px;height:28px;border-radius:99px;background:rgba(0,0,0,.6);color:#fff;display:grid;place-items:center;text-decoration:none;font-weight:700}
+.run-ph .ph-cap{position:absolute;bottom:4px;left:6px;font:600 .65rem var(--f-mono);text-transform:uppercase;color:#fff;text-shadow:0 1px 2px #000}
+.cal-t tbody tr{cursor:pointer}
+.cal-t tbody tr:hover td{background:var(--accent-soft)}
+.cal-gr{display:flex;gap:12px;flex-wrap:wrap}
+@media (max-width:760px){.cal-d{min-height:54px}.cal-l,.cal-crew,.cal-o{display:none}.cal-d.has::after{content:'';width:6px;height:6px;border-radius:99px;background:var(--accent);margin-top:2px}}
+.t-two{display:grid;grid-template-columns:1fr 1fr;align-items:start}
+.t-after{display:grid;justify-items:end;text-align:right;border-left:1px solid color-mix(in srgb,var(--ink) 14%,transparent);padding-left:10px}
+.inv-tile .t-two .t-val{font-size:1.9rem;white-space:nowrap}
+.t-lab,.bm-lab{font:500 .58rem/1.3 var(--f-mono);text-transform:uppercase;letter-spacing:.07em;color:var(--muted);white-space:nowrap}
+.t-after .t-val.neg,.bm-after .num.neg{color:var(--bad)}
+/* active orders above the inventory */
+.ao{padding:16px 18px 18px 20px;border-bottom:1px solid var(--line);display:grid;gap:12px}
+.ao-h{display:flex;align-items:center;gap:10px}
+.ao-h h3{margin:0;font-size:1.1rem;text-transform:uppercase;letter-spacing:.05em}
+.ao-t{width:100%}
+.ao-t tbody tr{cursor:pointer}
+.ao-t tbody tr:hover td{background:var(--accent-soft)}
+.ao-t td.ao-type{white-space:nowrap;font:600 .78rem/1.2 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;width:1%;padding-right:18px}
+.ao-mark{display:inline-block;width:4px;height:1.1em;border-radius:2px;background:var(--acc);margin-right:10px;vertical-align:-3px}
+.ao-t .ao-g,.ao-t .ao-mv,.ao-t .ao-mvh{width:1%;white-space:nowrap}
+.ao-grip{cursor:grab;color:var(--muted);user-select:none}
+.ao-mv .btn{width:28px;height:26px;padding:0;justify-content:center}
+.ao-row.dragging td{opacity:.4}
+.ao-row.drop-before td{box-shadow:inset 0 3px 0 var(--accent)}
+.ao-row.drop-after td{box-shadow:inset 0 -3px 0 var(--accent)}
+.binmap{width:100%;table-layout:fixed}
+.binmap .bh{min-width:0}
+.binmap th.div,.binmap td.div{width:8px}
+.binmap .bm-addcol{width:96px}
+.bm-two{display:grid;grid-template-columns:1fr 1fr;align-items:start}
+.bm-two>.num{text-align:left}
+.bm-after{display:grid;justify-items:end;border-left:1px solid color-mix(in srgb,var(--ink) 14%,transparent);padding-left:8px}
+.binmap .onhand .bm-two .num{font-size:clamp(1rem,1.25vw,1.5rem);white-space:nowrap}
+@media (max-width:1100px){.binmap{width:auto;table-layout:auto}.binmap .bh{min-width:170px}}
 .inv-tile .t-meta{font-size:.78rem;color:var(--muted)}
 @keyframes flashrow{from{background:var(--accent-soft)}to{background:var(--surface)}}
 .grid tbody tr.flash{animation:flashrow 1.6s ease-out}
@@ -416,9 +492,21 @@ table.grid.me{width:100%}
 .me-foot{font-size:.82rem;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
 .ratios{display:flex;gap:12px}
 .ratios input{width:64px;margin:0 3px}
-.set-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:440px;gap:16px}
+.set-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.set-grid>.set-card{height:440px}
+.set-grid>.set-card.wide{height:auto}
+.grates td,.grates th{vertical-align:middle}
+.grates .gr-m{font-weight:600}
+.grates tbody+tbody{border-top:2px solid var(--line-strong)}
+.grates tr.on td:not(.gr-m){background:var(--accent-soft)}
+.grates input[type=number]{width:72px;text-align:right}
+.grates input.bad{border-color:var(--bad);color:var(--bad)}
+.qr-btns{display:flex;gap:6px}
+.qr-btns a.btn{text-decoration:none;color:inherit}
 .set-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;display:flex;flex-direction:column;gap:12px;min-height:0}
 .set-body{flex:1;min-height:0;overflow:auto;display:grid;gap:12px;align-content:start}
+.crew .crew-name{display:block;padding:7px 2px;font-weight:600}
+.crew .crew-x{width:36px;text-align:right}
 .crew th.c,.crew td.c{text-align:center;width:110px}
 .crew td input[type=text]{width:100%}
 .crew input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
@@ -438,7 +526,7 @@ table.grid.me{width:100%}
 .qr img,.qr canvas{width:150px;height:150px}
 .qr-box .url{font-size:.78rem;text-align:center;color:var(--muted)}
 #printArea{display:none}
-@media (max-width:900px){.set-grid{grid-template-columns:1fr;grid-auto-rows:auto}.set-body{overflow:visible}}
+@media (max-width:900px){.set-grid{grid-template-columns:minmax(0,1fr)}.set-card{min-width:0}.set-grid>.set-card{height:auto}.set-body{overflow:visible}}
 @media (max-width:520px){.qr-pair{grid-template-columns:1fr}}
 @media print{body.printing-qr>*:not(#printArea){display:none!important} body.printing-qr #printArea{display:block}
   .sign{text-align:center;padding:40px 20px;color:#000;font-family:var(--f-body)} .sign h1{font:700 3rem/1.1 var(--f-display);text-transform:uppercase;margin:10px 0}
@@ -461,6 +549,27 @@ table.grid.me{width:100%}
 .detail dt{color:var(--muted);font:500 .74rem/1.9 var(--f-mono);text-transform:uppercase;letter-spacing:.06em}
 .detail dd{margin:0}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:.9rem;z-index:50}
+/* phones: the whole dashboard works at 375px wide; only wide tables scroll sideways inside their own box */
+@media (max-width:760px){
+  .top{position:static}
+  .top-in{gap:6px 10px}
+  .brand{width:100%;margin-right:0;padding-bottom:4px;justify-content:space-between;align-items:center}
+  .brand h1{font-size:1.15rem;line-height:1.15}
+  .who{font-size:.78rem;margin-bottom:6px}
+  nav.lines{flex-wrap:wrap;row-gap:8px;padding:0 12px 10px}
+  nav.lines button[role=tab]{padding:8px 10px 7px;font-size:.92rem}
+  nav.lines [data-line=settings]{margin-left:auto!important}
+  nav.lines .input-btn{order:5;flex:1 1 calc(33.333% - 6px);margin:0;padding:10px 4px;font-size:.7rem;letter-spacing:.03em;white-space:normal;line-height:1.1}
+  .toolbar input[type=search],#q{flex:1 1 140px;min-width:0;width:auto}
+  .ao{overflow-x:auto}.ao-t{min-width:560px}
+  .scrim{padding:8px 6px}
+  .modal-h{padding-left:12px;padding-right:12px}.modal-b{padding:12px}.modal-b>table{display:block;overflow-x:auto;max-width:100%}
+  .set-body{overflow-x:auto}
+  .cal{padding:12px 10px}.cal-h h3{min-width:0;font-size:1rem}.cal-stats{margin-left:0;width:100%;gap:10px}
+  .cal-w span{padding:0 2px;font-size:.62rem}
+  .inv-sec{padding:14px 12px 16px 14px}
+  .binmap-wrap{padding:12px 10px}
+}
 @media (max-width:700px){ main{padding:14px 12px 50px} .top-in{padding:10px 12px 0} nav.lines{padding:0 12px} .detail{grid-template-columns:1fr} input[type=search]{width:130px} }
 </style>
 </head>
@@ -489,9 +598,10 @@ table.grid.me{width:100%}
   <nav class="lines" role="tablist" id="lines">
     <button role="tab" data-line="biochar" aria-selected="true">Biochar</button>
     <button role="tab" data-line="orchid" aria-selected="false">Orchid bark</button>
-    <button type="button" class="input-btn" id="inputBtn">+ Input</button>
-    <button role="tab" data-line="purch" aria-selected="false" style="margin-left:auto">Purchased material</button>
-    <button role="tab" data-line="settings" aria-selected="false">Settings</button>
+    <button type="button" class="input-btn" id="prodBtn">Production input</button>
+    <button type="button" class="input-btn" id="salesBtn">Sales input</button>
+    <button type="button" class="input-btn" id="buyBtn">Purchased input</button>
+    <button role="tab" data-line="settings" aria-selected="false" style="margin-left:auto">Settings</button>
   </nav>
 </header>
 
@@ -550,6 +660,11 @@ const SETTINGS=Object.assign({ratio:{wash:.85,sock:.2,bag:.2},bonusPerYardIn:.5,
 });
 const CORE_BLENDS=['Basic','Washed','Peat','Zapt','Revd'],CORE_SOCKS=[3,6,10]; // top three, then the two custom blends; odd mixes are typed in as custom
 SETTINGS.orc=Object.assign({yardsPerUnit:7.5,ratios:{'Jumbo Orchid':{small:60,medium:30,lost:10},'#1 Medium Green':{small:75,medium:15,lost:10}}},SETTINGS.orc||{});
+/* Picker grates: two % profiles per input product; the active one is what ratios[] (and the database view) use. */
+function gratesInit(){const O=SETTINGS.orc;O.profiles=O.profiles||{};O.active=O.active||{};
+  Object.keys(O.ratios).forEach(m=>{if(!Array.isArray(O.profiles[m])||O.profiles[m].length<2)O.profiles[m]=[{...O.ratios[m]},{...O.ratios[m]}];if(O.active[m]!==1)O.active[m]=0;O.ratios[m]={...O.profiles[m][O.active[m]]}})}
+gratesInit();
+SETTINGS.toteSizes=SETTINGS.toteSizes||[{name:'1 yd',yd:1},{name:'2 yd',yd:2,blends:['Washed']}];
 SETTINGS.catalog=Object.assign({blends:CORE_BLENDS.slice(),bagTypes:['Basic','Washed','Peat'],sockSizes:CORE_SOCKS.slice(),materials:['Pallets','Blank white totes'],hidden:{}},SETTINGS.catalog||{});
 const BLENDS=SETTINGS.catalog.blends,SOCK_SIZES=SETTINGS.catalog.sockSizes,BAG_TYPES=SETTINGS.catalog.bagTypes; // bags have their own list (a subset of the blends that get bagged)
 const CORE_BAGS=['Basic','Washed','Peat'];
@@ -684,7 +799,7 @@ const DEFAULT_CARDS={
 };
 
 /* ---------- state ---------- */
-const UI={line:store.get('line','biochar'),table:{biochar:'inventory',orchid:'inventory'},flash:null,editCards:false,
+const UI={line:['biochar','orchid','settings'].includes(store.get('line'))?store.get('line'):'biochar',table:{biochar:'inventory',orchid:'inventory'},flash:null,editCards:false,
   q:'',sort:{},group:{},hidden:store.get('hidden',{}),filterJob:'',openPop:null};
 let CARDS=store.get('cards',DEFAULT_CARDS);
 
@@ -788,7 +903,7 @@ const tags=a=>(a||[]).map(t=>`<span class="pill">${esc(t)}</span>`).join('');
 const TABLES={
   biochar:{
     inventory:{label:'Inventory',view:'inventory',cols:[],groups:{},rows:()=>[]},
-    runs:{label:'Production sheets',rows:()=>DB.bio,addable:true,canVoid:true,
+    runs:{label:'Production log',simple:true,addLabel:'+ Add',rows:()=>DB.bio,addable:true,canVoid:true,pre:()=>calHTML('bio'),
       groups:{'':'None',job:'Job type',month:'Month',crew:'Crew'},
       cols:[
         {k:'date',l:'Date',t:'📅',get:r=>r.date,fmt:v=>fmtDate(v)},
@@ -806,12 +921,13 @@ const TABLES={
         {k:'boxes',l:'Boxes',t:'#',num:1,get:r=>r.boxes||'',sum:1},
         {k:'pallets',l:'Pallets',t:'#',num:1,get:r=>r.pallets||'',sum:1},
         {k:'orders',l:'Orders',t:'🏷',get:r=>r.orders.join(', '),fmt:(v,r)=>tags(r.orders)},
+        {k:'photos',l:'Photos',get:r=>Live.photoRuns&&Live.photoRuns.has(r.id)?'Yes':''},
         {k:'notes',l:'Notes',t:'¶',get:r=>r.notes},
       ]},
     monthend:{label:'Reports',report:true,cols:[],groups:{},rows:()=>[]},
   },
   orchid:{
-    dryer:{label:'Dryer',rows:()=>DB.orc,addable:true,canVoid:true,
+    dryer:{label:'Dryer log',simple:true,addLabel:'+ Add',rows:()=>DB.orc,addable:true,canVoid:true,pre:()=>calHTML('dryer'),
       groups:{'':'None',product:'Product in',dest:'Destination',month:'Month',crew:'Crew'},
       cols:[
         {k:'date',l:'Date',t:'📅',get:r=>r.date,fmt:v=>fmtDate(v)},
@@ -826,11 +942,12 @@ const TABLES={
         {k:'crew',l:'Crew',t:'👥',get:r=>r.crew.join(', '),fmt:(v,r)=>tags(r.crew)},
         {k:'notes',l:'Notes',t:'¶',get:r=>r.notes},
       ]},
-    picker:{label:'Picker production',simple:true,rows:()=>DB.oin.filter(e=>e.type==='pick'),addable:true,addLabel:'+ Add',onAdd:()=>openInputForm(null,'pick'),pre:()=>grateRatioPanel(),
+    picker:{label:'Picker log',simple:true,rows:()=>DB.oin.filter(e=>e.type==='pick'),addable:true,addLabel:'+ Add',onAdd:()=>openInputForm(null,'pick'),pre:()=>calHTML('pick'),
       groups:{},
       cols:[
         {k:'date',l:'Date',get:r=>r.date,fmt:v=>fmtDate(v)},
         {k:'material',l:'Material',get:r=>r.material},
+        {k:'grate',l:'Grates',get:r=>r.grate?`Profile ${r.grate}`:''},
         {k:'units',l:'Units',num:1,get:r=>r.units||'',sum:1},
         {k:'yards',l:'Yards',num:1,get:r=>inputCalc(r).yards,sum:1},
         {k:'small',l:'Small green (est.)',num:1,get:r=>inputCalc(r).small||'',sum:1},
@@ -839,7 +956,7 @@ const TABLES={
         {k:'hours',l:'Hours',num:1,get:r=>r.hours||'',sum:1},
         {k:'notes',l:'Notes',get:r=>r.notes||''},
       ]},
-    bagging:{label:'Bagging production',simple:true,rows:()=>DB.oin.filter(e=>e.type==='bag'),addable:true,addLabel:'+ Add',onAdd:()=>openInputForm(null,'bag'),
+    bagging:{label:'Bagging log',simple:true,rows:()=>DB.oin.filter(e=>e.type==='bag'),addable:true,addLabel:'+ Add',onAdd:()=>openInputForm(null,'bag'),pre:()=>calHTML('bag'),
       groups:{},
       cols:[
         {k:'date',l:'Date',get:r=>r.date,fmt:v=>fmtDate(v)},
@@ -850,7 +967,7 @@ const TABLES={
         {k:'notes',l:'Notes',get:r=>r.notes||''},
       ]},
     inventory:{label:'Inventory',view:'orcinv',cols:[],groups:{},rows:()=>[]},
-    sales:{label:'Sales',simple:true,rows:()=>DB.orders.filter(o=>o.line===UI.line),addable:true,addLabel:'+ Add order',onAdd:()=>openOrderForm(null,UI.line),
+    sales:{label:'Sales log',simple:true,rows:()=>DB.orders.filter(o=>o.line===UI.line),addable:true,addLabel:'+ Add order',onAdd:()=>openOrderForm(null,UI.line),
       groups:{'':'None',customer:'Customer',done:'Completed',month:'Month'},
       /* biochar sales only need the date, products and notes */
       get cols(){return UI.line==='biochar'?this.allCols.filter(c=>c.k!=='customer'&&c.k!=='so'):this.allCols},
@@ -867,23 +984,22 @@ const TABLES={
 };
 
 TABLES.orchid.reports={label:'Reports',report:true,cols:[],groups:{},rows:()=>[]};
-/* Purchased material: one list for the whole department (both lines). */
-TABLES.purch={purchased:{label:'Purchased material',simple:true,rows:()=>DB.purch,addable:true,addLabel:'+ Add',onAdd:()=>openInputForm(null,'buy'),groups:{},
+/* Purchased log: one per line (biochar raw char; orchid green products). */
+const purchTable=line=>({label:'Purchased log',simple:true,rows:()=>DB.purch.filter(r=>purchMat(r.material).line===line),addable:true,addLabel:'+ Add',onAdd:()=>openInputForm(null,'buy',line),groups:{},
   cols:[
     {k:'date',l:'Date',get:r=>r.date,fmt:v=>fmtDate(v)},
-    {k:'line',l:'Department',get:r=>purchMat(r.material).line==='biochar'?'Biochar':'Orchid bark',fmt:v=>`<span class="pill ${v==='Biochar'?'wash':'bag'}">${v}</span>`},
     {k:'material',l:'Material',get:r=>r.material},
     {k:'amount',l:'Amount',num:1,get:r=>+r.amount||0},
     {k:'unit',l:'Unit',get:r=>purchMat(r.material).unit},
     {k:'po',l:'PO',get:r=>r.po||''},
     {k:'notes',l:'Notes',get:r=>r.notes||''},
-  ]}};
-UI.table.purch='purchased';
-/* Orchid tab order: Inventory · Sales · Dryer · Picker production · Bagging production · Reports */
-TABLES.orchid=Object.fromEntries(['inventory','sales','dryer','picker','bagging','reports'].map(k=>[k,TABLES.orchid[k]]));
-/* Biochar gets the same Sales tab: Inventory · Production sheets · Sales · Reports */
+  ]});
+TABLES.biochar.purchased=purchTable('biochar');TABLES.orchid.purchased=purchTable('orchid');
+/* Orchid tab order: Inventory · Sales log · Dryer log · Picker log · Bagging log · Purchased log · Reports */
+TABLES.orchid=Object.fromEntries(['inventory','sales','dryer','picker','bagging','purchased','reports'].map(k=>[k,TABLES.orchid[k]]));
+/* Biochar: Inventory · Production log · Sales log · Purchased log · Reports */
 TABLES.biochar.sales=TABLES.orchid.sales;
-TABLES.biochar=Object.fromEntries(['inventory','runs','sales','monthend'].map(k=>[k,TABLES.biochar[k]]));
+TABLES.biochar=Object.fromEntries(['inventory','runs','sales','purchased','monthend'].map(k=>[k,TABLES.biochar[k]]));
 function curTable(){const T=TABLES[UI.line];if(T&&!T[UI.table[UI.line]])UI.table[UI.line]=Object.keys(T)[0];return T[UI.table[UI.line]]}
 function tkey(){return UI.line+'.'+UI.table[UI.line]}
 
@@ -938,22 +1054,20 @@ const isSales=()=>UI.table[UI.line]==='sales'&&(UI.line==='orchid'||UI.line==='b
 function viewRows(){
   const T=curTable(),k=tkey(),s=UI.sort[k];
   let rs=T.rows().slice();
-  if(UI.filterJob&&UI.line==='biochar'&&UI.table.biochar==='runs')rs=rs.filter(r=>r.job===UI.filterJob);
-  /* Sales: completed orders fold away under one row; they come back on request or when a search matches them. */
-  if(isSales()&&!UI.showDone&&!UI.q)rs=rs.filter(r=>!r.done);
+  if(UI.filterJob&&!T.simple&&UI.line==='biochar'&&UI.table.biochar==='runs')rs=rs.filter(r=>r.job===UI.filterJob);
   if(UI.q){const q=UI.q.toLowerCase();rs=rs.filter(r=>T.cols.some(c=>String(c.get(r)).toLowerCase().includes(q)))}
   if(s){const c=T.cols.find(c=>c.k===s.k);rs.sort((a,b)=>{const x=c.get(a),y=c.get(b);return (c.num?(+x||0)-(+y||0):String(x).localeCompare(String(y)))*s.d})}
   else if(T.cols[0].k==='date')rs.sort((a,b)=>b.date.localeCompare(a.date));
   return rs;
 }
-function updateCount(){const c=$('#count');if(!c)return;if(isSales()&&!UI.q){const o=VIEW.filter(r=>!r.done).length;c.textContent=`${o} open order${o===1?'':'s'}`;return}c.textContent=`${VIEW.length} record${VIEW.length===1?'':'s'}`}
+function updateCount(){const c=$('#count');if(!c)return;if(isSales()&&!UI.q){const o=VIEW.filter(r=>!r.done).length,dn=VIEW.length-o;c.textContent=`${o} open · ${dn} completed`;return}c.textContent=`${VIEW.length} record${VIEW.length===1?'':'s'}`}
 function renderGrid(){if(curTable().report){renderReports();return}if(curTable().view==='inventory'){renderInventory();return}if(curTable().view==='orcinv'){renderOrcInventory();return}renderToolbar();drawRows()}
 function drawRows(){
-  const T=curTable(),k=tkey(),hidden=UI.hidden[k]||[],grp=UI.group[k]||'',sort=UI.sort[k];
+  const T=curTable(),k=tkey(),hidden=T.simple?[]:UI.hidden[k]||[],grp=T.simple?'':UI.group[k]||'',sort=UI.sort[k];
   const cols=T.cols.filter(c=>!hidden.includes(c.k));
   VIEW=viewRows();updateCount();
   const pre=T.pre?T.pre():'';
-  if(!VIEW.length&&!(isSales()&&!UI.q&&DB.orders.some(r=>r.line===UI.line&&r.done))){$('#gridWrap').innerHTML=pre+`<div class="empty">No records.</div>`;return}
+  if(!VIEW.length){$('#gridWrap').innerHTML=pre+`<div class="empty">No records.</div>`;return}
   const cell=(c,r)=>{const v=c.get(r);const shown=c.fmt?c.fmt(v,r):(c.num&&v!==''?fmtN(v,1):esc(v));return `<td class="${c.num?'r':''}" title="${esc(typeof v==='number'?fmtN(v,2):v)}">${shown}</td>`};
   const groupKey=r=>grp==='month'?(r.month||r.date).slice(0,7):grp==='crew'?r.crew.join(', '):grp==='done'?(r.done?'Completed':'Open'):grp==='type'?IN_TYPES[r.type]:String(r[grp]??'');
   const groupLabel=g=>grp==='month'?new Date(g+'-15').toLocaleDateString('en-US',{month:'long',year:'numeric'}):grp==='job'?jobPill(g):esc(g||'—');
@@ -961,14 +1075,7 @@ function drawRows(){
   if(grp){const order=[];const by={};VIEW.forEach(r=>{const g=groupKey(r);if(!by[g]){by[g]=[];order.push(g)}by[g].push(r)});
     order.forEach(g=>{body+=`<tr class="grp"><td class="rn"></td><td colspan="${cols.length}">${groupLabel(g)} <span class="muted" style="font-weight:400">· ${by[g].length}</span></td></tr>`;
       by[g].forEach(r=>body+=rowHtml(r,++n))})}
-  else if(isSales()){
-    const open=VIEW.filter(r=>!r.done),done=VIEW.filter(r=>r.done),allDone=DB.orders.filter(r=>r.line===UI.line&&r.done).length;
-    open.forEach(r=>body+=rowHtml(r,++n));
-    const shown=UI.showDone||UI.q;
-    const cnt=UI.q?done.length:allDone;
-    if(cnt)body+=`<tr class="grp fold" data-fold><td class="rn">${shown?'▾':'▸'}</td><td colspan="${cols.length}">✓ Completed <span class="muted" style="font-weight:400">· ${cnt}${UI.q?' matching':''}</span> ${UI.q?'':`<span class="fold-act">${shown?'Collapse':'Show'}</span>`}</td></tr>`;
-    if(shown)done.forEach(r=>body+=rowHtml(r,++n));
-  }
+  else if(isSales()){VIEW.filter(r=>!r.done).forEach(r=>body+=rowHtml(r,++n));VIEW.filter(r=>r.done).forEach(r=>body+=rowHtml(r,++n))}
   else VIEW.forEach(r=>body+=rowHtml(r,++n));
   function rowHtml(r,i){return `<tr data-id="${esc(r.id)}" class="${r.status==='void'?'void':''} ${isSales()&&r.done?'arch':''} ${UI.flash===r.id?'flash':''}"><td class="rn">${i}</td>${cols.map(c=>cell(c,r)).join('')}</tr>`}
   const foot=cols.some(c=>c.sum)?`<tfoot><tr><td class="rn"></td>${cols.map(c=>c.sum?`<td class="r num">${fmtN(VIEW.filter(r=>r.status!=='void').reduce((a,r)=>a+(+c.get(r)||0),0),1)}</td>`:'<td></td>').join('')}</tr></tfoot>`:'';
@@ -977,7 +1084,6 @@ function drawRows(){
 $('#gridWrap').addEventListener('click',e=>{
   const th=e.target.closest('th[data-sort]');
   if(th){const k=tkey(),cur=UI.sort[k];UI.sort[k]=cur&&cur.k===th.dataset.sort?(cur.d>0?{k:cur.k,d:-1}:undefined):{k:th.dataset.sort,d:1};if(!UI.sort[k])delete UI.sort[k];renderGrid();return}
-  if(e.target.closest('tr[data-fold]')){if(!UI.q){UI.showDone=!UI.showDone;drawRows()}return}
   const tr=e.target.closest('tbody tr[data-id]');if(tr)openRecord(tr.dataset.id);
 });
 
@@ -1001,11 +1107,11 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#modalRoot').inn
 
 function openRecord(id){
   const T=curTable();const r=T.rows().find(x=>String(x.id)===id);if(!r)return;
+  if(UI.table[UI.line]==='purchased')return openInputForm(r,'buy');
   if(UI.line==='biochar'&&UI.table.biochar==='runs')return openRunEditor(r);
   if(UI.line==='biochar'&&UI.table.biochar==='inventory')return openItemHistory(r);
   if(UI.line==='orchid'&&UI.table.orchid==='dryer')return openOrchidForm(r);
   if(UI.line==='orchid'&&(UI.table.orchid==='picker'||UI.table.orchid==='bagging'))return openInputForm(r);
-  if(UI.line==='purch')return openInputForm(r,'buy');
   if(isSales())return openOrderForm(r,UI.line);
   const dl=T.cols.map(c=>{const v=c.get(r);if(v===''||v==null)return '';return `<dt>${c.l}</dt><dd>${c.fmt?c.fmt(v,r):(c.num?fmtN(v,2):esc(v))}</dd>`}).join('');
   const isRun=T.canVoid;
@@ -1035,6 +1141,21 @@ function lineRow(l,i){
     <td class="muted">${unitOf(l.item)}</td>
     <td><button type="button" class="btn icon ghost" data-rm="${i}" aria-label="Remove line">✕</button></td></tr>`;
 }
+/* Photos the crew added on a sock / bag sheet: runs/<run id>/ in the dept14-photos bucket. */
+async function loadRunPhotos(id){
+  const box=$('#runPhotos');if(!box||!Live.photoRuns||!Live.photoRuns.has(id))return;
+  const B=sb.storage.from('dept14-photos');
+  const {data:files}=await B.list('runs/'+id,{limit:100,sortBy:{column:'name',order:'asc'}});
+  const names=(files||[]).filter(f=>f.name.endsWith('.jpg')).map(f=>'runs/'+id+'/'+f.name);
+  if(!$('#runPhotos'))return;
+  if(!names.length){box.innerHTML='';return}
+  const {data:urls}=await B.createSignedUrls(names,3600);
+  if(!$('#runPhotos'))return;
+  box.innerHTML=`<div class="sect">Photos</div><div class="run-ph">${(urls||[]).map((u,i)=>`<div class="ph"><a href="${esc(u.signedUrl)}" target="_blank" rel="noopener"><img src="${esc(u.signedUrl)}" alt="Photo ${i+1}"></a><button type="button" class="ph-x" data-rmph="${esc(names[i])}" aria-label="Delete photo ${i+1}">✕</button></div>`).join('')}</div>`;
+  box.querySelectorAll('[data-rmph]').forEach(b=>b.onclick=async()=>{if(!confirm('Delete this photo?'))return;
+    const {error}=await B.remove([b.dataset.rmph]);if(error)return toast('⚠ Couldn’t delete the photo.');
+    if(names.length===1)Live.photoRuns.delete(id);loadRunPhotos(id);toast('Photo deleted')});
+}
 function openRunEditor(run){
   const isNew=!run;
   const d=isNew?{date:iso(TODAY),job:'',crew:[],hours:'',boxes:0,pallets:0,orders:[],notes:'',status:'active',lines:[]}:JSON.parse(JSON.stringify(run));
@@ -1051,17 +1172,19 @@ function openRunEditor(run){
     <div class="sect">Material used and made</div>
     <div style="overflow-x:auto"><table class="lines"><thead><tr><th style="width:96px"></th><th>Product</th><th style="width:96px">Qty</th><th style="width:130px">Size / name</th><th style="width:30px"></th><th style="width:36px"></th></tr></thead><tbody id="lb"></tbody></table></div>
     <div><button type="button" class="btn" id="addLine">+ Add line</button></div>
+    ${isNew?'':'<div id="runPhotos"></div>'}
     <div class="sect">Shipping and notes</div>
     <div class="fields">
       <label class="field"><span>Boxes</span><input type="number" name="boxes" min="0" value="${d.boxes||''}"></label>
       <label class="field"><span>Pallets</span><input type="number" name="pallets" min="0" value="${d.pallets||''}"></label>
-      <label class="field full"><span>Orders (comma separated)</span><input type="text" name="orders" value="${esc(d.orders.join(', '))}" placeholder="AECOM, Tesla"></label>
+      <label class="field full"><span>Orders (comma separated)</span><input type="text" name="orders" value="${esc(d.orders.join(', '))}"></label>
       <label class="field full"><span>Notes</span><textarea name="notes" rows="2">${esc(d.notes)}</textarea></label>
     </div>
     ${isNew?'':`<div class="muted" style="font-size:.82rem">${d.source==='manager'?'Added by manager':'Submitted from crew form'}${d.editedAt?` · last edited ${new Date(d.editedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}`:''}</div>`}
     <div class="err" id="formErr"></div>`,
     `${isNew?'':'<button class="btn danger" id="delRun" style="margin-right:auto">Delete</button>'}<button class="btn" data-close>Cancel</button><button class="btn primary" id="saveRun">${isNew?'Add run':'Save changes'}</button>`);
   const m=$('#modalRoot'),lb=$('#lb');
+  if(!isNew)loadRunPhotos(run.id);
   const delBtn=$('#delRun');if(delBtn)delBtn.onclick=()=>{if(!confirm(`Delete this ${run.job} sheet from ${fmtDate(run.date)}? It's removed from every total. You can undo it with ⌘Z.`))return;
     DB.bio=DB.bio.filter(x=>x.id!==run.id);saveDB();closeModal();render();toast('Production sheet deleted')};
   const drawLines=()=>{lb.innerHTML=lines.length?lines.map(lineRow).join(''):''};
@@ -1139,6 +1262,81 @@ function secItems(sec,h){
     .map(k=>({key:k,name:sec.key==='socks'?`${k.split(':')[2]} ft (custom)`:k.slice(sec.prefix.length),unit:sec.unit,deletable:true,custom:true}));
   return [...std,...extra];
 }
+/* Custom totes from the wash sheet: the crew picked Custom and wrote the size in Notes. They stay out of
+   inventory until the manager names the tote size and gives its yards. */
+function customTotes(){
+  const rows=active(DB.bio).flatMap(r=>(r.pendingTotes||[]).map((p,i)=>({r,p,i})));
+  if(!rows.length)return '';
+  return `<section class="ao ct"><div class="ao-h"><h3>Custom totes</h3><span class="muted">${rows.length}</span></div>
+    <table class="lines ct-t"><thead><tr><th>Date</th><th>Blend</th><th class="n">Totes</th><th>Notes</th><th></th></tr></thead><tbody>
+    ${rows.map(({r,p,i})=>`<tr><td>${fmtDate(r.date)}</td><td>${esc(p.key.replace(/^CC1:/,''))}</td><td class="n num">${fmtN(p.count,1)}</td><td>${esc(r.notes||'')}</td>
+      <td class="n"><button type="button" class="btn primary" data-ctote="${esc(r.id)}|${i}">Add to inventory</button></td></tr>`).join('')}
+    </tbody></table></section>`;
+}
+function openCustomTote(runId,i){
+  const r=DB.bio.find(x=>x.id===runId),p=r&&r.pendingTotes[i];if(!p)return;
+  modal('Add custom tote',`<div class="fields">
+      <label class="field"><span>Tote name</span><input type="text" id="ctName" maxlength="30" autocomplete="off"></label>
+      <label class="field"><span>Yards per tote</span><input type="number" id="ctYd" min="0.1" step="0.1" inputmode="decimal"></label>
+    </div>
+    <table class="lines"><tbody><tr><td>${fmtDate(r.date)} · ${esc(p.key.replace(/^CC1:/,''))}</td><td class="n num" id="ctOut">${fmtN(p.count,1)} totes</td></tr>
+    ${r.notes?`<tr><td colspan="2" class="muted">${esc(r.notes)}</td></tr>`:''}</tbody></table>
+    <div class="err" id="formErr"></div>`,
+    `<button class="btn" data-close>Cancel</button><button class="btn primary" id="ctSave">Add to inventory</button>`);
+  $('#ctName').focus();
+  $('#ctYd').oninput=()=>{const y=+$('#ctYd').value;$('#ctOut').textContent=y>0?`${fmtN(p.count,1)} totes · ${fmtN(p.count*y,2)} yd`:`${fmtN(p.count,1)} totes`};
+  $('#ctSave').onclick=()=>{const name=$('#ctName').value.trim().replace(/\s+/g,' '),yd=Math.round(+$('#ctYd').value*100)/100,err=t=>$('#formErr').textContent=t;
+    if(!name)return err('Type a name for this tote.');if(!(yd>0))return err('Enter the yards per tote.');
+    const same=SETTINGS.toteSizes.find(t=>t.name.toLowerCase()===name.toLowerCase());
+    if(same&&+same.yd!==yd)return err(`${same.name} is already ${same.yd} yd.`);
+    if(!same&&!SETTINGS.toteSizes.some(t=>+t.yd===yd&&!(t.blends||[]).length))SETTINGS.toteSizes.push({name,yd});
+    r.pendingTotes.splice(i,1);
+    r.lines.push({dir:'out',item:p.key,qty:Math.round(p.count*yd*100)/100,totes:p.count,toteSize:yd});
+    UI.flash=r.id;saveDB();store.set('settings',SETTINGS);closeModal();render();UI.flash=null;toast(`${fmtN(p.count*yd,2)} yd added to ${p.key.replace(/^CC1:/,'')}`)};
+}
+/* Active biochar orders: one spreadsheet row per product line, top to bottom by type (color mark on the left), then date. */
+function bioActiveOrders(){
+  const open=(DB.orders||[]).filter(o=>o.line==='biochar'&&!o.done);
+  const T=['washed','bags','socks','raw'];
+  const rows=open.flatMap(o=>o.lines.map(l=>({o,l,t:secOfKey(l.key),p:saleProduct('biochar',l.key)})))
+    .sort((a,b)=>T.indexOf(a.t)-T.indexOf(b.t)||a.o.date.localeCompare(b.o.date));
+  return `<section class="ao"><div class="ao-h"><h3>Active orders</h3><span class="muted">${open.length}</span></div>
+    ${rows.length?`<table class="grid ao-t"><thead><tr><th class="ao-type">Type</th><th>Product</th><th class="r">Qty</th><th>Unit</th><th>Order date</th><th>Notes</th></tr></thead><tbody>
+    ${rows.map(({o,l,t,p})=>{const sec=INV_SECTIONS.find(x=>x.key===t);return `<tr class="ao-line acc-${sec.acc}" data-order="${esc(o.id)}">
+      <td class="ao-type"><span class="ao-mark" aria-hidden="true"></span>${sec.title}</td><td>${esc(p.name)}</td><td class="r num">${fmtN(l.qty,1)}</td><td>${esc(p.unit)}</td><td>${fmtDate(o.date)}</td><td>${esc(o.notes||'')}</td></tr>`}).join('')}
+    </tbody></table>`:'<span class="muted">No open orders.</span>'}</section>`;
+}
+/* Active orchid orders: spreadsheet rows ranked 1, 2, 3... Drag a row (or use the arrows) to change the order. */
+function orcActiveOrders(){
+  const open=rankedOrchid();
+  return `<section class="ao"><div class="ao-h"><h3>Active orders</h3><span class="muted">${open.length}</span></div>
+    ${open.length?`<table class="grid ao-t"><thead><tr><th class="ao-g"></th><th class="rn">#</th><th>Customer</th><th>Sales order #</th><th>Products</th><th>Load</th><th>Order date</th><th>Notes</th><th class="ao-mvh"></th></tr></thead><tbody id="aoList">
+    ${open.map((o,i)=>`<tr class="ao-row" draggable="true" data-oid="${esc(o.id)}">
+      <td class="ao-g"><span class="ao-grip" aria-hidden="true">⋮⋮</span></td><td class="rn num">${i+1}</td>
+      <td>${esc(o.customer||'')}</td><td class="num">${esc(o.so||'')}</td><td>${esc(orderSummary(o))}</td>
+      <td>${esc([...new Set(o.lines.map(l=>l.load).filter(Boolean))].join(', '))}</td><td>${fmtDate(o.date)}</td><td>${esc(o.notes||'')}</td>
+      <td class="ao-mv"><button type="button" class="btn ghost" data-mv="-1" ${i?'':'disabled'} aria-label="Move ${esc(o.customer)} up">↑</button><button type="button" class="btn ghost" data-mv="1" ${i<open.length-1?'':'disabled'} aria-label="Move ${esc(o.customer)} down">↓</button></td></tr>`).join('')}
+    </tbody></table>`:'<span class="muted">No open orders.</span>'}
+  </section>`;
+}
+let AO_DRAG=null;
+$('#gridWrap').addEventListener('click',e=>{
+  const it=e.target.closest('[data-order]');if(it){const o=DB.orders.find(x=>x.id===it.dataset.order);if(o)openOrderForm(o);return}
+  const row=e.target.closest('.ao-row');if(!row)return;
+  const mv=e.target.closest('[data-mv]');const ids=rankedOrchid().map(o=>o.id);
+  if(mv){const i=ids.indexOf(row.dataset.oid),j=i+ +mv.dataset.mv;if(j<0||j>=ids.length)return;[ids[i],ids[j]]=[ids[j],ids[i]];setRank(ids);
+    $(`.ao-row[data-oid="${CSS.escape(ids[j])}"] [data-mv="${mv.dataset.mv}"]`)?.focus();return}
+  if(e.target.closest('.ao-grip'))return;
+  const o=DB.orders.find(x=>x.id===row.dataset.oid);if(o)openOrderForm(o);
+});
+$('#gridWrap').addEventListener('dragstart',e=>{const r=e.target.closest&&e.target.closest('.ao-row');if(!r)return;AO_DRAG=r.dataset.oid;r.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',AO_DRAG)});
+$('#gridWrap').addEventListener('dragover',e=>{const r=e.target.closest('.ao-row');if(!r||!AO_DRAG)return;e.preventDefault();
+  document.querySelectorAll('.ao-row.drop-before,.ao-row.drop-after').forEach(x=>x.classList.remove('drop-before','drop-after'));
+  if(r.dataset.oid===AO_DRAG)return;const b=r.getBoundingClientRect();r.classList.add(e.clientY<b.top+b.height/2?'drop-before':'drop-after')});
+$('#gridWrap').addEventListener('drop',e=>{const r=e.target.closest('.ao-row');if(!r||!AO_DRAG)return;e.preventDefault();
+  const after=r.classList.contains('drop-after'),ids=rankedOrchid().map(o=>o.id).filter(id=>id!==AO_DRAG);
+  let at=ids.indexOf(r.dataset.oid);if(at<0)at=ids.length;else if(after)at++;ids.splice(at,0,AO_DRAG);AO_DRAG=null;setRank(ids)});
+$('#gridWrap').addEventListener('dragend',()=>{AO_DRAG=null;document.querySelectorAll('.ao-row').forEach(x=>x.classList.remove('dragging','drop-before','drop-after'))});
 function renderInventory(){
   const h=onHand(),oo=openOrders('biochar');
   $('#toolbar').innerHTML=`<span class="sp"></span>`;
@@ -1148,18 +1346,20 @@ function renderInventory(){
       <div class="inv-h"><span class="inv-dot" aria-hidden="true"></span><h3>${sec.title}</h3>${sec.code?`<span class="muted num">${sec.code}</span>`:''}
         <span class="inv-tot"></span>
         ${sec.add?`<button class="btn" data-addprod="${sec.key}" aria-label="${sec.addTitle}">Add +</button>`:''}<button class="btn" data-count="${sec.key}">Enter counts</button></div>
-      <div class="inv-tiles">${items.map(x=>{const q=h[x.key]||0,c=DB.counts[x.key];return `<button class="inv-tile ${x.custom?'custom':''}" data-tile="${sec.key}" data-key="${esc(x.key)}">
+      <div class="inv-tiles">${items.map(x=>{const q=h[x.key]||0,af=q-(oo[x.key]||0);return `<button class="inv-tile ${x.custom?'custom':''}" data-tile="${sec.key}" data-key="${esc(x.key)}">
         <span class="t-name">${esc(x.name)}</span>
-        <span class="t-val num ${q<0?'neg':''}">${fmtN(q,1)}<small>${x.unit}</small></span>
-        <span class="t-meta">${oo[x.key]?`${fmtN(oo[x.key],1)} ${x.unit} on open orders`:x.custom?'Custom from sheets':' '}</span></button>`}).join('')||'<span class="muted">Nothing here yet.</span>'}</div>
+        <span class="t-two"><span class="t-val num ${q<0?'neg':''}">${fmtN(q,1)}<small>${x.unit}</small></span>
+          <span class="t-after"><span class="t-val num ${af<-1e-9?'neg':''}">${fmtN(af,1)}<small>${x.unit}</small></span><span class="t-lab">after sales</span></span></span>
+        <span class="t-meta">${x.custom?'Custom from sheets':' '}</span></button>`}).join('')||'<span class="muted">Nothing here yet.</span>'}</div>
     </section>`};
   const by=k=>INV_SECTIONS.find(x=>x.key===k);
-  $('#gridWrap').innerHTML=`<div class="inv">${['raw','washed','bags','socks'].map(k=>one(by(k))).join('')}</div>`;
+  $('#gridWrap').innerHTML=customTotes()+bioActiveOrders()+`<div class="inv">${['raw','washed','bags','socks'].map(k=>one(by(k))).join('')}</div>`;
 }
 $('#gridWrap').addEventListener('click',e=>{
   if(!(UI.line==='biochar'&&UI.table.biochar==='inventory'))return;
   const t=e.target.closest('[data-tile]'),cb=e.target.closest('[data-count]'),ap=e.target.closest('[data-addprod]');
   if(ap){openAddProduct(INV_SECTIONS.find(s=>s.key===ap.dataset.addprod));return}
+  const ct=e.target.closest('[data-ctote]');if(ct){const [id,i]=ct.dataset.ctote.split('|');openCustomTote(id,+i);return}
   if(t){openCounts(INV_SECTIONS.find(s=>s.key===t.dataset.tile),t.dataset.key);return}
   if(cb)openCounts(INV_SECTIONS.find(s=>s.key===cb.dataset.count));
 });
@@ -1219,7 +1419,7 @@ function openCounts(sec,focusKey){
    - Completed sales take product out.
    ============================================================= */
 const ORC_PICK=['Jumbo Orchid','#1 Medium Green'];
-const ORC_PURCHASED=['XS Idaho Green','PAC Fibre Large','PAC Fibre Medium','Cypress Mulch','#1 Small Green','#1 Medium Green'];
+const ORC_PURCHASED=['XS Idaho Green','PAC Fibre Large','PAC Fibre Medium','Cypress Mulch','#1 Small Green','#1 Medium Green','Jumbo Orchid','NW Bark'];
 const ORC_SECTIONS=[
   {key:'ogreen',title:'Green',code:'',acc:'wash',unit:'yd',fixed:['#1 Medium Green','#1 Small Green','XS Idaho Green','PAC Fibre Large','PAC Fibre Medium','Cypress Mulch'].map(n=>['O:'+n,n,'yd'])},
   {key:'odried',title:'Dried bins',code:'',acc:'bag',unit:'yd',fixed:['#1 Medium Dried','#2 Medium Dried','Small Dried'].map(n=>['O:'+n,n,'yd'])},
@@ -1232,7 +1432,7 @@ const orcUnit=name=>{const x=extraBins().find(b=>b.name===name);if(x)return x.ki
 const smallish=p=>/small|xs|pac fibre medium/i.test(p);
 function inputCalc(e){
   const O=SETTINGS.orc;
-  if(e.type==='pick'){const yards=(+e.units||0)*O.yardsPerUnit,r=O.ratios[e.material]||{small:0,medium:0,lost:100};
+  if(e.type==='pick'){const yards=(+e.units||0)*O.yardsPerUnit,r=e.pct||O.ratios[e.material]||{small:0,medium:0,lost:100};
     return {yards,small:yards*r.small/100,medium:yards*r.medium/100,lost:yards*r.lost/100}}
   return {yards:+e.yards||0,small:0,medium:0,lost:0};
 }
@@ -1253,6 +1453,12 @@ function onHandOrc(){
 }
 ORC_SECTIONS.forEach(s=>s.hand=onHandOrc);
 /* open (not completed) order quantities by inventory key, for either line */
+/* biochar sale line → its inventory section (for colors) */
+const secOfKey=k=>k.startsWith('CC1:')?'washed':k.startsWith('BAG:')?'bags':k.startsWith('SO1:')?'socks':'raw';
+/* open orchid orders in priority order (ranked ones first, then by date) */
+const rankedOrchid=()=>(DB.orders||[]).filter(o=>o.line==='orchid'&&!o.done)
+  .sort((a,b)=>(a.priority??1e9)-(b.priority??1e9)||a.date.localeCompare(b.date));
+function setRank(ids){ids.forEach((id,i)=>{const o=DB.orders.find(x=>x.id===id);if(o)o.priority=i+1});saveDB();render()}
 const openOrders=(line='orchid')=>{const o={};(DB.orders||[]).filter(x=>x.line===line&&!x.done).forEach(x=>x.lines.forEach(l=>{o[l.key]=(o[l.key]||0)+(+l.qty||0)}));return o};
 /* old one-row-per-product shape, for the orchid report builder / exports */
 const orcSalesFlat=()=>(DB.orders||[]).filter(o=>o.line==='orchid').flatMap(o=>o.lines.map((l,i)=>({id:o.id+'#'+i,date:o.date,customer:o.customer,so:o.so,load:l.load||'',product:l.key.slice(2),qty:+l.qty,done:o.done})));
@@ -1265,7 +1471,6 @@ const orcSalesFlat=()=>(DB.orders||[]).filter(o=>o.line==='orchid').flatMap(o=>o
 const BIN_CORE=[
   {name:'#1 Medium Green',kind:'green',note:'Turns into #1 Medium Dried'},
   {name:'#1 Small Green',kind:'green',note:'Turns into Small Dried'},
-  {divider:true},
   {name:'XS Idaho Green',kind:'green',note:'Purchased'},
   {name:'PAC Fibre Large',kind:'green',note:'Turns into #2 Medium Dried'},
   {name:'PAC Fibre Medium',kind:'green',note:'Turns into “#2 Small Dried Toted” immediately'},
@@ -1273,6 +1478,8 @@ const BIN_CORE=[
   {name:'Small Dried',kind:'dried',note:''},
   {name:'#2 Medium Dried',kind:'dried',note:''},
   {name:'#1 Medium Dried',kind:'dried',note:''},
+  {name:'Jumbo Orchid',kind:'material',note:''},
+  {name:'NW Bark',kind:'material',note:''},
 ];
 /* Bins the manager adds (Inventory → + Add bin). Stored in SETTINGS.orc.extraBins.
    New green bins go after the last green bin, new dried bins at the end. Only added bins can be deleted;
@@ -1282,7 +1489,8 @@ function binMap(){
   const ex=extraBins().map(b=>({...b,added:true}));
   const firstDried=BIN_CORE.findIndex(c=>c.kind==='dried');
   const N=SETTINGS.orc.binNotes||{};
-  return [...BIN_CORE.slice(0,firstDried),...ex.filter(b=>b.kind==='green'),...BIN_CORE.slice(firstDried),...ex.filter(b=>b.kind==='dried')]
+  const core=k=>BIN_CORE.filter(c=>c.kind===k);
+  return [...core('green'),...ex.filter(b=>b.kind==='green'),...core('dried'),...ex.filter(b=>b.kind==='dried'),...core('material')]
     .map(c=>c.divider||N[c.name]===undefined?c:{...c,note:N[c.name]});
 }
 /* bin notes are typed straight into the bin map, like a spreadsheet cell */
@@ -1342,16 +1550,20 @@ function renderOrcInventory(){
   $('#toolbar').querySelectorAll('[data-binunit]').forEach(b=>b.onclick=()=>{UI.binUnit=b.dataset.binunit;store.set('binUnit',UI.binUnit);renderOrcInventory()});
   const cols=binMap();
   const val=(q,u)=>`<span class="num ${q<0?'neg':''}">${fmtN(q,2)}<small>${u}</small></span>`;
-  $('#gridWrap').innerHTML=`<div class="binmap-wrap"><table class="binmap">
+  const two=(q,o,u)=>{const af=q-(o||0);return `<span class="bm-two">${val(q,u)}<span class="bm-after"><span class="num ${af<-1e-9?'neg':''}">${fmtN(af,2)}<small>${u}</small></span><span class="bm-lab">after sales</span></span></span>`};
+  const W6=Math.max(6,binMap().filter(c=>c.kind==='green').length);
+  const tbl=cols=>`<div class="binmap-wrap"><table class="binmap" style="min-width:0;width:${Math.min(100,cols.length/W6*100)}%">
     <thead><tr>${cols.map(c=>c.divider?'<th class="div" aria-hidden="true"></th>':`<th class="bh ${c.kind} ${c.added?'added':''}"><button data-otile="obins" data-key="${esc('O:'+c.name)}">${esc(c.name.toUpperCase())}</button>${c.added?`<button class="bm-del" data-delbin="${esc(c.name)}" title="Delete this bin" aria-label="Delete ${esc(c.name)}">✕</button>`:''}</th>`).join('')}</tr></thead>
     <tbody>
       <tr class="onhand">${cols.map(c=>{if(c.divider)return '<td class="div"></td>';const k='O:'+c.name,q=h[k]||0,cn=DB.counts[k],o=oo[k];
-        return `<td><button data-otile="obins" data-key="${esc(k)}">${val(show(q),uLbl)}${o?`<span class="bm-meta">${fmtN(show(o),1)} ${uLbl} on open orders</span>`:''}</button></td>`}).join('')}</tr>
+        return `<td><button data-otile="obins" data-key="${esc(k)}">${two(show(q),show(o||0),uLbl)}</button></td>`}).join('')}</tr>
       <tr class="note">${cols.map(c=>c.divider?'<td class="div"></td>':`<td class="bm-note" contenteditable="plaintext-only" spellcheck="false" data-binnote="${esc(c.name)}" aria-label="Note for ${esc(c.name)}">${esc(c.note||'')}</td>`).join('')}</tr>
-    </tbody></table></div>
-    <div class="binmap-wrap"><table class="binmap bagmap">
+    </tbody></table></div>`;
+  const of=k=>cols.filter(c=>c.kind===k);
+  $('#gridWrap').innerHTML=orcActiveOrders()+`<div class="inv-block">${tbl(of('green'))}${tbl(of('dried'))}</div><hr class="inv-div"><div class="inv-block">${tbl(of('material'))}</div><hr class="inv-div">
+    <div class="binmap-wrap"><table class="binmap bagmap" style="min-width:0;width:min(100%,calc(${bagMap().length/W6*100}% + 96px))">
       <thead><tr>${bagMap().map(([k,n,,added])=>`<th class="bh bagged ${added?'added':''}"><button data-otile="obagged" data-key="${esc('O:'+k)}">${esc(n)}</button>${added?`<button class="bm-del" data-delbin="${esc(k)}" title="Delete" aria-label="Delete ${esc(k)}">✕</button>`:''}</th>`).join('')}<th class="bm-addcol"><button class="btn" data-addbag aria-label="Add a bagged or tote product">Add +</button></th></tr></thead>
-      <tbody><tr class="onhand">${bagMap().map(([k,,u])=>{const q=h['O:'+k]||0;return `<td><button data-otile="obagged" data-key="${esc('O:'+k)}">${val(q,u)}</button></td>`}).join('')}<td class="bm-addcol"></td></tr></tbody>
+      <tbody><tr class="onhand">${bagMap().map(([k,,u])=>{const q=h['O:'+k]||0;return `<td><button data-otile="obagged" data-key="${esc('O:'+k)}">${two(q,oo['O:'+k],u)}</button></td>`}).join('')}<td class="bm-addcol"></td></tr></tbody>
     </table></div>`;
 }
 $('#gridWrap').addEventListener('click',e=>{
@@ -1377,9 +1589,9 @@ const purchMat=name=>purchMats().find(m=>m.name===name)||{name,line:'orchid',uni
    Purchased material (both departments): material · amount · PO · notes
    Picker production: date · material + units · hours · notes
    Bagging production: date · bagged from + yards used · pallets + hours · notes */
-function openInputForm(rec,type){
+function openInputForm(rec,type,line){
   const isNew=!rec,isBuy=type==='buy'||(rec&&DB.purch.includes(rec));
-  const d=isNew?{type:type||UI.lastInType||'buy',date:iso(TODAY),material:'',hours:'',units:'',yards:'',pallets:'',amount:'',po:'',notes:''}:{...rec,type:isBuy?'buy':rec.type};
+  const d=isNew?{grate:'',type:type||(UI.lastInType==='bag'?'bag':'pick'),date:iso(TODAY),material:isNew&&type==='buy'&&line?(purchMats().find(m=>m.line===line)||{}).name||'':'',hours:'',units:'',yards:'',pallets:'',amount:'',po:'',notes:''}:{...rec,type:isBuy?'buy':rec.type};
   const draw=()=>{
     const pm=purchMats();
     const mats=d.type==='pick'?ORC_PICK:d.type==='buy'?pm.map(m=>m.name):['Small Dried','#1 Medium Dried',...extraBins().filter(b=>b.kind==='dried').map(b=>b.name)];
@@ -1392,11 +1604,14 @@ function openInputForm(rec,type){
     const F=(label,ctl,cls='')=>`<label class="field ${cls}"><span>${label}</span>${ctl}</label>`;
     const date=F('Date',`<input type="date" name="date" value="${d.date}">`);
     let body='';
-    if(d.type==='buy')body=F('Material',sel,'full')+F('Amount',sfx('amount','0.5',d.amount,'Amount',purchMat(d.material).unit))+F('PO',`<input type="text" name="po" value="${esc(d.po||'')}" autocomplete="off" placeholder="PO number">`);
-    else if(d.type==='pick')body=date+F('Hours',sfx('hours','0.5',d.hours,'Hours','hours'))+F('Material',sel)+F('Units',sfx('units','0.1',d.units,'Units','units'));
+    if(d.type==='buy')body=F('Material',sel,'full')+F('Amount',sfx('amount','0.5',d.amount,'Amount',purchMat(d.material).unit))+F('PO',`<input type="text" name="po" value="${esc(d.po||'')}" autocomplete="off">`);
+    else if(d.type==='pick'){const P=SETTINGS.orc.profiles[d.material]||[],act=(SETTINGS.orc.active[d.material]??0)+1;if(!d.grate)d.grate=String(act);
+      const gl=(p,i)=>`Profile ${i+1} · ${p.small}/${p.medium}/${p.lost}`;
+      body=date+F('Hours',sfx('hours','0.5',d.hours,'Hours','hours'))+F('Material',sel)+F('Units',sfx('units','0.1',d.units,'Units','units'))
+        +F('Grates',`<select name="grate" aria-label="Grate profile">${P.map((p,i)=>`<option value="${i+1}" ${String(i+1)===String(d.grate)?'selected':''}>${!isNew&&rec.pct&&String(rec.grate)===String(i+1)&&rec.material===d.material?`Profile ${i+1} · ${rec.pct.small}/${rec.pct.medium}/${rec.pct.lost}`:gl(p,i)}</option>`).join('')}</select>`,'full')}
     else body=date+F('Hours',sfx('hours','0.5',d.hours,'Hours','hours'))+F('Bagged from',sel)+F('Yards used',sfx('yards','0.5',d.yards,'Yards used','yd'))+F('Pallets bagged',sfx('pallets','1',d.pallets,'Pallets bagged','pallets'));
-    modal(isNew?'New input':`Edit ${IN_TYPES[d.type].toLowerCase()}`,`
-      ${isNew?`<div class="seg in-type" role="group" aria-label="Input type">${Object.entries(IN_TYPES).map(([k,l])=>`<button type="button" data-itype="${k}" aria-pressed="${d.type===k}">${l}</button>`).join('')}</div>`:''}
+    modal(isNew?(d.type==='buy'?'Purchased input':'Production input'):`Edit ${IN_TYPES[d.type].toLowerCase()}`,`
+      ${isNew&&d.type!=='buy'?`<div class="seg in-type" role="group" aria-label="Input type">${Object.entries(IN_TYPES).filter(([k])=>k!=='buy').map(([k,l])=>`<button type="button" data-itype="${k}" aria-pressed="${d.type===k}">${l}</button>`).join('')}</div>`:''}
       <form class="in-form" id="inForm" novalidate>
         ${body}
         ${F('Notes',`<textarea name="notes" rows="2">${esc(d.notes||'')}</textarea>`,'full')}
@@ -1404,9 +1619,9 @@ function openInputForm(rec,type){
       <div class="in-err" id="formErr" role="alert" hidden></div>`,
       `${isNew?'':'<button class="btn" id="delIn" style="margin-right:auto">Delete</button>'}<button class="btn" data-close>Cancel</button><button class="btn primary" id="saveIn">${isNew?'Save':'Save changes'}</button>`);
     $('#modalRoot .modal').classList.add('in-modal');
-    const m=$('#modalRoot'),grab=()=>{['date','material','hours','units','yards','pallets','notes','amount','po'].forEach(n=>{const el=m.querySelector(`[name="${n}"]`);if(el)d[n]=el.value})};
+    const m=$('#modalRoot'),grab=()=>{['date','material','hours','units','yards','pallets','notes','amount','po','grate'].forEach(n=>{const el=m.querySelector(`[name="${n}"]`);if(el)d[n]=el.value})};
     m.querySelectorAll('[data-itype]').forEach(b=>b.onclick=()=>{grab();d.type=b.dataset.itype;draw()});
-    m.querySelector('[name=material]').onchange=()=>{grab();if(d.type==='buy')draw()};
+    m.querySelector('[name=material]').onchange=()=>{grab();if(d.type==='pick'&&(isNew||d.material!==rec.material))d.grate='';if(d.type==='buy'||d.type==='pick')draw()};
     const del=$('#delIn');if(del)del.onclick=()=>{if(!confirm('Delete this entry?'))return;if(isBuy)DB.purch=DB.purch.filter(x=>x.id!==rec.id);else DB.oin=DB.oin.filter(x=>x.id!==rec.id);saveDB();closeModal();render();toast('Deleted')};
     const save=()=>{grab();m.querySelectorAll('.bad').forEach(x=>x.classList.remove('bad'));
       const err=(t,n)=>{const e=$('#formErr');e.textContent=t;e.hidden=false;const f=n&&m.querySelector(`[name="${n}"]`);if(f){f.classList.add('bad');f.focus()}};
@@ -1419,6 +1634,9 @@ function openInputForm(rec,type){
       if(d.type==='buy'){out={id:isNew?crypto.randomUUID():rec.id,date:isNew?iso(TODAY):rec.date,material:d.material,amount:+d.amount,po:(d.po||'').trim(),notes:(d.notes||'').trim()};
         if(isNew)DB.purch.push(out);else Object.assign(rec,out)}
       else{out={id:isNew?crypto.randomUUID():rec.id,type:d.type,date:d.date,material:d.material,hours:+d.hours||0,units:d.type==='pick'?+d.units:0,yards:d.type==='bag'?+d.yards:0,pallets:d.type==='bag'?+d.pallets:0,notes:(d.notes||'').trim()};
+        /* picker runs keep the grate % they were entered with; a new profile pick takes that profile's % now */
+        if(d.type==='pick'){const g=+d.grate||1,P=(SETTINGS.orc.profiles[d.material]||[])[g-1];
+          out.grate=g;out.pct=!isNew&&rec.pct&&rec.grate===g&&rec.material===d.material?{...rec.pct}:P?{small:P.small,medium:P.medium,lost:P.lost}:undefined;if(!out.pct)delete out.pct}
         if(isNew)DB.oin.push(out);else{Object.keys(rec).forEach(k=>delete rec[k]);Object.assign(rec,out)}}
       if(isNew)UI.lastInType=d.type;
       UI.flash=out.id;saveDB();closeModal();render();UI.flash=null;toast('Saved')};
@@ -1430,23 +1648,6 @@ function openInputForm(rec,type){
   };
   draw();
 }
-/* Picker grate ratios: collapsed to just its title; expand to change them.
-   Yards per unit (7.5) is fixed and not editable. */
-function grateRatioPanel(){
-  const O=SETTINGS.orc;
-  return `<details class="ratio-panel" id="grPanel" ${UI.grOpen?'open':''}>
-    <summary><b>Picker grate ratios</b></summary>
-    <div class="ratio-body">
-    ${ORC_PICK.map(m=>{const r=O.ratios[m];return `<div class="ratio-row"><span>${esc(m)}</span>${['small','medium','lost'].map(k=>`<label>${cap(k)} <input type="number" min="0" max="100" step="1" data-gr="${esc(m)}|${k}" value="${r[k]}">%</label>`).join('')}${r.small+r.medium+r.lost!==100?'<span class="neg">Adds up to '+(r.small+r.medium+r.lost)+'%</span>':''}</div>`}).join('')}
-    </div>
-  </details>`;
-}
-$('#gridWrap').addEventListener('toggle',e=>{if(e.target.id==='grPanel')UI.grOpen=e.target.open},true);
-$('#gridWrap').addEventListener('change',e=>{
-  const t=e.target;
-  if(t.dataset.gr){const [m,k]=t.dataset.gr.split('|');SETTINGS.orc.ratios[m][k]=Math.max(0,Math.min(100,+t.value||0));store.set('settings',SETTINGS);renderGrid();toast('Ratio updated')}
-});
-
 /* ---- Sales: an order has a date, customer, sales order #, notes and any number of product lines.
    Open orders don't move inventory; Completed takes the lines out on the day it's ticked. ---- */
 function saleProducts(line){
@@ -1468,7 +1669,8 @@ function openOrderForm(rec,line){
       <td><span class="in-sfx"><input type="number" data-f="qty" min="0" step="0.5" value="${l.qty??''}" aria-label="Quantity" inputmode="decimal"><i>${u}</i></span></td>
       ${L==='orchid'?`<td class="ord-load"><select data-f="load" aria-label="Load type"><option value="">—</option>${['BULK','BAGS','TOTES'].map(x=>`<option ${x===l.load?'selected':''}>${x}</option>`).join('')}</select></td>`:''}
       <td>${d.lines.length>1?`<button type="button" class="btn icon ghost" data-rmline="${i}" aria-label="Remove line">✕</button>`:''}</td></tr>`};
-  modal(isNew?'New order':L==='biochar'?`Order · ${fmtDate(d.date)}`:`Order · ${d.customer||''}`,`
+  modal(isNew?'Sales input':L==='biochar'?`Order · ${fmtDate(d.date)}`:`Order · ${d.customer||''}`,`
+    ${isNew?`<div class="seg in-type" role="group" aria-label="Line">${[['biochar','Biochar'],['orchid','Orchid bark']].map(([k,l])=>`<button type="button" data-oline="${k}" aria-pressed="${L===k}">${l}</button>`).join('')}</div>`:''}
     <div class="in-form">
       <label class="field"><span>Order date</span><input type="date" name="date" value="${d.date}"></label>
       ${L==='orchid'?`<label class="field"><span>Customer</span><input type="text" name="customer" list="custList" value="${esc(d.customer)}" autocomplete="off"><datalist id="custList">${customers.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label>
@@ -1483,6 +1685,7 @@ function openOrderForm(rec,line){
     `${isNew?'':'<button class="btn danger" id="delOrder" style="margin-right:auto">Delete</button>'}<button class="btn" data-close>Cancel</button><button class="btn primary" id="saveOrder">${isNew?'Save order':'Save changes'}</button>`);
   $('#modalRoot .modal').classList.add('in-modal','ord-modal');
   const m=$('#modalRoot'),tb=$('#ordLines');
+  m.querySelectorAll('[data-oline]').forEach(b=>b.onclick=()=>{if(b.dataset.oline!==L)openOrderForm(null,b.dataset.oline)});
   const val=n=>m.querySelector(`[name=${n}]`);
   const grab=()=>{d.date=val('date').value;if(val('customer'))d.customer=val('customer').value;if(val('so'))d.so=val('so').value;d.notes=val('notes').value;d.done=val('done')?val('done').checked:d.done;
     tb.querySelectorAll('tr[data-i]').forEach(tr=>{const l=d.lines[+tr.dataset.i];tr.querySelectorAll('[data-f]').forEach(el=>{l[el.dataset.f]=el.value})})};
@@ -1510,7 +1713,7 @@ function openOrderForm(rec,line){
 $('#gridWrap').addEventListener('click',e=>{
   const cb=e.target.closest('[data-done]');if(!cb)return;
   e.stopPropagation();const s=DB.orders.find(x=>x.id===cb.dataset.done);if(!s)return;
-  s.done=!s.done;s.doneOn=s.done?iso(TODAY):null;UI.flash=s.id;saveDB();render();UI.flash=null;toast(s.done?(UI.showDone?'Marked completed':'Completed. It’s folded under ✓ Completed.'):'Marked open');
+  s.done=!s.done;s.doneOn=s.done?iso(TODAY):null;UI.flash=s.id;saveDB();render();UI.flash=null;toast(s.done?'Marked completed':'Marked open');
 },true);
 
 /* demo data for the orchid tabs */
@@ -2231,6 +2434,148 @@ function renderExport(){
 
 /* Dryer run editor: adds a run, or (clicking a row) edits every field of an existing one,
    like the biochar production sheet editor. Runs are voided, not deleted. */
+/* =============================================================
+   Calendars (above the Production, Dryer, Picker and Bagging logs).
+   A month grid like Google Calendar. Each day shows that day's totals,
+   hours and crew. A past weekday with nothing entered is red (from the
+   first entry in that log on). Click a day to see its entries, open one,
+   or add one for that day. Picker days can switch grate profile, and the
+   picker month shows its averages. Sales orders show on their order
+   date (display only; shipping dates come later).
+   ============================================================= */
+const CAL={bio:{line:'biochar',rows:()=>active(DB.bio)},dryer:{line:'orchid',rows:()=>active(DB.orc)},
+  pick:{line:'orchid',rows:()=>DB.oin.filter(e=>e.type==='pick')},bag:{line:'orchid',rows:()=>DB.oin.filter(e=>e.type==='bag')}};
+UI.cal=UI.cal||{};
+const calMonth=k=>UI.cal[k]||(UI.cal[k]=iso(TODAY).slice(0,7));
+const ymShift=(ym,n)=>{const [y,m]=ym.split('-').map(Number);const d=new Date(y,m-1+n,1,12);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`};
+DB.cal=DB.cal||[];
+const calRec=(k,ds)=>(DB.cal||[]).find(c=>c.kind===k&&c.day===ds);
+function setCal(k,ds,patch){
+  let c=calRec(k,ds);if(!c){c={id:crypto.randomUUID(),kind:k,day:ds,note:'',off:false};DB.cal.push(c)}
+  Object.assign(c,patch);if(!c.note&&!c.off)DB.cal=DB.cal.filter(x=>x!==c);
+  saveDB();renderGrid();
+}
+const crewOf=rs=>[...new Set(rs.flatMap(r=>r.crew||[]))];
+function calDay(k,rs){
+  const hrs=rs.reduce((a,r)=>a+(+r.hours||0),0),L=[];
+  if(k==='bio'){const by=j=>rs.filter(r=>r.job===j);
+    const w=by('wash').reduce((a,r)=>a+linesSum(r,'out',l=>l.item.startsWith('CC1')),0),so=by('sock').reduce((a,r)=>a+sockQty(r),0),ba=by('bag').reduce((a,r)=>a+linesSum(r,'out',l=>l.item.startsWith('BAG')),0);
+    if(w)L.push(['wash',`Wash ${fmtN(w,1)} yd`]);if(so)L.push(['sock',`Sock ${fmtN(so,0)}`]);if(ba)L.push(['bag',`Bag ${fmtN(ba,0)}`]);
+    rs.filter(r=>!['wash','sock','bag'].includes(r.job)).forEach(r=>L.push(['',cap(r.job)]))}
+  else if(k==='dryer'){const i=rs.reduce((a,r)=>a+r.yardsIn,0),o=rs.reduce((a,r)=>a+r.yardsOut,0);L.push(['',`In ${fmtN(i,1)} yd`],['',`Out ${fmtN(o,1)} yd`])}
+  else if(k==='pick'){const u=rs.reduce((a,r)=>a+(+r.units||0),0),y=rs.reduce((a,r)=>a+inputCalc(r).yards,0);L.push(['',`${fmtN(u,1)} units`],['',`${fmtN(y,1)} yd`]);
+    const g=[...new Set(rs.map(r=>r.grate).filter(Boolean))];if(g.length)L.push(['g',g.map(x=>'P'+x).join(' / ')])}
+  else{const pa=rs.reduce((a,r)=>a+(+r.pallets||0),0),y=rs.reduce((a,r)=>a+(+r.yards||0),0);L.push(['',`${fmtN(pa,0)} pallets`],['',`${fmtN(y,1)} yd`])}
+  if(hrs)L.push(['h',`${fmtN(hrs,1)} hours`]);
+  return L;
+}
+function calHTML(k){
+  const C=CAL[k],ym=calMonth(k),[y,m]=ym.split('-').map(Number),rows=C.rows();
+  const by={};rows.forEach(r=>{(by[r.date]=by[r.date]||[]).push(r)});
+  const first=rows.reduce((a,r)=>!a||r.date<a?r.date:a,''),today=iso(TODAY);
+  const ords={};if(k==='bio'||k==='dryer')(DB.orders||[]).filter(o=>o.line===C.line).forEach(o=>{(ords[o.date]=ords[o.date]||[]).push(o)});
+  const start=new Date(y,m-1,1,12);start.setDate(1-start.getDay());
+  let cells='';
+  for(let i=0;i<42;i++){const d=new Date(start);d.setDate(start.getDate()+i);const ds=iso(d),inM=d.getMonth()===m-1;
+    if(i===35&&!inM)break;
+    const rs=by[ds]||[],we=d.getDay()===0||d.getDay()===6,cr=calRec(k,ds)||{},miss=inM&&!rs.length&&!we&&!cr.off&&ds<today&&first&&ds>=first;
+    const os=ords[ds]||[];
+    cells+=`<button type="button" class="cal-d ${inM?'':'out'} ${miss?'miss':''} ${we?'we':''} ${cr.off?'dayoff':''} ${ds===today?'today':''} ${rs.length?'has':''}" data-calday="${ds}" aria-label="${d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}${rs.length?', '+rs.length+' entries':cr.off?', off':miss?', no entry':''}">
+      <span class="cal-n">${d.getDate()}${cr.off?'<span class="cal-off">Off</span>':''}</span>
+      ${cr.note?`<span class="cal-note">${esc(cr.note)}</span>`:''}
+      ${k==='bio'&&Live.photoRuns&&rs.some(r=>Live.photoRuns.has(r.id))?'<span class="cal-ph">Photos</span>':''}
+      ${rs.length?calDay(k,rs).map(([c,t])=>`<span class="cal-l ${c?'c-'+c:''}">${esc(t)}</span>`).join('')+(crewOf(rs).length?`<span class="cal-crew">${esc(crewOf(rs).join(', '))}</span>`:''):''}
+      ${os.map(o=>`<span class="cal-o ${o.done?'done':''}">${esc(o.line==='biochar'?(o.notes||'Order'):(o.customer||'Order'))}</span>`).join('')}
+    </button>`}
+  const mt=new Date(y,m-1,15).toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  return `<section class="cal" data-cal="${k}">
+    <div class="cal-h"><button type="button" class="btn icon" data-calnav="-1" aria-label="Previous month">‹</button><h3>${mt}</h3><button type="button" class="btn icon" data-calnav="1" aria-label="Next month">›</button>
+      <button type="button" class="btn" data-calnav="0">Today</button>${k==='pick'?pickMonthStats(rows,ym):''}</div>
+    <div class="cal-w">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(w=>`<span>${w}</span>`).join('')}</div>
+    <div class="cal-grid">${cells}</div></section>`;
+}
+/* picker month: totals, per-day averages, and the yards-weighted grate split */
+function pickMonthStats(rows,ym){
+  const rs=rows.filter(r=>r.date.startsWith(ym));if(!rs.length)return '';
+  const days=new Set(rs.map(r=>r.date)).size,u=rs.reduce((a,r)=>a+(+r.units||0),0);
+  const c=rs.map(inputCalc),y=c.reduce((a,x)=>a+x.yards,0),sm=c.reduce((a,x)=>a+x.small,0),md=c.reduce((a,x)=>a+x.medium,0),lo=c.reduce((a,x)=>a+x.lost,0);
+  const pc=v=>y?fmtN(v/y*100,1)+'%':'—';
+  return `<div class="cal-stats">
+    <span><b class="num">${days}</b> days</span><span><b class="num">${fmtN(u/days,1)}</b> units / day</span><span><b class="num">${fmtN(y/days,1)}</b> yd / day</span>
+    <span>Small <b class="num">${pc(sm)}</b></span><span>Medium <b class="num">${pc(md)}</b></span><span>Lost <b class="num">${pc(lo)}</b></span></div>`;
+}
+$('#gridWrap').addEventListener('click',e=>{
+  const nav=e.target.closest('[data-calnav]');
+  if(nav){const k=nav.closest('[data-cal]').dataset.cal,n=+nav.dataset.calnav;UI.cal[k]=n?ymShift(calMonth(k),n):iso(TODAY).slice(0,7);renderGrid();return}
+  const d=e.target.closest('[data-calday]');if(d)openCalDay(d.closest('[data-cal]').dataset.cal,d.dataset.calday);
+});
+/* photos from that day's sock / bag sheets: view full size or download */
+async function loadDayPhotos(runs,ds){
+  const B=sb.storage.from('dept14-photos'),items=[];
+  for(const r of runs){const {data}=await B.list('runs/'+r.id,{limit:100,sortBy:{column:'name',order:'asc'}});
+    (data||[]).filter(f=>f.name.endsWith('.jpg')).forEach(f=>items.push({run:r,name:'runs/'+r.id+'/'+f.name}))}
+  const box=$('#dayPhotos');if(!box)return;
+  if(!items.length){box.remove();return}
+  const names=items.map(x=>x.name);
+  const [{data:view},{data:dl}]=await Promise.all([B.createSignedUrls(names,3600),B.createSignedUrls(names,3600,{download:true})]);
+  if(!$('#dayPhotos'))return;
+  box.innerHTML=`<div class="sect">Photos <button type="button" class="btn" id="dlAll" style="margin-left:8px">Download all</button></div>
+    <div class="run-ph">${items.map((x,i)=>`<div class="ph"><a href="${esc(view[i].signedUrl)}" target="_blank" rel="noopener"><img src="${esc(view[i].signedUrl)}" alt="${esc(cap(x.run.job))} photo ${i+1}"></a>
+      <a class="ph-dl" href="${esc(dl[i].signedUrl)}" aria-label="Download photo ${i+1}">↓</a><span class="ph-cap">${esc(cap(x.run.job))}</span></div>`).join('')}</div>`;
+  $('#dlAll').onclick=()=>box.querySelectorAll('.ph-dl').forEach((a,i)=>setTimeout(()=>a.click(),i*400));
+}
+/* right-click a day: mark it off (or back on), or open it to write a note */
+$('#gridWrap').addEventListener('contextmenu',e=>{
+  const d=e.target.closest('[data-calday]');if(!d||!Live.hasCal)return;e.preventDefault();
+  const k=d.closest('[data-cal]').dataset.cal,ds=d.dataset.calday,cr=calRec(k,ds)||{};
+  calMenuClose();
+  const mnu=document.createElement('div');mnu.className='cal-menu';mnu.id='calMenu';mnu.setAttribute('role','menu');
+  mnu.innerHTML=`<button type="button" role="menuitem" data-cm="off">${cr.off?'Mark day back on':'Mark day off'}</button><button type="button" role="menuitem" data-cm="note">${cr.note?'Edit note':'Add note'}</button>`;
+  document.body.appendChild(mnu);
+  const w=mnu.offsetWidth,h=mnu.offsetHeight;mnu.style.left=Math.min(e.clientX,innerWidth-w-8)+'px';mnu.style.top=Math.min(e.clientY,innerHeight-h-8)+'px';
+  mnu.onclick=ev=>{const b=ev.target.closest('[data-cm]');if(!b)return;calMenuClose();
+    if(b.dataset.cm==='off'){setCal(k,ds,{off:!cr.off});toast(!cr.off?`${fmtDate(ds)} marked off`:`${fmtDate(ds)} back on`)}
+    else{openCalDay(k,ds);$('#calNote')?.focus()}};
+  mnu.querySelector('button').focus();
+});
+function calMenuClose(){document.getElementById('calMenu')?.remove()}
+document.addEventListener('click',e=>{if(!e.target.closest('#calMenu'))calMenuClose()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')calMenuClose()});
+addEventListener('scroll',calMenuClose,true);
+/* a day: its entries (click to open), Add for that day, and on the picker the day's grate profile */
+function openCalDay(k,ds){
+  const rs=CAL[k].rows().filter(r=>r.date===ds);
+  const os=(k==='bio'||k==='dryer')?(DB.orders||[]).filter(o=>o.line===CAL[k].line&&o.date===ds):[];
+  const title=dOf(ds).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  const head={bio:['Job','Used','Made','Hours','Crew'],dryer:['Product','In','Out','Went to','Hours','Crew'],pick:['Material','Grates','Units','Yards','Hours'],bag:['Bagged from','Yards','Pallets','Hours']}[k];
+  const row=r=>({bio:()=>[jobPill(r.job),esc(summary(r,'in')),esc(summary(r,'out')),fmtN(r.hours,1),esc((r.crew||[]).join(', '))],
+    dryer:()=>[esc(r.product),fmtN(r.yardsIn,1),fmtN(r.yardsOut,1),esc(r.dest==='Bin'?r.bin:`Totes${r.totes?' · '+fmtN(r.totes,2):''}`),fmtN(r.hours,1),esc((r.crew||[]).join(', '))],
+    pick:()=>[esc(r.material),r.grate?`Profile ${r.grate}`:'',fmtN(r.units,1),fmtN(inputCalc(r).yards,1),fmtN(r.hours,1)],
+    bag:()=>[esc(r.material),fmtN(r.yards,1),fmtN(r.pallets,0),fmtN(r.hours,1)]}[k]());
+  let grates='';
+  if(k==='pick'&&rs.length){const mats=[...new Set(rs.map(r=>r.material))];
+    grates=`<div class="cal-gr">${mats.map(mt=>{const g=[...new Set(rs.filter(r=>r.material===mt).map(r=>r.grate||1))],P=SETTINGS.orc.profiles[mt]||[];
+      return `<label class="field"><span>${esc(mt)} grates</span><select data-daygrate="${esc(mt)}">${g.length>1?'<option value="">Mixed</option>':''}${P.map((p,i)=>`<option value="${i+1}" ${g.length===1&&g[0]===i+1?'selected':''}>Profile ${i+1} · ${p.small}/${p.medium}/${p.lost}</option>`).join('')}</select></label>`}).join('')}</div>`}
+  const cr=calRec(k,ds)||{};
+  const dayBox=Live.hasCal!==false?`<div class="cal-dayed"><label class="cal-offchk"><input type="checkbox" id="calOff" ${cr.off?'checked':''}> Day off</label>
+    <label class="field"><span>Day notes</span><textarea id="calNote" rows="2" maxlength="1000">${esc(cr.note||'')}</textarea></label></div>`:'';
+  modal(title,`${dayBox}${grates}
+    ${rs.length?`<table class="grid cal-t"><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rs.map(r=>`<tr data-calrec="${esc(r.id)}">${row(r).map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`:'<div class="muted">No entries.</div>'}
+    ${k==='bio'&&Live.photoRuns&&rs.some(r=>Live.photoRuns.has(r.id))?'<div id="dayPhotos"><div class="sect">Photos</div><div class="muted">Loading…</div></div>':''}
+    ${os.length?`<div class="sect">Orders</div><table class="grid cal-t"><tbody>${os.map(o=>`<tr data-calord="${esc(o.id)}"><td>${esc(o.line==='biochar'?(o.notes||'Order'):o.customer)}</td><td>${esc(orderSummary(o))}</td><td>${o.done?'Completed':'Open'}</td></tr>`).join('')}</tbody></table>`:''}`,
+    `<button class="btn" data-close>Close</button><button class="btn primary" id="calAdd">Add +</button>`);
+  const m=$('#modalRoot');
+  if($('#dayPhotos'))loadDayPhotos(rs.filter(r=>Live.photoRuns.has(r.id)),ds);
+  const off=$('#calOff');if(off)off.onchange=()=>{setCal(k,ds,{off:off.checked});toast(off.checked?`${fmtDate(ds)} marked off`:`${fmtDate(ds)} back on`)};
+  const nt=$('#calNote');if(nt)nt.onchange=()=>{const v=nt.value.trim();if(v===((calRec(k,ds)||{}).note||''))return;setCal(k,ds,{note:v});toast('Note saved')};
+  m.querySelectorAll('[data-calrec]').forEach(tr=>tr.onclick=()=>{const r=rs.find(x=>x.id===tr.dataset.calrec);closeModal();
+    if(k==='bio')openRunEditor(r);else if(k==='dryer')openOrchidForm(r);else openInputForm(r)});
+  m.querySelectorAll('[data-calord]').forEach(tr=>tr.onclick=()=>{const o=os.find(x=>x.id===tr.dataset.calord);closeModal();openOrderForm(o)});
+  m.querySelectorAll('[data-daygrate]').forEach(sel=>sel.onchange=()=>{const mt=sel.dataset.daygrate,g=+sel.value;if(!g)return;const p=(SETTINGS.orc.profiles[mt]||[])[g-1];if(!p)return;
+    rs.filter(r=>r.material===mt).forEach(r=>{r.grate=g;r.pct={small:p.small,medium:p.medium,lost:p.lost}});saveDB();render();openCalDay(k,ds);toast(`${mt}: Profile ${g} on ${fmtDate(ds)}`)});
+  $('#calAdd').onclick=()=>{closeModal();if(k==='bio')openRunEditor(null);else if(k==='dryer')openOrchidForm(null);else openInputForm(null,k);
+    const f=$('#modalRoot [name=date]');if(f)f.value=ds};
+}
 function openOrchidForm(rec){
   const isNew=!rec;
   const d=isNew?{date:iso(TODAY),product:ORCHID_IN[0],yardsIn:'',yardsOut:'',hours:'',dest:'Totes',bin:'',totes:'',crew:[],notes:'',status:'active',voidReason:''}:{...rec,crew:[...(rec.crew||[])]};
@@ -2340,12 +2685,13 @@ function renderSettings(){
   $('#settingsSec').innerHTML=`
   <div class="set-grid">
     <div class="set-card">
-      <div class="set-h"><h2>Crew</h2><button class="btn icon" id="addCrew" aria-label="Add crew member" title="Add crew member">+</button></div>
+      <div class="set-h"><h2>Crew</h2><button class="btn" id="addCrew">Add crew</button></div>
       <div class="set-body">
-        <table class="lines crew"><thead><tr><th>Name</th><th class="c">Biochar sheet</th><th class="c">Dryer sheet</th></tr></thead><tbody>
-        ${S.crew.map((c,i)=>`<tr><td><input type="text" data-crew="${i}" data-f="name" value="${esc(c.name)}" placeholder="Name" aria-label="Crew member name"></td>
+        <table class="lines crew"><thead><tr><th>Name</th><th class="c">Biochar sheet</th><th class="c">Dryer sheet</th><th class="crew-x"></th></tr></thead><tbody>
+        ${S.crew.map((c,i)=>`<tr><td>${c.id?`<span class="crew-name">${esc(c.name)}</span>`:`<input type="text" data-crew="${i}" data-f="name" value="${esc(c.name)}" placeholder="Name" aria-label="Crew member name">`}</td>
           <td class="c"><input type="checkbox" data-crew="${i}" data-f="biochar" ${c.biochar?'checked':''} aria-label="Show ${esc(c.name)} on the biochar sheet"></td>
-          <td class="c"><input type="checkbox" data-crew="${i}" data-f="orchid" ${c.orchid?'checked':''} aria-label="Show ${esc(c.name)} on the dryer sheet"></td></tr>`).join('')}
+          <td class="c"><input type="checkbox" data-crew="${i}" data-f="orchid" ${c.orchid?'checked':''} aria-label="Show ${esc(c.name)} on the dryer sheet"></td>
+          <td class="crew-x"><button type="button" class="btn icon ghost" data-rmcrew="${i}" aria-label="Delete ${esc(c.name||'crew member')}" title="Delete">✕</button></td></tr>`).join('')}
         </tbody></table>
       </div>
     </div>
@@ -2357,8 +2703,7 @@ function renderSettings(){
           <div class="qr-title">${FORM_NAME[k]}</div>
           <div class="qr" id="qr-${k}"></div>
           <a class="url num" href="${esc(formUrl(k))}" target="_blank" rel="noopener">/${FORM_PATH[k]}</a>
-          <button class="btn" data-printqr="${k}">Print QR</button>
-          <button class="btn" data-editsheet="${k}">Customize sheet</button>
+          <span class="qr-btns"><a class="btn" href="${esc(formUrl(k))}" target="_blank" rel="noopener">View sheet</a><button class="btn" data-printqr="${k}">Print QR</button></span>
         </div>`).join('')}
       </div>
     </div>
@@ -2376,7 +2721,19 @@ function renderSettings(){
     </div>
 
     <div class="set-card">
-      <div class="set-h"><h2>Equipment hours</h2></div>
+      <div class="set-h"><h2>Picker grates</h2></div>
+      <div class="set-body">
+        <table class="lines grates"><thead><tr><th>Product</th><th>Profile</th><th class="c">Active</th><th class="n">Small %</th><th class="n">Medium %</th><th class="n">Lost %</th></tr></thead>
+        ${ORC_PICK.map(m=>`<tbody>${S.orc.profiles[m].map((p,i)=>{const t=p.small+p.medium+p.lost;return `<tr class="${S.orc.active[m]===i?'on':''}">
+          ${i?'':`<td rowspan="2" class="gr-m">${esc(m)}</td>`}<td>${i+1}</td>
+          <td class="c"><input type="radio" name="gr-${esc(m)}" data-gract="${esc(m)}" value="${i}" ${S.orc.active[m]===i?'checked':''} aria-label="${esc(m)} profile ${i+1} active"></td>
+          ${['small','medium','lost'].map(k=>`<td class="n"><input type="number" min="0" max="100" step="1" data-grp="${esc(m)}|${i}|${k}" value="${p[k]}" aria-label="${esc(m)} profile ${i+1} ${k} %" class="${t!==100?'bad':''}"></td>`).join('')}</tr>`}).join('')}</tbody>`).join('')}
+        </table>
+      </div>
+    </div>
+
+    <div class="set-card wide">
+      <div class="set-h"><h2>Biochar equipment hours</h2></div>
       <div class="set-body">
         <div class="fields">${['wash','sock','bag'].map(j=>`<label class="field"><span>${cap(j)} %</span><input type="number" min="0" max="100" step="5" data-ratio="${j}" value="${Math.round(S.ratio[j]*100)}"></label>`).join('')}</div>
       </div>
@@ -2388,16 +2745,21 @@ function saveSettings(msg){store.set('settings',SETTINGS);if(msg)toast(msg)}
 $('#settingsSec').addEventListener('change',e=>{
   const t=e.target,S=SETTINGS;
   if(t.dataset.crew!=null){const c=S.crew[+t.dataset.crew];
-    if(t.dataset.f==='name'){const v=t.value.trim();if(!v){t.value=c.name;return toast('Names can’t be blank')}c.name=v}else c[t.dataset.f]=t.checked;
+    if(t.dataset.f==='name'){if(c.id)return;const v=t.value.trim();if(!v){t.value=c.name;return toast('Names can’t be blank')}
+      if(S.crew.some(x=>x!==c&&x.name.toLowerCase()===v.toLowerCase())){t.value='';return toast(`${v} is already on the crew`)}c.name=v}else c[t.dataset.f]=t.checked;
     saveSettings('Crew updated');return}
   if(t.dataset.ratio){S.ratio[t.dataset.ratio]=Math.min(100,Math.max(0,+t.value||0))/100;saveSettings('Ratio updated');return}
+  if(t.dataset.gract){const m=t.dataset.gract;S.orc.active[m]=+t.value;S.orc.ratios[m]={...S.orc.profiles[m][+t.value]};saveSettings(`${m}: profile ${+t.value+1} active`);renderSettings();return}
+  if(t.dataset.grp){const [m,i,k]=t.dataset.grp.split('|');S.orc.profiles[m][+i][k]=Math.max(0,Math.min(100,Math.round(+t.value||0)));
+    if(S.orc.active[m]===+i)S.orc.ratios[m]={...S.orc.profiles[m][+i]};saveSettings('Grates updated');renderSettings();return}
   if(t.dataset.set){S[t.dataset.set]=Math.max(0,+t.value||0);saveSettings('Saved');renderSettings()}
 });
 $('#settingsSec').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.rmcrew!=null){const i=+b.dataset.rmcrew,c=SETTINGS.crew[i];
+    if(c.name&&!confirm(`Delete ${c.name} from the crew? They come off both crew sheets. Past production sheets keep their name.`))return;
+    SETTINGS.crew.splice(i,1);saveSettings(c.name?`${c.name} deleted`:'');renderSettings();return}
   if(b.id==='addCrew'){SETTINGS.crew.push({name:'',biochar:true,orchid:false});renderSettings();const ins=document.querySelectorAll('[data-crew][data-f=name]');ins[ins.length-1].focus();return}
-  if(b.dataset.editsheet){const k=b.dataset.editsheet;
-    modal(`Customize ${FORM_NAME[k].toLowerCase()}`,`<p style="margin:0">Not built yet.</p>`,`<button class="btn" data-close>Close</button>`);return}
   if(b.dataset.printqr){const k=b.dataset.printqr;const src=$('#qr-'+k+' canvas')?.toDataURL()||$('#qr-'+k+' img')?.src||'';
     $('#printArea').innerHTML=`<div class="sign"><div class="sign-dept">Rexius · Dept 14</div><h1>${esc(FORM_NAME[k])}</h1><p>Scan with your phone camera to fill out today’s production sheet.</p>${src?`<img src="${src}" alt="QR code">`:''}<div class="num">${esc(formUrl(k))}</div></div>`;
     document.body.classList.add('printing-qr');window.print();setTimeout(()=>document.body.classList.remove('printing-qr'),500)}
@@ -2417,7 +2779,9 @@ function openSuggestions(){
       closeModal();toast('✓ Suggestion sent.')})};
 }
 $('#suggBtn').onclick=openSuggestions;
-$('#inputBtn').onclick=()=>openInputForm(null);
+$('#prodBtn').onclick=()=>openInputForm(null);
+$('#buyBtn').onclick=()=>openInputForm(null,'buy',UI.line==='orchid'?'orchid':'biochar');
+$('#salesBtn').onclick=()=>openOrderForm(null,UI.line==='orchid'?'orchid':'biochar');
 
 /* =============================================================
    Undo / redo / version history (like Google Sheets).
@@ -2433,7 +2797,7 @@ $('#inputBtn').onclick=()=>openInputForm(null);
    Prototype: kept in this browser (d14.versions, last 80). Live: a
    dept14 audit table written by the database, shared by every manager.
    ============================================================= */
-const VH_NAMES={bio:'Biochar production sheets',orc:'Dryer runs',oin:'Picker & bagging production',purch:'Purchased material',orders:'Sales',counts:'Inventory counts',adj:'Inventory adjustments',settings:'Settings'};
+const VH_NAMES={bio:'Biochar production sheets',orc:'Dryer runs',oin:'Picker & bagging production',purch:'Purchased material',orders:'Sales',counts:'Inventory counts',adj:'Inventory adjustments',cal:'Calendar notes',settings:'Settings'};
 const VH_MAX=80;
 const VH={list:[],ptr:-1,applying:false,pending:false};
 (function vhLoad(){try{const v=JSON.parse(localStorage.getItem('d14.versions')||'null');if(v&&Array.isArray(v.list)){VH.list=v.list;VH.ptr=Math.min(v.ptr,v.list.length-1)}}catch(e){}})();
@@ -2490,6 +2854,7 @@ function vhRowName(k,r){
   if(k==='purch')return `${r.material||''} · ${d}${r.po?' · PO '+r.po:''}`;
   if(k==='orders')return `${r.customer||'Order'} · ${d}${r.so?' · '+r.so:''}`;
   if(k==='adj')return `${(r.item||'').replace(/^O:/,'')} · ${d}`;
+  if(k==='cal')return `${{bio:'Production',dryer:'Dryer',pick:'Picker',bag:'Bagging'}[r.kind]||''} calendar · ${r.day?fmtDate(r.day):''}${r.off?' · off':''}`;
   return r.name||r.id||'';
 }
 const VH_FIELD={yardsIn:'yards in',yardsOut:'yards out',dest:'went to',voidReason:'void reason',so:'sales order #',done:'completed',per:'per'};
@@ -2645,17 +3010,24 @@ Live.load=async function(){
     fetchAll('inventory_counts','*',q=>q.order('counted_on',{ascending:false}).order('created_at',{ascending:false}))]);
   Live.items=items;Live.bins=bins;Live.emp=emp;
   const bn=id=>(Live.bin(id)||{}).name||'';
+  Live.hasTotes=runs.length?'pending_totes' in runs[0]:!(await sb.from('production_runs').select('pending_totes').limit(1)).error;
   DB.bio=runs.map(r=>({id:r.id,date:r.production_date,job:r.job_type,hours:+r.hours,crew:(r.run_workers||[]).map(w=>Live.empName(w.employee_id)).filter(Boolean),
-    lines:(r.run_lines||[]).map(l=>{const it=Live.item(l.item_id);const o={dir:l.direction,item:keyOfLine(it,l.custom_name),qty:+l.qty};if(l.custom_size_ft!=null)o.size=+l.custom_size_ft;return o}),
+    lines:(r.run_lines||[]).map(l=>{const it=Live.item(l.item_id);const o={dir:l.direction,item:keyOfLine(it,l.custom_name),qty:+l.qty};if(l.custom_size_ft!=null)o.size=+l.custom_size_ft;if(l.tote_count!=null){o.totes=+l.tote_count;o.toteSize=+l.tote_size_yd}return o}),
+    pendingTotes:(r.pending_totes||[]).map(p=>({key:keyOfLine(Live.item(p.item_id),p.custom_name),count:+p.count})),
     boxes:r.boxes??0,pallets:r.pallets??0,orders:r.order_refs||[],notes:r.notes||'',status:r.status,voidReason:r.void_reason||'',source:r.source}));
   DB.orc=dryer.map(r=>({id:r.id,date:r.production_date,product:bn(r.product_bin_id),yardsIn:+r.yards_in,yardsOut:+r.yards_out,hours:+r.hours,
     dest:r.destination==='bin'?'Bin':'Totes',bin:r.bin_id?bn(r.bin_id):'',totes:r.totes!=null?+r.totes:0,crew:(r.dryer_run_workers||[]).map(w=>Live.empName(w.employee_id)).filter(Boolean),
     notes:r.notes||'',status:r.status,voidReason:r.void_reason||'',source:r.source}));
-  DB.oin=[...picker.map(p=>({id:p.id,type:'pick',date:p.production_date,material:bn(p.material_bin_id),units:+p.units,hours:+p.hours,yards:0,pallets:0,notes:p.notes||''})),
+  Live.hasGrates=picker.length?'small_pct' in picker[0]:!(await sb.from('picker_runs').select('small_pct').limit(1)).error;
+  DB.oin=[...picker.map(p=>({id:p.id,type:'pick',date:p.production_date,material:bn(p.material_bin_id),units:+p.units,hours:+p.hours,yards:0,pallets:0,notes:p.notes||'',
+    ...(p.small_pct!=null?{grate:p.grate_profile||1,pct:{small:+p.small_pct,medium:+p.medium_pct,lost:+p.lost_pct}}:{})})),
           ...bagging.map(b=>({id:b.id,type:'bag',date:b.production_date,material:bn(b.from_bin_id),yards:+b.yards_used,pallets:+b.pallets,hours:+b.hours,units:0,notes:b.notes||''}))];
-  DB.orders=orders.map(o=>({id:o.id,line:o.line,date:o.order_date,customer:o.customer,so:o.sales_order_no||'',notes:o.notes||'',done:o.completed,doneOn:o.completed_on||null,
+  Live.hasPrio=!orders.length||'priority' in orders[0];
+  if(!orders.length)Live.hasPrio=!(await sb.from('orders').select('priority').limit(1)).error;
+  DB.orders=orders.map(o=>({id:o.id,line:o.line,date:o.order_date,customer:o.customer,so:o.sales_order_no||'',notes:o.notes||'',done:o.completed,doneOn:o.completed_on||null,priority:o.priority??null,
     lines:(o.order_lines||[]).map(l=>({key:l.bin_id?'O:'+bn(l.bin_id):countKeyOf(Live.item(l.item_id),l.custom_size_ft,l.custom_name),qty:+l.qty,...(l.load_type?{load:l.load_type}:{})}))}));
   DB.purch=purch.map(p=>({id:p.id,date:p.purchase_date,material:p.bin_id?bn(p.bin_id):PURCH_RAW[keyOfLine(Live.item(p.item_id))]||'',amount:+p.amount,po:p.po||'',notes:p.notes||''}));
+  try{DB.cal=(await fetchAll('calendar_days')).map(c=>({id:c.id,kind:c.kind,day:c.day,note:c.note||'',off:!!c.off}));Live.hasCal=true}catch(e){DB.cal=[];Live.hasCal=false}
   DB.adj=adj.map(a=>({id:a.id,date:a.adj_date,item:a.bin_id?'O:'+bn(a.bin_id):countKeyOf(Live.item(a.item_id),a.custom_size_ft,a.custom_name),qty:+a.qty_delta,reason:a.reason,notes:a.notes||''}));
   DB.counts={};
   counts.forEach(c=>{const k=c.bin_id?'O:'+bn(c.bin_id):countKeyOf(Live.item(c.item_id),c.custom_size_ft,c.custom_name);if(!DB.counts[k])DB.counts[k]={qty:+c.qty,date:c.counted_on}});
@@ -2663,7 +3035,10 @@ Live.load=async function(){
   const S=Object.fromEntries(settings.map(r=>[r.key,r.value]));
   if(S.equipment_ratio)SETTINGS.ratio={wash:+S.equipment_ratio.wash,sock:+S.equipment_ratio.sock,bag:+S.equipment_ratio.bag};
   if(S.bonus){SETTINGS.bonusPerYardIn=+S.bonus.per_yard_in;SETTINGS.bonusPerTote=+S.bonus.per_tote;SETTINGS.bonusYdPerTote=+S.bonus.yards_per_tote}
-  if(S.orchid)SETTINGS.orc={...SETTINGS.orc,yardsPerUnit:+S.orchid.yards_per_unit,ratios:S.orchid.ratios,extraBins:[]};
+  if(S.orchid){SETTINGS.orc={...SETTINGS.orc,yardsPerUnit:+S.orchid.yards_per_unit,ratios:S.orchid.ratios,profiles:S.orchid.profiles,active:S.orchid.active,extraBins:[]};gratesInit()}
+  if(Array.isArray(S.tote_sizes))SETTINGS.toteSizes=S.tote_sizes;
+  Live.photoRuns=new Set();
+  try{for(let off=0;;off+=1000){const {data,error}=await sb.storage.from('dept14-photos').list('runs',{limit:1000,offset:off});if(error||!data)break;data.forEach(f=>Live.photoRuns.add(f.name));if(data.length<1000)break}}catch(e){}
   if(S.dashboard){const D=S.dashboard;if(D.siteUrl)SETTINGS.siteUrl=D.siteUrl;if(D.forms)SETTINGS.forms=D.forms;if(D.hidden)SETTINGS.catalog.hidden=D.hidden}
   SETTINGS.crew=emp.filter(e=>e.active).map(e=>({id:e.id,name:e.name,biochar:e.on_biochar_sheet,orchid:e.on_dryer_sheet,active:true}));
   const blends=items.filter(i=>i.kind==='blend'&&!i.is_custom&&i.active).sort((a,b)=>a.sort-b.sort).map(i=>i.blend);
@@ -2687,29 +3062,32 @@ Live.seedReports=async function(){
 };
 
 /* ---- snapshots used to work out what changed ---- */
-const COLS=['bio','orc','oin','orders','purch','adj'];
+const COLS=['bio','orc','oin','orders','purch','adj','cal'];
 Live.snap=()=>{const o={};COLS.forEach(c=>{o[c]=new Map((DB[c]||[]).map(r=>[r.id,JSON.stringify(r)]))});o.counts=JSON.stringify(DB.counts||{});return o};
 Live.ssnap=()=>JSON.stringify({ratio:{wash:SETTINGS.ratio.wash,sock:SETTINGS.ratio.sock,bag:SETTINGS.ratio.bag},bonus:[SETTINGS.bonusPerYardIn,SETTINGS.bonusPerTote,SETTINGS.bonusYdPerTote],
-  orc:{y:SETTINGS.orc.yardsPerUnit,r:SETTINGS.orc.ratios},binNotes:SETTINGS.orc.binNotes||{},crew:SETTINGS.crew,blends:[...BLENDS],bags:[...BAG_TYPES],socks:[...SOCK_SIZES],bins:SETTINGS.orc.extraBins||[],reports:SETTINGS.reports||[],
-  dash:{siteUrl:SETTINGS.siteUrl,forms:SETTINGS.forms,hidden:SETTINGS.catalog.hidden}});
+  orc:{y:SETTINGS.orc.yardsPerUnit,r:SETTINGS.orc.ratios,p:SETTINGS.orc.profiles,a:SETTINGS.orc.active},binNotes:SETTINGS.orc.binNotes||{},crew:SETTINGS.crew,blends:[...BLENDS],bags:[...BAG_TYPES],socks:[...SOCK_SIZES],bins:SETTINGS.orc.extraBins||[],reports:SETTINGS.reports||[],
+  dash:{siteUrl:SETTINGS.siteUrl,forms:SETTINGS.forms,hidden:SETTINGS.catalog.hidden},totes:SETTINGS.toteSizes});
 
 /* ---- dashboard record → table row ---- */
 const ROW={
+  cal:r=>({id:r.id,kind:r.kind,day:r.day,note:r.note||null,off:!!r.off,updated_at:new Date().toISOString()}),
   bio:r=>({id:r.id,line:'biochar',job_type:r.job,production_date:r.date,hours:+r.hours,boxes:r.boxes?Math.round(+r.boxes):null,pallets:r.pallets?Math.round(+r.pallets):null,
-    order_refs:r.orders||[],notes:r.notes||null,source:r.source==='form'||r.source==='import'?r.source:'dashboard',status:r.status||'active',void_reason:r.status==='void'?(r.voidReason||null):null}),
+    order_refs:r.orders||[],notes:r.notes||null,source:r.source==='form'||r.source==='import'?r.source:'dashboard',status:r.status||'active',void_reason:r.status==='void'?(r.voidReason||null):null,
+    ...(Live.hasTotes?{pending_totes:(r.pendingTotes||[]).map(p=>{const it=itemOfKey(p.key);return {item_id:it.item_id,custom_name:it.custom_name||null,count:+p.count}})}:{})}),
   orc:r=>({id:r.id,production_date:r.date,product_bin_id:Live.binId(r.product),yards_in:+r.yardsIn,yards_out:+r.yardsOut,hours:+r.hours,destination:r.dest==='Bin'?'bin':'totes',
     bin_id:r.dest==='Bin'?Live.binId(r.bin):null,totes:r.dest==='Totes'?(+r.totes||0):null,notes:r.notes||null,source:r.source==='form'||r.source==='import'?r.source:'dashboard',
     status:r.status||'active',void_reason:r.status==='void'?(r.voidReason||null):null}),
-  pick:r=>({id:r.id,production_date:r.date,material_bin_id:Live.binId(r.material),units:+r.units,hours:+r.hours||0,notes:r.notes||null}),
+  pick:r=>({id:r.id,production_date:r.date,material_bin_id:Live.binId(r.material),units:+r.units,hours:+r.hours||0,notes:r.notes||null,
+    ...(Live.hasGrates&&r.pct?{grate_profile:r.grate||1,small_pct:r.pct.small,medium_pct:r.pct.medium,lost_pct:r.pct.lost}:{})}),
   bag:r=>({id:r.id,production_date:r.date,from_bin_id:Live.binId(r.material),yards_used:+r.yards,pallets:+r.pallets,hours:+r.hours||0,notes:r.notes||null}),
-  orders:r=>({id:r.id,line:r.line,order_date:r.date,customer:r.customer,sales_order_no:r.so||null,notes:r.notes||null,completed:!!r.done,completed_on:r.done?(r.doneOn||iso(TODAY)):null}),
+  orders:r=>({id:r.id,line:r.line,order_date:r.date,customer:r.customer,sales_order_no:r.so||null,notes:r.notes||null,completed:!!r.done,completed_on:r.done?(r.doneOn||iso(TODAY)):null,...(Live.hasPrio?{priority:r.done?null:(r.priority??null)}:{})}),
   purch:r=>{const raw=Object.entries(PURCH_RAW).find(([,n])=>n===r.material);
     return raw?{id:r.id,purchase_date:r.date,line:'biochar',item_id:itemOfKey(raw[0]).item_id,bin_id:null,amount:+r.amount,po:r.po||null,notes:r.notes||null}
               :{id:r.id,purchase_date:r.date,line:'orchid',item_id:null,bin_id:Live.binId(r.material),amount:+r.amount,po:r.po||null,notes:r.notes||null}},
   adj:r=>r.item.startsWith('O:')?{id:r.id,bin_id:Live.binId(r.item.slice(2)),item_id:null,qty_delta:+r.qty,reason:r.reason,adj_date:r.date,notes:r.notes||null}
         :{id:r.id,...itemOfKey(r.item),bin_id:null,qty_delta:+r.qty,reason:r.reason,adj_date:r.date,notes:r.notes||null},
 };
-const TABLE={bio:'production_runs',orc:'dryer_runs',pick:'picker_runs',bag:'bagging_runs',orders:'orders',purch:'purchases',adj:'inventory_adjustments'};
+const TABLE={bio:'production_runs',orc:'dryer_runs',pick:'picker_runs',bag:'bagging_runs',orders:'orders',purch:'purchases',adj:'inventory_adjustments',cal:'calendar_days'};
 const must=async p=>{const {error}=await p;if(error)throw error};
 
 /* ---- write what changed ---- */
@@ -2722,7 +3100,7 @@ Live.sync=async function(){
       Live.again=false;
       /* give records made by the screens a real id */
       COLS.forEach(c=>(DB[c]||[]).forEach(r=>{if(!isUuid(r.id))r.id=newId()}));
-      const B=Live.base;
+      const B=Live.base,S0=Live.snap(); // what this pass saves; edits made while it runs differ from it and get the next pass
       for(const c of COLS){
         const cur=new Map((DB[c]||[]).map(r=>[r.id,r]));
         for(const [id,r] of cur){const was=B[c].get(id);if(was===JSON.stringify(r))continue;
@@ -2734,7 +3112,7 @@ Live.sync=async function(){
             const ws=(r.crew||[]).map(n=>Live.empId(n)).filter(Boolean).map(e=>({run_id:id,employee_id:e}));
             if(ws.length)await must(sb.from('run_workers').insert(ws));
             await must(sb.from('run_lines').delete().eq('run_id',id));
-            const ls=(r.lines||[]).filter(l=>+l.qty>0).map(l=>({run_id:id,direction:l.dir,qty:+l.qty,...itemOfKey(l.item,l.size)}));
+            const ls=(r.lines||[]).filter(l=>+l.qty>0).map(l=>({run_id:id,direction:l.dir,qty:+l.qty,...itemOfKey(l.item,l.size),...(Live.hasTotes&&l.totes?{tote_count:+l.totes,tote_size_yd:+l.toteSize}:{})}));
             if(ls.length)await must(sb.from('run_lines').insert(ls));
           }
           if(c==='orders'){
@@ -2761,7 +3139,8 @@ Live.sync=async function(){
         q=t.custom_size_ft?q.eq('custom_size_ft',t.custom_size_ft):q.is('custom_size_ft',null);
         await must(q)}
       await Live.syncSettings();
-      Live.base=Live.snap();
+      Live.base=S0;
+      if(UI.line==='settings'&&[...document.querySelectorAll('#settingsSec [data-crew][data-f=name]')].some(el=>(SETTINGS.crew[+el.dataset.crew]||{}).id))renderSettings();
     }while(Live.again);
   }catch(e){
     console.error(e);toast('⚠ Couldn’t save: '+(e.message||e)+'. Reloading from the database.');
@@ -2769,18 +3148,21 @@ Live.sync=async function(){
   }finally{Live.running=false}
 };
 Live.syncSettings=async function(){
-  const now=Live.ssnap();if(now===Live.sbase)return;
+  const now=Live.ssnap();if(now===Live.sbase)return; // snapshot first: edits made during the awaits below stay unsaved for the next pass
   const old=JSON.parse(Live.sbase),cur=JSON.parse(now);
   const up=(key,value)=>must(sb.from('settings').upsert({key,value}));
   if(JSON.stringify(old.ratio)!==JSON.stringify(cur.ratio))await up('equipment_ratio',cur.ratio);
   if(JSON.stringify(old.bonus)!==JSON.stringify(cur.bonus))await up('bonus',{per_yard_in:cur.bonus[0],per_tote:cur.bonus[1],yards_per_tote:cur.bonus[2]});
-  if(JSON.stringify(old.orc)!==JSON.stringify(cur.orc))await up('orchid',{yards_per_unit:cur.orc.y,ratios:cur.orc.r});
+  if(JSON.stringify(old.orc)!==JSON.stringify(cur.orc))await up('orchid',{yards_per_unit:cur.orc.y,ratios:cur.orc.r,profiles:cur.orc.p,active:cur.orc.a});
   if(JSON.stringify(old.dash)!==JSON.stringify(cur.dash))await up('dashboard',cur.dash);
+  if(JSON.stringify(old.totes)!==JSON.stringify(cur.totes))await up('tote_sizes',cur.totes);
   /* crew */
   for(const c of SETTINGS.crew){if(!c.name)continue;
     const row={name:c.name,on_biochar_sheet:!!c.biochar,on_dryer_sheet:!!c.orchid,active:true};
     if(c.id)await must(sb.from('employees').update(row).eq('id',c.id));
     else{const {data,error}=await sb.from('employees').upsert(row,{onConflict:'name'}).select('id').single();if(error)throw error;c.id=data.id}}
+  const keep=new Set(SETTINGS.crew.map(c=>c.id).filter(Boolean));
+  for(const c of (old.crew||[]))if(c.id&&!keep.has(c.id))await must(sb.from('employees').update({active:false,on_biochar_sheet:false,on_dryer_sheet:false}).eq('id',c.id));
   Live.emp=await fetchAll('employees','*',q=>q.order('name'));
   /* blends, sock sizes */
   const maxSort=Math.max(0,...Live.items.map(i=>i.sort||0));
@@ -2813,7 +3195,7 @@ Live.syncSettings=async function(){
       if(UI.rb)Object.values(UI.rb).forEach(c=>{if(c&&c.id===id)c.id=nid})}
     await must(sb.from('saved_reports').upsert({id:r.id,line:r.line,name:r.name,config:r.cfg}))}
   for(const id of oR.keys())if(!cR.has(id)&&isUuid(id))await must(sb.from('saved_reports').delete().eq('id',id));
-  Live.sbase=Live.ssnap();
+  Live.sbase=now;
 };
 let syncTimer=null;
 Live.queue=()=>{clearTimeout(syncTimer);syncTimer=setTimeout(()=>Live.sync(),0)};
