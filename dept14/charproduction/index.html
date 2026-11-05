@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="../../config.js"></script>
+<title>Biochar Production Sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column, phone first. Header → who/when → job type → job questions → shipping/notes → submit. Big tap targets, no typing for numbers that can be stepped. */
+:root{
+  --bg:#F3F4F1; --surface:#FFFFFF; --sunken:#EAECE7; --ink:#1B211D; --muted:#5F6A63; --line:#DADFD8; --line-strong:#C3CAC1;
+  --accent:#2F6B47; --accent-ink:#FFFFFF; --accent-soft:#E2EEE6; --bar:#1B211D; --bar-ink:#F3F4F1; --bad:#B23A30; --bad-soft:#F8E4E1;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#121614; --surface:#1A201C; --sunken:#222924; --ink:#E6EBE7; --muted:#9AA69F; --line:#2D3530; --line-strong:#3B4540;
+  --accent:#74BF8E; --accent-ink:#0E1511; --accent-soft:#1F3227; --bar:#0B0E0C; --bar-ink:#E6EBE7; --bad:#EE7B6F; --bad-soft:#3A1F1C; color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --bg:#121614; --surface:#1A201C; --sunken:#222924; --ink:#E6EBE7; --muted:#9AA69F; --line:#2D3530; --line-strong:#3B4540;
+  --accent:#74BF8E; --accent-ink:#0E1511; --accent-soft:#1F3227; --bar:#0B0E0C; --bar-ink:#E6EBE7; --bad:#EE7B6F; --bad-soft:#3A1F1C; color-scheme:dark; }
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:17px/1.45 var(--f-body);-webkit-text-size-adjust:100%}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+.top{background:var(--bar);color:var(--bar-ink);padding:calc(14px + env(safe-area-inset-top,0px)) 16px 14px}
+.top-in{max-width:528px;margin:0 auto;display:grid;gap:2px} /* = main width minus its 16px side padding, so the title lines up with the cards */
+.dept{font:500 .72rem/1 var(--f-mono);text-transform:uppercase;letter-spacing:.14em;opacity:.7}
+.top h1{font:700 1.9rem/1.05 var(--f-display);text-transform:uppercase;letter-spacing:.03em;margin:0}
+.demo{justify-self:start;margin-top:6px;font:500 .68rem/1 var(--f-mono);text-transform:uppercase;letter-spacing:.1em;padding:4px 8px;border-radius:99px;border:1px solid #E3A94B;color:#E3A94B}
+
+main{max-width:560px;margin:0 auto;padding:16px 16px calc(40px + env(safe-area-inset-bottom,0px));display:grid;gap:14px}
+.intro{margin:0;color:var(--muted);font-size:.95rem}
+.q{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:grid;gap:10px}
+.q.bad{border-color:var(--bad);background:linear-gradient(var(--bad-soft),var(--bad-soft)) padding-box}
+.q>label,.q>.lbl{font:600 1.05rem/1.2 var(--f-display);text-transform:uppercase;letter-spacing:.06em}
+.q .hint{font-size:.85rem;color:var(--muted);margin-top:-6px}
+.q .err{color:var(--bad);font-size:.9rem;font-weight:500}
+.sect{font:700 1.25rem/1 var(--f-display);text-transform:uppercase;letter-spacing:.06em;margin:8px 2px 0;color:var(--muted)}
+
+input[type=date],input[type=text],textarea{width:100%;background:var(--surface);border:1.5px solid var(--line-strong);border-radius:8px;padding:12px;min-height:50px}
+textarea{min-height:80px;resize:vertical}
+
+/* Chips (multi/single select) */
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1.5px solid var(--line-strong);background:var(--surface);border-radius:99px;padding:10px 16px;min-height:46px;font-weight:600;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.jobs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.jobs .chip{border-radius:8px;min-height:64px;font:700 1.3rem/1 var(--f-display);text-transform:uppercase;letter-spacing:.06em}
+
+/* Stepper rows */
+.rows{display:grid;gap:8px}
+.row{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.row .name{font-weight:600}
+.row .name small{display:block;font-weight:400;color:var(--muted);font-size:.8rem}
+.step{display:flex;align-items:center;border:1.5px solid var(--line-strong);border-radius:8px;overflow:hidden;background:var(--surface);flex-shrink:0}
+.step button{width:48px;height:50px;border:0;background:var(--sunken);font-size:1.5rem;font-weight:600;cursor:pointer;touch-action:manipulation}
+.step button:active{background:var(--line)}
+.step input{width:74px;height:50px;border:0;text-align:center;background:transparent;font:500 1.1rem var(--f-mono);-moz-appearance:textfield}
+.step input::-webkit-outer-spin-button,.step input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.unit{font:500 .8rem var(--f-mono);color:var(--muted);width:20px}
+.custom{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:10px;border:1px dashed var(--line-strong);border-radius:8px}
+.custom .pair{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.link{background:none;border:0;color:var(--accent);font-weight:600;padding:8px 0;cursor:pointer;justify-self:start}
+.charrow{display:grid;gap:8px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.charhead{display:flex;gap:8px;align-items:center}
+.charrow>input[type=text],.charhead input[type=text]{flex:1}
+select{width:100%;background:var(--surface);border:1.5px solid var(--line-strong);border-radius:8px;padding:12px;min-height:50px;font-weight:600}
+.rm{background:none;border:0;color:var(--muted);font-size:1.3rem;width:40px;height:40px;cursor:pointer}
+
+.submit{background:var(--accent);color:var(--accent-ink);border:0;border-radius:var(--r);min-height:60px;font:700 1.4rem/1 var(--f-display);text-transform:uppercase;letter-spacing:.08em;cursor:pointer;width:100%}
+.submit:disabled{opacity:.6}
+.loading{text-align:center;color:var(--muted);padding:40px 0}
+.formerr{color:var(--bad);font-weight:600;text-align:center}
+
+/* Done screen */
+.done{text-align:center;display:grid;gap:12px;padding:24px 8px}
+.done .tick{width:72px;height:72px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-size:2.4rem;margin:0 auto}
+.done h2{font:700 2rem/1 var(--f-display);text-transform:uppercase;margin:0}
+.summary{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;text-align:left;display:grid;gap:6px;font-size:.95rem}
+.summary div{display:flex;justify-content:space-between;gap:12px}
+.summary span:first-child{color:var(--muted)}
+.ghostbtn{background:var(--surface);border:1.5px solid var(--line-strong);border-radius:var(--r);min-height:54px;font-weight:600;cursor:pointer}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <div class="dept">Rexius · Dept 14</div>
+    <h1 id="title">Biochar production sheet</h1>
+  </div>
+</header>
+<main id="app"><div class="loading">Loading…</div></main>
+
+<script>
+/* =============================================================
+   Biochar production sheet — open crew form (/charproduction)
+   Live: crew and products come from dept14.form_options('biochar');
+   a submit goes to dept14.submit_biochar_run. Both run as the public
+   (anon) key, which can't read or change anything else.
+   ============================================================= */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store={get(k,d){try{const v=localStorage.getItem('d14.'+k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem('d14.'+k,JSON.stringify(v))}catch(e){}}};
+
+/* Sheet setup: crew on the biochar sheet and the active catalog, from Supabase. */
+const SHEET={title:'Biochar production sheet',crew:[],jobs:['wash','sock','bag'],blends:[],sockSizes:[],questions:['shipping','orders','notes']};
+const CAT={crew:{},items:[]};
+const CFG=window.MIX_BOARD_CONFIG||{};
+const sb=window.supabase&&CFG.SUPABASE_URL?window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{db:{schema:'dept14'},auth:{persistSession:false}}):null;
+async function loadSheet(){
+  if(!sb)throw new Error('The sheet can’t reach the database.');
+  const {data,error}=await sb.rpc('form_options',{p_line:'biochar'});
+  if(error)throw error;
+  (data.employees||[]).forEach(e=>CAT.crew[e.name]=e.id);SHEET.crew=(data.employees||[]).map(e=>e.name);
+  CAT.items=data.items||[];
+  SHEET.blends=CAT.items.filter(i=>i.kind==='blend'&&!i.is_custom).map(i=>i.blend);
+  SHEET.sockSizes=CAT.items.filter(i=>i.kind==='sock'&&!i.is_custom).map(i=>+(i.name.match(/[\d.]+/)||[0])[0]).filter(Boolean);
+}
+/* catalog lookups → item ids */
+const itemOf=(kind,blend)=>CAT.items.find(i=>i.kind===kind&&!i.is_custom&&i.blend===blend);
+const customOf=kind=>CAT.items.find(i=>i.kind===kind&&i.is_custom);
+function charLine(direction,kind,blendOrName,qty,isCustom){
+  const std=!isCustom&&itemOf(kind,blendOrName);
+  return std?{direction,item_id:std.id,qty}:{direction,item_id:customOf(kind)?.id,qty,custom_name:blendOrName};
+}
+const charName=x=>x.blend==='__custom'?(x.cname||'').trim():x.blend;
+const LAST_CREW=store.get('sheet.lastCrew',[]);
+
+const today=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)};
+const cap=s=>s[0].toUpperCase()+s.slice(1);
+const fresh=()=>({date:today(),crew:LAST_CREW.filter(c=>SHEET.crew.includes(c)),hours:'',job:'',
+  raw:'',totes:'',washOut:{},washCustom:[],inputs:[{blend:'',yd:'',bags:''}],socks:{},custom:[],boxes:'',pallets:'',orders:'',notes:''});
+let F=fresh(), errors={};
+
+/* ---------- small builders ---------- */
+const stepper=(key,val,step=1,unit='',label='')=>`<div class="step"><button type="button" data-dec="${key}" data-step="${step}" aria-label="Less ${esc(label)}">−</button><input type="number" inputmode="decimal" min="0" step="${step}" data-k="${key}" value="${val??''}" aria-label="${esc(label)}" placeholder="0"><button type="button" data-inc="${key}" data-step="${step}" aria-label="More ${esc(label)}">+</button></div><span class="unit">${unit}</span>`;
+const chips=(group,opts,selected,multi)=>`<div class="chips" role="group">${opts.map(o=>`<button type="button" class="chip" data-chip="${group}" data-v="${esc(o)}" aria-pressed="${multi?selected.includes(o):selected===o}">${esc(o)}</button>`).join('')}</div>`;
+const q=(id,label,body,hint='')=>`<div class="q ${errors[id]?'bad':''}" id="q-${id}"><div class="lbl">${label}</div>${hint?`<div class="hint">${hint}</div>`:''}${body}${errors[id]?`<div class="err">${esc(errors[id])}</div>`:''}</div>`;
+
+function render(){
+  $('#title').textContent=SHEET.title;document.title=SHEET.title;
+  const j=F.job;
+  let h=`
+  ${q('date','Production date',`<input type="date" data-k="date" value="${F.date}" max="${today()}">`)}
+  ${q('crew','Who worked on it?',chips('crew',SHEET.crew,F.crew,true))}
+  ${q('hours','How many hours did it take?',`<div class="row"><span></span><div style="display:flex;align-items:center;gap:8px">${stepper('hours',F.hours,.5,'h','hours')}</div></div>`)}
+  ${q('job','What did you do?',`<div class="jobs">${SHEET.jobs.map(x=>`<button type="button" class="chip" data-chip="job" data-v="${x}" aria-pressed="${j===x}">${cap(x)}</button>`).join('')}</div>`)}`;
+
+  if(j==='wash'){h+=`<div class="sect">Wash</div>
+    ${q('raw','Raw biochar used',`<div class="row"><span class="name">Yards of unwashed used</span><div style="display:flex;align-items:center;gap:8px">${stepper('raw',F.raw,.5,'yd','raw yards')}</div></div>`)}
+    ${q('totes','Blank white totes used',`<div class="row"><span class="name">Totes</span><div style="display:flex;align-items:center;gap:8px">${stepper('totes',F.totes,1,'','blank white totes')}</div></div>`)}
+    ${q('washOut','Washed char made',`<div class="rows">${SHEET.blends.map(b=>`<div class="row"><span class="name">${b}</span><div style="display:flex;align-items:center;gap:8px">${stepper('washOut.'+b,F.washOut[b],.5,'yd',b+' yards made')}</div></div>`).join('')}
+      ${F.washCustom.map((c,i)=>`<div class="charrow"><div class="charhead"><input type="text" data-k="washCustom.${i}.name" value="${esc(c.name)}" placeholder="What did you make?" aria-label="Custom blend name" autocomplete="off"><button type="button" class="rm" data-rmwash="${i}" aria-label="Remove custom blend">✕</button></div>
+        <div class="row"><span class="name">Yards made</span><div style="display:flex;align-items:center;gap:8px">${stepper(`washCustom.${i}.yd`,c.yd,.5,'yd','custom blend yards made')}</div></div></div>`).join('')}</div>
+      <button type="button" class="link" id="addWashCustom">+ Add a custom blend</button>`)}`}
+
+  if(j==='sock'||j==='bag'){
+    const taken=i=>F.inputs.filter((x,k)=>k!==i).map(x=>x.blend);
+    h+=`<div class="sect">${cap(j)}</div>`+q('inputs',j==='bag'?'Char used and bags made':'Char used',`<div class="rows">${F.inputs.map((x,i)=>`<div class="charrow">
+      <div class="charhead"><select data-k="inputs.${i}.blend" aria-label="Char type"><option value="">Pick char type</option>${SHEET.blends.map(b=>`<option value="${b}" ${x.blend===b?'selected':''} ${taken(i).includes(b)?'disabled':''}>${b}</option>`).join('')}<option value="__custom" ${x.blend==='__custom'?'selected':''}>Custom</option></select>
+        ${F.inputs.length>1?`<button type="button" class="rm" data-rminput="${i}" aria-label="Remove this char type">✕</button>`:''}</div>
+      ${x.blend==='__custom'?`<input type="text" data-k="inputs.${i}.cname" value="${esc(x.cname||'')}" placeholder="What's in it?" aria-label="Custom char description" autocomplete="off">`:''}
+      <div class="row"><span class="name">Yards used</span><div style="display:flex;align-items:center;gap:8px">${stepper(`inputs.${i}.yd`,x.yd,.5,'yd','yards used')}</div></div>
+      ${j==='bag'?`<div class="row"><span class="name">${x.blend?esc(charName(x)||'Custom')+' bags':'Bags'} made<small>1.5cf</small></span><div style="display:flex;align-items:center;gap:8px">${stepper(`inputs.${i}.bags`,x.bags,1,'','bags made')}</div></div>`:''}
+    </div>`).join('')}</div>
+    ${F.inputs.length<8?'<button type="button" class="link" id="addInput">+ Add another char type</button>':''}`);
+  }
+
+  if(j==='sock'){h+=q('socks','Socks made',`<div class="rows">${SHEET.sockSizes.map(s=>`<div class="row"><span class="name">${s} ft</span><div style="display:flex;align-items:center;gap:8px">${stepper('socks.'+s,F.socks[s],1,'',s+' foot socks')}</div></div>`).join('')}
+      ${F.custom.map((c,i)=>`<div class="custom"><div class="pair"><span class="name">Custom</span>${stepper('custom.'+i+'.len',c.len,.5,'ft','custom length in feet')}<span>×</span>${stepper('custom.'+i+'.qty',c.qty,1,'','custom sock count')}</div><button type="button" class="rm" data-rmcustom="${i}" aria-label="Remove custom size">✕</button></div>`).join('')}</div>
+      <button type="button" class="link" id="addCustom">+ Add a custom size</button>`)}
+
+  if(j){
+    if(j==='sock'&&(SHEET.questions.includes('shipping')||SHEET.questions.includes('orders'))){
+      h+=`<div class="sect">Wrap up</div>`;
+      if(SHEET.questions.includes('shipping'))h+=q('ship','Wrapped for shipping',`<div class="rows">
+        <div class="row"><span class="name">Pallets</span><div style="display:flex;align-items:center;gap:8px">${stepper('pallets',F.pallets,1,'','pallets')}</div></div></div>`);
+      if(SHEET.questions.includes('orders'))h+=q('orders','Orders filled',`<input type="text" data-k="orders" value="${esc(F.orders)}" autocomplete="off">`);
+    }
+    if(SHEET.questions.includes('notes'))h+=q('notes','Notes',`<textarea data-k="notes">${esc(F.notes)}</textarea>`);
+    h+=`<div class="formerr" id="formerr">${Object.keys(errors).length?'Fix the highlighted questions above.':''}</div>
+    <button type="button" class="submit" id="submit">Submit</button>`;
+  }
+  $('#app').innerHTML=h;
+}
+
+/* ---------- state updates ---------- */
+function setPath(path,val){
+  const parts=path.split('.');
+  if(Array.isArray(F[parts[0]])){F[parts[0]][+parts[1]][parts[2]]=val;return}
+  if(parts.length===2){F[parts[0]][parts[1]]=val;return}
+  F[path]=val;
+}
+function getPath(path){const p=path.split('.');if(Array.isArray(F[p[0]]))return F[p[0]][+p[1]][p[2]];return p.length===2?F[p[0]][p[1]]:F[path]}
+const errFor={date:'date',crew:'crew',hours:'hours',job:'job',raw:'raw',washOut:'washOut',washCustom:'washOut',inputs:'inputs',socks:'socks',custom:'socks'};
+function clearErr(path){const k=errFor[path.split('.')[0]];if(k&&errors[k]){delete errors[k];const el=$('#q-'+k);if(el){el.classList.remove('bad');el.querySelector('.err')?.remove()}if(!Object.keys(errors).length&&$('#formerr'))$('#formerr').textContent=''}}
+
+$('#app').addEventListener('input',e=>{const k=e.target.dataset.k;if(!k)return;
+  const v=e.target.type==='number'?(e.target.value===''?'':+e.target.value):e.target.value;setPath(k,v);clearErr(k);if(k.endsWith('.blend'))render()});
+$('#app').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.inc||b.dataset.dec){const k=b.dataset.inc||b.dataset.dec,st=+b.dataset.step;const cur=+getPath(k)||0;
+    const nv=Math.max(0,Math.round((cur+(b.dataset.inc?st:-st))*100)/100);setPath(k,nv||'');
+    const inp=b.parentElement.querySelector('input');inp.value=nv||'';clearErr(k);return}
+  if(b.dataset.chip){const g=b.dataset.chip,v=b.dataset.v;
+    if(g==='crew'){const i=F.crew.indexOf(v);i<0?F.crew.push(v):F.crew.splice(i,1);b.setAttribute('aria-pressed',i<0);clearErr('crew');return}
+    F[g]=v;clearErr(g);render();return}
+  if(b.id==='addWashCustom'){F.washCustom.push({name:'',yd:''});render();const ins=document.querySelectorAll('[data-k$=".name"]');ins[ins.length-1]?.focus();return}
+  if(b.dataset.rmwash!=null){F.washCustom.splice(+b.dataset.rmwash,1);render();return}
+  if(b.id==='addInput'){F.inputs.push({blend:'',yd:'',bags:''});render();return}
+  if(b.dataset.rminput!=null){F.inputs.splice(+b.dataset.rminput,1);render();return}
+  if(b.id==='addCustom'){F.custom.push({len:'',qty:''});render();return}
+  if(b.dataset.rmcustom!=null){F.custom.splice(+b.dataset.rmcustom,1);render();return}
+  if(b.id==='submit'){submit();return}
+  if(b.id==='again'){F=fresh();F.crew=store.get('sheet.lastCrew',[]);errors={};render();scrollTo(0,0);return}
+});
+
+/* ---------- validation + payload ---------- */
+function validate(){
+  const e={};const n=v=>+v||0;
+  if(!F.date)e.date='Pick the production date.';else if(F.date>today())e.date='The date can’t be in the future.';
+  if(!F.crew.length)e.crew='Pick at least one name.';
+  if(!(n(F.hours)>0))e.hours='Enter how many hours it took.';else if(n(F.hours)>24)e.hours='Hours can’t be more than 24.';
+  if(!F.job)e.job='Pick Wash, Sock or Bag.';
+  if(F.job==='wash'){if(!(n(F.raw)>0))e.raw='Enter the raw yards used.';if(!SHEET.blends.some(b=>n(F.washOut[b])>0)&&!F.washCustom.some(c=>n(c.yd)>0))e.washOut='Enter at least one blend you made.';
+    else if(F.washCustom.some(c=>n(c.yd)>0&&!c.name.trim()))e.washOut='Type what each custom blend is.'}
+  if(F.job==='sock'||F.job==='bag'){
+    if(F.inputs.some(x=>!x.blend))e.inputs='Pick a char type for each row, or remove the empty row.';
+    else if(F.inputs.some(x=>x.blend==='__custom'&&!charName(x)))e.inputs='Type what\'s in the custom char.';
+    else if(F.inputs.some(x=>!(n(x.yd)>0)))e.inputs='Enter the yards used for each char type.';
+    else if(F.job==='bag'&&F.inputs.some(x=>!(n(x.bags)>0)))e.inputs='Enter how many bags you made from each char type.'}
+  if(F.job==='sock'){const any=SHEET.sockSizes.some(s=>n(F.socks[s])>0)||F.custom.some(c=>n(c.qty)>0);
+    if(!any)e.socks='Enter how many socks you made.';
+    else if(F.custom.some(c=>n(c.qty)>0&&!(n(c.len)>0)))e.socks='Enter the length for each custom size.'}
+  return e;
+}
+function payload(){
+  const n=v=>+v||0,lines=[];
+  const raw=CAT.items.find(i=>i.kind==='raw'&&i.unit==='yd'),totes=CAT.items.find(i=>i.kind==='other'&&/blank white tote/i.test(i.name));
+  if(F.job==='wash'){lines.push({direction:'in',item_id:raw?.id,qty:n(F.raw)});if(n(F.totes)&&totes)lines.push({direction:'in',item_id:totes.id,qty:n(F.totes)});
+    SHEET.blends.forEach(b=>n(F.washOut[b])&&lines.push(charLine('out','blend',b,n(F.washOut[b]))));
+    F.washCustom.forEach(c=>n(c.yd)&&lines.push(charLine('out','blend',c.name.trim(),n(c.yd),true)))}
+  else{F.inputs.forEach(x=>lines.push(charLine('in','blend',charName(x),n(x.yd),x.blend==='__custom')));
+    if(F.job==='sock'){SHEET.sockSizes.forEach(s=>{if(!n(F.socks[s]))return;const it=CAT.items.find(i=>i.kind==='sock'&&!i.is_custom&&+(i.name.match(/[\d.]+/)||[0])[0]===s);lines.push({direction:'out',item_id:it?.id,qty:n(F.socks[s])})});
+      F.custom.forEach(c=>n(c.qty)&&lines.push({direction:'out',item_id:customOf('sock')?.id,qty:n(c.qty),custom_size_ft:n(c.len)}))}
+    if(F.job==='bag')F.inputs.forEach(x=>lines.push(charLine('out','bag',charName(x),n(x.bags),x.blend==='__custom')))}
+  return {production_date:F.date,job_type:F.job,hours:n(F.hours),worker_ids:F.crew.map(c=>CAT.crew[c]),
+    boxes:null,pallets:F.job==='sock'?n(F.pallets):null,
+    order_refs:F.job!=='sock'?[]:F.orders.split(',').map(s=>s.trim()).filter(Boolean),notes:F.notes.trim(),lines};
+}
+let sending=false;
+async function submit(){
+  if(sending)return;
+  errors=validate();
+  if(Object.keys(errors).length){render();const first=$('.q.bad');first&&first.scrollIntoView({behavior:'smooth',block:'center'});return}
+  const p=payload();
+  const btn=$('#submit');sending=true;btn.disabled=true;btn.textContent='Sending…';$('#formerr').textContent='';
+  try{
+    const {error}=await sb.rpc('submit_biochar_run',{payload:p});
+    if(error)throw error;
+  }catch(e){
+    sending=false;btn.disabled=false;btn.textContent='Submit';
+    $('#formerr').textContent=(e&&e.message&&!/fetch|network/i.test(e.message))?e.message+'.':'Couldn’t send. Check your signal and press Submit again. Nothing was lost.';
+    return;
+  }
+  sending=false;
+  store.set('sheet.lastCrew',F.crew);
+  $('#app').innerHTML=`<div class="done">
+    <div class="tick" aria-hidden="true">✓</div>
+    <h2>Sent</h2>
+    <button type="button" class="ghostbtn" id="again">Submit another job</button>
+  </div>`;
+  scrollTo(0,0);
+}
+loadSheet().then(()=>{F=fresh();render()}).catch(()=>{
+  $('#app').innerHTML=`<div class="loading">Couldn’t load the sheet. Check your signal and reload the page.</div>`});
+</script>
+</body>
+</html>
