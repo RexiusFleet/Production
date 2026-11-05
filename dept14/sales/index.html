@@ -137,6 +137,12 @@ main{padding:20px 20px 60px;display:grid;gap:20px}
 .cal-o{font-size:.7rem;border-radius:4px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:color-mix(in srgb,#E3A94B 22%,transparent)}
 .cal-o.ship{background:var(--accent-soft)}
 .cal-plan{font-size:.72rem;font-weight:600;background:color-mix(in srgb,var(--accent) 16%,transparent);border-left:3px solid var(--accent);border-radius:3px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-snote{font-size:.72rem;font-weight:600;background:color-mix(in srgb,var(--s-1,#2a78d6) 14%,transparent);border-left:3px solid var(--s-1,#2a78d6);border-radius:3px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.day-notes{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:12px;margin-top:6px}
+.day-notes .field{display:flex;flex-direction:column;gap:4px}.day-notes .field>span{font-size:.8rem;font-weight:600;color:var(--muted)}
+.day-notes textarea{width:100%;min-height:76px;border:1px solid var(--line-strong);border-left:3px solid var(--s-1,#2a78d6);border-radius:6px;padding:8px 10px;background:var(--surface);resize:vertical}
+.note-ro{min-height:76px;font-size:.92rem;padding:8px 10px;border-left:3px solid var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);border-radius:4px;white-space:pre-wrap}
+@media (max-width:520px){.day-notes{grid-auto-flow:row}}
 .cal-note{font-size:.7rem;font-style:italic;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cal-off{font:600 .62rem/1 var(--f-mono);text-transform:uppercase;color:var(--muted);margin-left:6px}
 .sect{font:600 .78rem var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-top:4px}
@@ -195,7 +201,7 @@ main{padding:20px 20px 60px;display:grid;gap:20px}
   .toolbar input[type=search]{flex:1 1 140px;width:auto;min-width:0}
   .cal{padding:12px 10px}.cal-h h3{min-width:0;font-size:1rem}.cal-w span{padding:0 2px;font-size:.62rem}
   .grid td.clip{max-width:180px}
-  .cal-d{min-height:54px}.cal-l,.cal-o,.cal-note,.cal-plan{display:none}.cal-d.has::after{content:'';width:6px;height:6px;border-radius:99px;background:var(--accent);margin-top:2px}
+  .cal-d{min-height:54px}.cal-l,.cal-o,.cal-note,.cal-plan,.cal-snote{display:none}.cal-d.has::after{content:'';width:6px;height:6px;border-radius:99px;background:var(--accent);margin-top:2px}
   .scrim{padding:8px 6px}.modal-b{padding:12px}.modal-b>table{display:block;overflow-x:auto;max-width:100%}.modal-h,.modal-f{padding-left:12px;padding-right:12px}
 }
 @media (max-width:520px){
@@ -372,10 +378,11 @@ function renderCal(){
     cells+=`<button type="button" class="cal-d ${inM?'':'out'} ${we?'we':''} ${ds===t?'today':''} ${has?'has':''}" data-day="${ds}" aria-label="${d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}">
       <span class="cal-n">${d.getDate()}${off.length&&!L.length?'<span class="cal-off">Off</span>':''}</span>
       ${L.map(([c,a,b])=>`<span class="cal-l c-${c}"><b>${a}</b> ${esc(b)}</span>`).join('')}
-      ${x.notes.filter(n=>n.note&&n.kind==='orc').map(n=>`<span class="cal-plan">${esc(n.note)}</span>`).join('')}
-      ${x.notes.filter(n=>n.note&&n.kind!=='orc').map(n=>`<span class="cal-note">${esc(n.note)}</span>`).join('')}
+      ${x.notes.filter(n=>n.note&&n.kind!=='orc'&&n.kind!=='sales').map(n=>`<span class="cal-note">${esc(n.note)}</span>`).join('')}
       ${x.shipping.map(o=>`<span class="cal-o ship">Ships · ${esc(o.customer)}</span>`).join('')}
       ${x.placed.map(o=>`<span class="cal-o">Order · ${esc(o.customer)}</span>`).join('')}
+      ${x.notes.filter(n=>n.note&&n.kind==='orc').map(n=>`<span class="cal-plan">${esc(n.note)}</span>`).join('')}
+      ${x.notes.filter(n=>n.note&&n.kind==='sales').map(n=>`<span class="cal-snote">${esc(n.note)}</span>`).join('')}
     </button>`}
   const mt=new Date(y,m-1,15).toLocaleDateString('en-US',{month:'long',year:'numeric'});
   $('#view').innerHTML=`<section class="cal"><div class="cal-h"><button type="button" class="btn icon" data-nav="-1" aria-label="Previous month">‹</button><h3>${mt}</h3><button type="button" class="btn icon" data-nav="1" aria-label="Next month">›</button><button type="button" class="btn" data-nav="0">Today</button></div>
@@ -391,10 +398,18 @@ function openDay(ds){
   if(x.bagging.length)b+=sec('Bagging',t(['Bagged from','Yards','Pallets'],x.bagging.map(r=>`<tr><td>${esc(r.from)}</td><td class="num">${fmtN(r.yards,1)}</td><td class="num">${fmtN(r.pallets,0)}</td></tr>`)));
   if(x.shipping.length)b+=sec('Shipping',t(['Customer','Products','Carrier','Status'],x.shipping.map(o=>`<tr data-order="${esc(o.id)}"><td>${esc(o.customer)}</td><td>${esc(summary(o))}</td><td>${esc(o.carrier)}</td><td>${statusTag(o)}</td></tr>`)));
   if(x.placed.length)b+=sec('Orders placed',t(['Customer','Products','Status'],x.placed.map(o=>`<tr data-order="${esc(o.id)}"><td>${esc(o.customer)}</td><td>${esc(summary(o))}</td><td>${statusTag(o)}</td></tr>`)));
-  const plan=x.notes.find(n=>n.kind==='orc'&&n.note);if(plan)b=sec('Plan',`<div class="ro">${esc(plan.note)}</div>`)+b;
-  const others=x.notes.filter(n=>n.kind!=='orc');
+  const plan=(x.notes.find(n=>n.kind==='orc')||{}).note||'',mine=(x.notes.find(n=>n.kind==='sales')||{}).note||'';
+  const others=x.notes.filter(n=>n.kind!=='orc'&&n.kind!=='sales');
   if(others.length)b+=sec('Notes',`<div class="ro"><dl>${others.map(n=>`<dt>${KN[n.kind]||''}</dt><dd>${n.off?'Off':''}${n.off&&n.note?' · ':''}${esc(n.note||'')}</dd>`).join('')}</dl></div>`);
-  modal(new Date(ds+'T12:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}),b||'<div class="muted">No entries.</div>','<button class="btn" data-close>Close</button>','wide');
+  b+=`<div class="day-notes">${plan?`<div class="field"><span>Production notes</span><div class="note-ro">${esc(plan)}</div></div>`:''}
+    <label class="field"><span>Sales notes</span><textarea id="salesNote" maxlength="1000">${esc(mine)}</textarea></label></div><div class="in-err" id="formErr" role="alert" hidden></div>`;
+  modal(new Date(ds+'T12:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}),b,'<button class="btn" data-close>Close</button>','wide');
+  const ta=$('#salesNote');ta.onchange=async()=>{const v=ta.value.trim();if(v===mine)return;
+    try{if(v)await must(sb.from('calendar_days').upsert({kind:'sales',day:ds,note:v,off:false},{onConflict:'kind,day'}));
+      else await must(sb.from('calendar_days').delete().eq('kind','sales').eq('day',ds));}
+    catch(e){const er=$('#formErr');er.textContent='Couldn’t save: '+(e.message||e);er.hidden=false;return}
+    D.cal=D.cal.filter(c=>!(c.kind==='sales'&&c.day===ds));if(v)D.cal.push({kind:'sales',day:ds,note:v,off:false});
+    toast('Note saved');if(UI.tab==='cal')renderCal()};
 }
 
 /* ---------- order window: add, or change until the manager completes it ---------- */
@@ -479,7 +494,13 @@ function viewOrder(o){
     <dt>Products</dt><dd>${o.lines.map(l=>`${fmtN(l.qty,2)} ${unitOf(l.bin)} ${esc(l.bin)}${l.load?' · '+esc(l.load):''}`).join('<br>')}</dd>
     <dt>Carrier</dt><dd>${esc(o.carrier)}</dd><dt>Ship date</dt><dd>${fmtDate(o.shipDate)}</dd><dt>Freight</dt><dd>${o.freight!=null?'$'+fmtN(o.freight,2):''}</dd>
     ${o.done?`<dt>Completed</dt><dd>${fmtDate(o.doneOn)}</dd>`:''}
-    <dt>Notes</dt><dd>${esc(o.notes)}</dd></dl></div>`,'<button class="btn" data-close>Close</button>');
+    <dt>Notes</dt><dd>${esc(o.notes)}</dd></dl></div><div class="in-err" id="formErr" role="alert" hidden></div>`,'<button class="btn danger" id="delOrder" style="margin-right:auto">Delete order</button><button class="btn" data-close>Close</button>');
+  const del=$('#delOrder');del.onclick=async()=>{if(!confirm(`Delete the ${o.customer} order? It will be deleted.`))return;
+    del.disabled=true;
+    try{await must(sb.rpc('cancel_sales_order',{p_id:o.id,p_expected:o.updatedAt||null}))}
+    catch(e){del.disabled=false;const msg=e.message||String(e);if(/changed/i.test(msg)){try{await refresh()}catch(x){}closeModal()}
+      const b=$('#formErr');if(b){b.textContent='Couldn’t delete: '+msg;b.hidden=false}else toast(msg);return}
+    livePending=false;closeModal();toast('Order deleted');try{await refresh()}catch(e){}};
 }
 
 /* ---------- windows ---------- */
@@ -494,7 +515,7 @@ $('#modalRoot').addEventListener('click',e=>{
   if(e.target.id==='scrim'||e.target.closest('[data-close]'))return closeModal();
   const r=e.target.closest('tr[data-order]');if(r){const o=D.orders.find(x=>x.id===r.dataset.order);if(o)openOrder(o)}
 });
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#modalRoot').innerHTML)closeModal()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#modalRoot').innerHTML){document.activeElement?.blur?.();closeModal()}});
 $('#view').addEventListener('click',e=>{
   const r=e.target.closest('tr[data-order]');if(r){const o=D.orders.find(x=>x.id===r.dataset.order);if(o)openOrder(o);return}
   const n=e.target.closest('[data-nav]');if(n){const k=+n.dataset.nav;if(!k)UI.month=today().slice(0,7);else{const [y,m]=UI.month.split('-').map(Number);const d=new Date(y,m-1+k,1,12);UI.month=isoOf(d).slice(0,7)}renderCal();return}
