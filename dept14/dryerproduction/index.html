@@ -70,7 +70,9 @@ textarea{min-height:80px;resize:vertical}
 .step button:active{background:var(--line)}
 .step input{width:74px;height:50px;border:0;text-align:center;background:transparent;font:500 1.1rem var(--f-mono);-moz-appearance:textfield}
 .step input::-webkit-outer-spin-button,.step input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
-.unit{font:500 .8rem var(--f-mono);color:var(--muted);width:20px}
+.unit{font:500 .8rem var(--f-mono);color:var(--muted);flex:0 0 20px;width:20px}
+.row .name{min-width:0;text-wrap:balance}
+@media (max-width:400px){.step button{width:44px}.step input{width:56px}}
 .custom{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:10px;border:1px dashed var(--line-strong);border-radius:8px}
 .custom .pair{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .link{background:none;border:0;color:var(--accent);font-weight:600;padding:8px 0;cursor:pointer;justify-self:start}
@@ -132,39 +134,39 @@ const today=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOff
 const fresh=()=>({date:today(),crew:store.get('dryer.lastCrew',[]).filter(c=>SHEET.crew.includes(c)),product:'',yin:'',yout:'',hours:'',dest:'',bin:'',totes:'',notes:''});
 let F=fresh(),errors={};
 
-const stepper=(key,val,step=1,unit='',label='')=>`<div class="step"><button type="button" data-dec="${key}" data-step="${step}" aria-label="Less ${esc(label)}">−</button><input type="number" inputmode="decimal" min="0" step="${step}" data-k="${key}" value="${val??''}" aria-label="${esc(label)}" placeholder="0"><button type="button" data-inc="${key}" data-step="${step}" aria-label="More ${esc(label)}">+</button></div><span class="unit">${unit}</span>`;
+const stepper=(key,val,step=1,unit='',label='')=>`<div class="step"><button type="button" data-dec="${esc(key)}" data-step="${step}" aria-label="Less ${esc(label)}">−</button><input type="number" inputmode="decimal" min="0" step="${step}" data-k="${esc(key)}" value="${esc(val)}" aria-label="${esc(label)}" placeholder="0"><button type="button" data-inc="${esc(key)}" data-step="${step}" aria-label="More ${esc(label)}">+</button></div><span class="unit">${esc(unit)}</span>`;
 const chips=(group,opts,selected,multi)=>`<div class="chips" role="group">${opts.map(o=>`<button type="button" class="chip" data-chip="${group}" data-v="${esc(o)}" aria-pressed="${multi?selected.includes(o):selected===o}">${esc(o)}</button>`).join('')}</div>`;
 const q=(id,label,body,hint='')=>`<div class="q ${errors[id]?'bad':''}" id="q-${id}"><div class="lbl">${label}</div>${hint?`<div class="hint">${hint}</div>`:''}${body}${errors[id]?`<div class="err">${esc(errors[id])}</div>`:''}</div>`;
-const row=(name,inner)=>`<div class="row"><span class="name">${name}</span><div style="display:flex;align-items:center;gap:8px">${inner}</div></div>`;
+const row=(name,inner)=>`<div class="row"><span class="name">${esc(name)}</span><div style="display:flex;align-items:center;gap:8px">${inner}</div></div>`;
 
 function render(){
   let h=`
-  ${q('date','Production date',`<input type="date" data-k="date" value="${F.date}" max="${today()}">`)}
+  ${q('date','Production date',`<input type="date" data-k="date" value="${esc(F.date)}" max="${today()}">`)}
   ${q('crew','Who worked on it?',chips('crew',SHEET.crew,F.crew,true))}
-  ${q('product','What went into the dryer?',`<select data-k="product" aria-label="Product into the dryer"><option value="">Pick a product</option>${SHEET.products.map(p=>`<option ${F.product===p?'selected':''}>${esc(p)}</option>`).join('')}</select>`)}
+  ${q('product','What went into the dryer?',`<select data-k="product" aria-label="Product into the dryer"><option value="">Pick a product</option>${SHEET.products.map(p=>`<option value="${esc(p)}" ${F.product===p?'selected':''}>${esc(p)}</option>`).join('')}</select>`)}
   ${q('yards','Yards',`<div class="rows">${row('Went in',stepper('yin',F.yin,.5,'yd','yards in'))}${row('Came out',stepper('yout',F.yout,.5,'yd','yards out'))}</div>`)}
-  ${q('hours','How many hours did it take?',row('',stepper('hours',F.hours,.5,'h','hours')))}
+  ${q('hours','How many hours did it take?',row('Hours',stepper('hours',F.hours,.5,'h','hours')))}
   ${q('dest','Where did it go?',`<div class="jobs" style="grid-template-columns:1fr 1fr">${['Totes','Bin'].map(x=>`<button type="button" class="chip" data-chip="dest" data-v="${x}" aria-pressed="${F.dest===x}">${x}</button>`).join('')}</div>`)}`;
   if(F.dest==='Totes')h+=q('totes','How many totes?',`<input type="text" inputmode="decimal" data-k="totes" value="${esc(F.totes)}" autocomplete="off" aria-label="Number of totes">`);
   if(F.dest==='Bin')h+=q('bin','Which bin?',chips('bin',SHEET.bins,F.bin,false));
   h+=q('notes','Notes',`<textarea data-k="notes">${esc(F.notes)}</textarea>`);
   h+=`<div class="formerr" id="formerr">${Object.keys(errors).length?'Fix the highlighted questions above.':''}</div>
-    <button type="button" class="submit" id="submit">Submit</button>`;
+    <button type="button" class="submit" id="submit" ${sending?'disabled':''}>${sending?'Sending…':'Submit'}</button>`;
   $('#app').innerHTML=h;
 }
 
 const errFor={date:'date',crew:'crew',product:'product',yin:'yards',yout:'yards',hours:'hours',dest:'dest',totes:'totes',bin:'bin'};
 function clearErr(k){const e=errFor[k];if(e&&errors[e]){delete errors[e];const el=$('#q-'+e);if(el){el.classList.remove('bad');el.querySelector('.err')?.remove()}if(!Object.keys(errors).length&&$('#formerr'))$('#formerr').textContent=''}}
-$('#app').addEventListener('input',e=>{const k=e.target.dataset.k;if(!k)return;F[k]=e.target.type==='number'?(e.target.value===''?'':+e.target.value):e.target.value;clearErr(k)});
+$('#app').addEventListener('input',e=>{const k=e.target.dataset.k;if(!k||sending)return;F[k]=e.target.type==='number'?(e.target.value===''?'':+e.target.value):e.target.value;clearErr(k)});
 $('#app').addEventListener('click',e=>{
-  const b=e.target.closest('button');if(!b)return;
+  const b=e.target.closest('button');if(!b||b.disabled||sending)return;
   if(b.dataset.inc||b.dataset.dec){const k=b.dataset.inc||b.dataset.dec,st=+b.dataset.step;const nv=Math.max(0,Math.round(((+F[k]||0)+(b.dataset.inc?st:-st))*100)/100);
     F[k]=nv||'';b.parentElement.querySelector('input').value=nv||'';clearErr(k);return}
   if(b.dataset.chip){const g=b.dataset.chip,v=b.dataset.v;
     if(g==='crew'){const i=F.crew.indexOf(v);i<0?F.crew.push(v):F.crew.splice(i,1);b.setAttribute('aria-pressed',i<0);clearErr('crew');return}
     F[g]=v;clearErr(g);render();return}
   if(b.id==='submit'){submit();return}
-  if(b.id==='again'){F=fresh();errors={};render();scrollTo(0,0)}
+  if(b.id==='again'){F=fresh();BASE=snap();errors={};render();scrollTo(0,0)}
 });
 
 function validate(){
@@ -204,7 +206,22 @@ async function submit(){
   $('#app').innerHTML=`<div class="done"><div class="tick" aria-hidden="true">✓</div><h2>Sent</h2><button type="button" class="ghostbtn" id="again">Submit another run</button></div>`;
   scrollTo(0,0);
 }
-loadSheet().then(()=>{F=fresh();render()}).catch(()=>{
+/* fresh options: when the page comes back into view or every 5 min, reload crew/products/bins, but only while the form is untouched */
+const snap=()=>JSON.stringify(F);
+let BASE='',LOADING=false,LOADED=false;
+async function refreshOptions(){
+  if(LOADING||sending||document.hidden||$('.done'))return;
+  if(LOADED&&snap()!==BASE)return;
+  LOADING=true;
+  try{await loadSheet()}catch(e){LOADING=false;return}
+  LOADING=false;
+  const a=document.activeElement;
+  if(sending||$('.done')||(LOADED&&snap()!==BASE)||(LOADED&&a&&a!==document.body&&$('#app').contains(a)&&/INPUT|SELECT|TEXTAREA/.test(a.tagName)))return;
+  F=fresh();BASE=snap();errors={};LOADED=true;render();
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshOptions()});
+setInterval(refreshOptions,5*60*1000);
+loadSheet().then(()=>{F=fresh();BASE=snap();LOADED=true;render()}).catch(()=>{
   $('#app').innerHTML=`<div class="loading">Couldn’t load the sheet. Check your signal and reload the page.</div>`});
 </script>
 </body>

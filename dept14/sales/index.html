@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 /* Sales page for Dept 14 orchid bark: sign in → Inventory (active orders + bins) · Sales log · Calendar.
-   Sales add and edit their orders (until shipped) and the shipping info; everything else is view only. */
+   Sales add and edit their orders (until completed) and the shipping info; everything else is view only. */
 :root{
   --bg:#F3F4F1; --surface:#FFFFFF; --sunken:#EAECE7; --ink:#1B211D; --muted:#5F6A63; --line:#DADFD8; --line-strong:#C3CAC1;
   --accent:#2F6B47; --accent-ink:#FFFFFF; --accent-soft:#E2EEE6; --bar:#1B211D; --bar-ink:#F3F4F1; --bad:#B23A30;
@@ -67,12 +67,15 @@ main{padding:20px 20px 60px;display:grid;gap:20px}
 .base{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;min-height:calc(100vh - 200px)}
 .toolbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line)}
 .toolbar .sp{flex:1}
-.toolbar input[type=search]{border:1px solid var(--line-strong);border-radius:6px;padding:6px 10px;background:var(--surface);width:220px}
-.btn{background:var(--surface);border:1px solid var(--line-strong);border-radius:6px;padding:6px 11px;font-size:.88rem;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.toolbar input[type=search]{border:1px solid var(--line-strong);border-radius:6px;padding:0 10px;height:34px;background:var(--surface);width:220px}
+.btn{background:var(--surface);border:1px solid var(--line-strong);border-radius:6px;padding:0 11px;height:34px;font-size:.88rem;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .btn:hover{background:var(--sunken)}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .btn.danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 50%,transparent)}
-.btn.icon{width:32px;height:32px;padding:0;justify-content:center}
+.btn.icon{width:34px;height:34px;padding:0;justify-content:center}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn.ghost:hover{background:var(--sunken)}
+.btn:disabled{opacity:.6;cursor:default}
 .empty{padding:40px;text-align:center;color:var(--muted)}
 .loading-all{padding:40px;text-align:center;color:var(--muted)}
 
@@ -86,6 +89,7 @@ main{padding:20px 20px 60px;display:grid;gap:20px}
 .grid tbody tr{cursor:pointer}
 .grid tbody tr:hover td{background:var(--accent-soft)}
 .grid tr.done td{color:var(--muted)}
+.grid td.clip{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
 .tag{display:inline-block;font:600 .68rem/1.2 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;padding:2px 7px;border-radius:99px;border:1px solid var(--line-strong);white-space:nowrap}
 .tag.ready{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 .tag.shipped{background:color-mix(in srgb,#E3A94B 20%,transparent);border-color:#E3A94B}
@@ -139,11 +143,11 @@ main{padding:20px 20px 60px;display:grid;gap:20px}
 
 /* windows */
 .scrim{position:fixed;inset:0;background:rgb(0 0 0 / .45);z-index:40;display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px;overflow:auto}
-.modal{background:var(--surface);border-radius:12px;width:min(620px,100%);border:1px solid var(--line-strong)}
+.modal{background:var(--surface);border-radius:12px;width:min(620px,100%);border:1px solid var(--line-strong);max-height:88vh;display:flex;flex-direction:column}
 .modal.wide{width:min(760px,100%)}
 .modal-h{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line)}
 .modal-h h3{font-size:1.25rem}
-.modal-b{padding:18px 20px 20px;display:grid;gap:16px}
+.modal-b{padding:18px 20px 20px;display:grid;gap:16px;overflow:auto;flex:1 1 auto;min-height:0;align-content:start}
 .modal-b>table{width:100%}
 .modal-f{display:flex;gap:8px;justify-content:flex-end;padding:14px 20px;border-top:1px solid var(--line)}
 .in-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 14px}
@@ -164,7 +168,8 @@ main{padding:20px 20px 60px;display:grid;gap:20px}
 .ord-lines td{padding:0 6px 8px 0;vertical-align:middle}
 .ord-lines td:nth-child(2),.ord-lines th:nth-child(2){width:130px}
 .ord-lines td.ord-load,.ord-lines th:nth-child(3){width:110px}
-.ord-lines td:last-child{width:36px;padding-right:0}
+.ord-lines td:last-child{width:40px;padding-right:0}
+.ord-lines .btn.icon{width:40px;height:40px}
 .combo{position:relative}
 .combo input{width:100%}
 .combo-list{position:absolute;left:0;right:0;top:calc(100% + 2px);z-index:50;list-style:none;margin:0;padding:4px;background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;box-shadow:0 8px 24px rgb(0 0 0 / .25);max-height:260px;overflow:auto}
@@ -189,10 +194,17 @@ main{padding:20px 20px 60px;display:grid;gap:20px}
   main{padding:14px 12px 50px}
   .toolbar input[type=search]{flex:1 1 140px;width:auto;min-width:0}
   .cal{padding:12px 10px}.cal-h h3{min-width:0;font-size:1rem}.cal-w span{padding:0 2px;font-size:.62rem}
+  .grid td.clip{max-width:180px}
   .cal-d{min-height:54px}.cal-l,.cal-o,.cal-note,.cal-plan{display:none}.cal-d.has::after{content:'';width:6px;height:6px;border-radius:99px;background:var(--accent);margin-top:2px}
   .scrim{padding:8px 6px}.modal-b{padding:12px}.modal-b>table{display:block;overflow-x:auto;max-width:100%}.modal-h,.modal-f{padding-left:12px;padding-right:12px}
 }
-@media (max-width:520px){.in-form{grid-template-columns:1fr}}
+@media (max-width:520px){
+  .in-form{grid-template-columns:1fr}
+  .ord-lines,.ord-lines tbody{display:block}.ord-lines thead{display:none}
+  .ord-lines tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 40px;gap:6px;margin-bottom:12px}
+  .ord-lines td{display:block;padding:0;width:auto!important;min-width:0}
+  .ord-lines td:first-child{grid-column:1/-1}
+}
 </style>
 </head>
 <body>
@@ -229,7 +241,7 @@ main{padding:20px 20px 60px;display:grid;gap:20px}
 /* =============================================================
    Dept 14 sales page (orchid bark). Same Supabase logins as the
    manager dashboard. Sales can add orders and change them (and their
-   shipping info: carrier, ship date, freight) until they ship; the
+   shipping info: carrier, ship date, freight) until completed; the
    rest is view only. They never write ready / completed / ranking:
    the manager owns those on the dashboard.
    ============================================================= */
@@ -290,7 +302,7 @@ async function load(){
   D.bins=bins.filter(b=>b.active);
   D.onhand=Object.fromEntries(oh.map(r=>[r.name,{q:+r.on_hand||0,o:+r.on_open_orders||0}]));
   D.orders=orders.map(o=>({id:o.id,date:o.order_date,customer:o.customer||'',so:o.sales_order_no||'',po:o.po||'',notes:o.notes||'',done:!!o.completed,doneOn:o.completed_on,
-    ready:!!o.ready,readyOn:o.ready_on,carrier:o.carrier||'',shipDate:o.ship_date,freight:o.freight_cost!=null?+o.freight_cost:null,priority:o.priority,
+    ready:!!o.ready,readyOn:o.ready_on,updatedAt:o.updated_at||null,carrier:o.carrier||'',shipDate:o.ship_date,freight:o.freight_cost!=null?+o.freight_cost:null,priority:o.priority,
     lines:(o.order_lines||[]).map(l=>({bin:binName(l.bin_id),qty:+l.qty,load:l.load_type||''}))}));
   D.dryer=dryer.map(r=>({date:r.production_date,product:binName(r.product_bin_id),yin:+r.yards_in,yout:+r.yards_out,dest:r.destination,bin:binName(r.bin_id),totes:r.totes!=null?+r.totes:null,hours:+r.hours}));
   D.picker=picker.map(r=>({date:r.production_date,material:r.material,units:+r.units,yards:+r.yards,small:+r.small_green,medium:+r.medium_green,hours:+r.hours}));
@@ -299,8 +311,7 @@ async function load(){
   try{const c=await must(sb.from('settings').select('value').eq('key','orchid_customers').maybeSingle());D.customers=Array.isArray(c&&c.value)?c.value:[]}catch(e){D.customers=[]}
   D.loadedAt=Date.now();
 }
-const shipped=o=>o.done||(o.shipDate&&o.shipDate<today());
-const canEdit=o=>!shipped(o);
+const canEdit=o=>!o.done;
 const summary=o=>o.lines.map(l=>`${fmtN(l.qty,2)} ${unitOf(l.bin)} ${l.bin}`).join(', ');
 const loads=o=>[...new Set(o.lines.map(l=>l.load).filter(Boolean))].join(', ');
 const statusTag=o=>o.done?'<span class="tag done">Completed</span>':o.shipDate&&o.shipDate<=today()?'<span class="tag shipped">Shipped</span>':o.ready?'<span class="tag ready">Ready</span>':'<span class="tag">Open</span>';
@@ -317,7 +328,7 @@ function activeOrders(){
   const open=D.orders.filter(o=>!o.done).sort((a,b)=>(a.priority??1e9)-(b.priority??1e9)||a.date.localeCompare(b.date));
   return `<section class="ao"><div class="ao-h"><h3>Active orders</h3><span class="muted">${open.length}</span></div>
     ${open.length?`<table class="grid"><thead><tr><th class="r">#</th><th>Customer</th><th>Sales order #</th><th>PO</th><th>Products</th><th>Load</th><th>Order date</th><th>Status</th><th>Ship date</th><th>Carrier</th></tr></thead><tbody>
-    ${open.map((o,i)=>`<tr data-order="${esc(o.id)}"><td class="r num">${i+1}</td><td>${esc(o.customer)}</td><td class="num">${esc(o.so)}</td><td class="num">${esc(o.po)}</td><td>${esc(summary(o))}</td><td>${esc(loads(o))}</td><td>${fmtDate(o.date)}</td><td>${statusTag(o)}</td><td>${fmtDate(o.shipDate)}</td><td>${esc(o.carrier)}</td></tr>`).join('')}
+    ${open.map((o,i)=>`<tr data-order="${esc(o.id)}"><td class="r num">${i+1}</td><td>${esc(o.customer)}</td><td class="num">${esc(o.so)}</td><td class="num">${esc(o.po)}</td><td class="clip" title="${esc(summary(o))}">${esc(summary(o))}</td><td>${esc(loads(o))}</td><td>${fmtDate(o.date)}</td><td>${statusTag(o)}</td><td>${fmtDate(o.shipDate)}</td><td>${esc(o.carrier)}</td></tr>`).join('')}
     </tbody></table>`:'<span class="muted">No open orders.</span>'}</section>`;
 }
 function renderInv(){
@@ -327,7 +338,7 @@ function renderInv(){
     return `<span class="bm-two"><span class="n ${h.q<0?'neg':''}">${fmtN(h.q,2)}<small>${u}</small></span><span class="bm-after"><span class="n ${af<-1e-9?'neg':''}">${fmtN(af,2)}<small>${u}</small></span><span class="bm-lab">after sales</span></span></span>`};
   const tbl=(cols,notes=true)=>cols.length?`<div class="binmap-wrap"><table class="binmap" style="width:${Math.min(100,cols.length/W*100)}%">
     <thead><tr>${cols.map(b=>`<th class="bh ${b.kind}">${esc(b.name)}</th>`).join('')}</tr></thead>
-    <tbody><tr>${cols.map(b=>`<td>${two(b)}</td>`).join('')}</tr>${notes?`<tr>${cols.map(b=>`<td class="bm-note">${esc(b.note||'')}</td>`).join('')}</tr>`:''}</tbody></table></div>`:'';
+    <tbody><tr>${cols.map(b=>`<td>${two(b)}</td>`).join('')}</tr>${notes&&cols.some(b=>b.note)?`<tr>${cols.map(b=>`<td class="bm-note">${esc(b.note||'')}</td>`).join('')}</tr>`:''}</tbody></table></div>`:'';
   const bagged=D.bins.filter(b=>b.kind==='bagged'||b.kind==='totes');
   $('#view').innerHTML=activeOrders()+tbl(green)+tbl(kinds('dried'))+'<hr class="inv-div">'+tbl(kinds('material'))+'<hr class="inv-div">'+tbl(bagged,false);
 }
@@ -335,9 +346,9 @@ function renderSales(){
   const q=UI.q.toLowerCase();
   const rows=D.orders.filter(o=>!q||[o.customer,o.so,o.po,o.notes,o.carrier,summary(o)].join(' ').toLowerCase().includes(q))
     .sort((a,b)=>(a.done-b.done)||b.date.localeCompare(a.date));
-  $('#view').innerHTML=`<div class="toolbar"><input type="search" id="q" placeholder="Search" value="${esc(UI.q)}"><span class="sp"></span><button class="btn primary" id="add2">+ Add order</button></div>
+  $('#view').innerHTML=`<div class="toolbar"><input type="search" id="q" placeholder="Search" value="${esc(UI.q)}"><span class="sp"></span><button class="btn primary" id="add2">Add +</button></div>
     <div class="grid-wrap">${rows.length?`<table class="grid"><thead><tr><th>Order date</th><th>Customer</th><th>Sales order #</th><th>PO</th><th>Products</th><th>Load</th><th>Status</th><th>Ship date</th><th>Carrier</th><th class="r">Freight</th><th>Notes</th></tr></thead><tbody>
-    ${rows.map(o=>`<tr data-order="${esc(o.id)}" class="${o.done?'done':''}"><td>${fmtDate(o.date)}</td><td>${esc(o.customer)}</td><td class="num">${esc(o.so)}</td><td class="num">${esc(o.po)}</td><td>${esc(summary(o))}</td><td>${esc(loads(o))}</td><td>${statusTag(o)}</td><td>${fmtDate(o.shipDate)}</td><td>${esc(o.carrier)}</td><td class="r num">${o.freight!=null?'$'+fmtN(o.freight,2):''}</td><td>${esc(o.notes)}</td></tr>`).join('')}
+    ${rows.map(o=>`<tr data-order="${esc(o.id)}" class="${o.done?'done':''}"><td>${fmtDate(o.date)}</td><td>${esc(o.customer)}</td><td class="num">${esc(o.so)}</td><td class="num">${esc(o.po)}</td><td class="clip" title="${esc(summary(o))}">${esc(summary(o))}</td><td>${esc(loads(o))}</td><td>${statusTag(o)}</td><td>${fmtDate(o.shipDate)}</td><td>${esc(o.carrier)}</td><td class="r num">${o.freight!=null?'$'+fmtN(o.freight,2):''}</td><td class="clip" title="${esc(o.notes)}">${esc(o.notes)}</td></tr>`).join('')}
     </tbody></table>`:'<div class="empty">No records.</div>'}</div>`;
   const s=$('#q');s.oninput=()=>{UI.q=s.value;const p=s.selectionStart;renderSales();const n=$('#q');n.focus();n.setSelectionRange(p,p)};
   $('#add2').onclick=()=>openOrder(null);
@@ -386,17 +397,18 @@ function openDay(ds){
   modal(new Date(ds+'T12:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}),b||'<div class="muted">No entries.</div>','<button class="btn" data-close>Close</button>','wide');
 }
 
-/* ---------- order window: add, or change until it ships ---------- */
+/* ---------- order window: add, or change until the manager completes it ---------- */
 function openOrder(o){
   const isNew=!o,edit=isNew||canEdit(o);
   if(!edit)return viewOrder(o);
   const d=isNew?{date:today(),customer:'',so:'',po:'',notes:'',carrier:'',shipDate:'',freight:'',lines:[{bin:'',qty:'',load:''}]}
                :{...o,shipDate:o.shipDate||'',freight:o.freight??'',lines:o.lines.map(l=>({...l}))};
-  const prods=products(),customers=[...new Set(D.orders.map(x=>x.customer).filter(Boolean))].sort(),carriers=[...new Set(D.orders.map(x=>x.carrier).filter(Boolean))].sort();
+  const id=isNew?crypto.randomUUID():o.id;
+  const prods=products(),carriers=[...new Set(D.orders.map(x=>x.carrier).filter(Boolean))].sort();
   const lineRow=(l,i)=>`<tr data-i="${i}"><td><select data-f="bin" aria-label="Product"><option value="">Pick a product</option>${prods.map(p=>`<option ${p===l.bin?'selected':''}>${esc(p)}</option>`).join('')}${l.bin&&!prods.includes(l.bin)?`<option selected>${esc(l.bin)}</option>`:''}</select></td>
     <td><span class="in-sfx"><input type="number" data-f="qty" min="0" step="0.5" value="${l.qty??''}" aria-label="Quantity" inputmode="decimal"><i>${l.bin?unitOf(l.bin):''}</i></span></td>
     <td class="ord-load"><select data-f="load" aria-label="Load type"><option value="">—</option>${['BULK','BAGS','TOTES'].map(x=>`<option ${x===l.load?'selected':''}>${x}</option>`).join('')}</select></td>
-    <td>${d.lines.length>1?`<button type="button" class="btn icon" data-rm="${i}" aria-label="Remove line">✕</button>`:''}</td></tr>`;
+    <td>${d.lines.length>1?`<button type="button" class="btn icon ghost" data-rm="${i}" aria-label="Remove line">✕</button>`:''}</td></tr>`;
   modal(isNew?'Sales input':`Order · ${o.customer}`,`
     <div class="in-form">
       <label class="field full"><span>Customer</span><input type="text" name="customer" value="${esc(d.customer)}" maxlength="80"></label>
@@ -423,8 +435,16 @@ function openOrder(o){
   tb.addEventListener('click',e=>{const b=e.target.closest('[data-rm]');if(b){grab();d.lines.splice(+b.dataset.rm,1);redraw()}});
   $('#addLine').onclick=()=>{grab();d.lines.push({bin:'',qty:'',load:''});redraw();tb.querySelector('tr:last-child select')?.focus()};
   const del=$('#delOrder');if(del)del.onclick=async()=>{if(!confirm(`Cancel the ${o.customer} order? It will be deleted.`))return;
-    del.disabled=true;try{await must(sb.from('orders').delete().eq('id',o.id));closeModal();await refresh();toast('Order cancelled')}catch(e){del.disabled=false;err('Couldn’t cancel: '+e.message)}};
+    del.disabled=true;
+    try{await must(sb.rpc('cancel_sales_order',{p_id:o.id,p_expected:o.updatedAt||null}))}catch(e){del.disabled=false;return fail(e,'Couldn’t cancel: ')}
+    livePending=false;closeModal();toast('Order cancelled');try{await refresh()}catch(e){}};
   const err=t=>{const e=$('#formErr');e.textContent=t;e.hidden=false};
+  /* someone else changed it: reload and show the fresh copy with the server's message */
+  const fail=async(e,pre)=>{const msg=e.message||String(e);
+    if(!/changed/i.test(msg))return err(pre+msg);
+    try{await refresh()}catch(x){}
+    const f=D.orders.find(x=>x.id===id);
+    if(f&&canEdit(f)){openOrder(f);err(msg)}else{closeModal();toast(msg)}};
   $('#saveOrder').onclick=async()=>{grab();
     if(!String(d.customer).trim())return err('Enter the customer.');
     if(!d.date)return err('Pick the order date.');
@@ -433,21 +453,23 @@ function openOrder(o){
     if(lines.some(l=>!l.bin))return err('Pick a product for each line.');
     if(lines.some(l=>!(+l.qty>0)))return err('Enter a quantity for each line.');
     if(d.freight!==''&&!(+d.freight>=0))return err('Freight cost must be a number.');
+    if(d.shipDate&&d.shipDate<d.date)return err('The ship date can’t be before the order date.');
     const btn=$('#saveOrder');btn.disabled=true;
-    {const n=String(d.customer).trim().replace(/\s+/g,' '),hit=D.customers.find(c=>c.toLowerCase()===n.toLowerCase());d.customer=hit||n;
-      if(!hit){try{const cur=await must(sb.from('settings').select('value').eq('key','orchid_customers').maybeSingle());const list=Array.isArray(cur&&cur.value)?cur.value:[];
-        if(!list.some(c=>c.toLowerCase()===n.toLowerCase())){list.push(n);list.sort((x,y)=>x.localeCompare(y));await must(sb.from('settings').upsert({key:'orchid_customers',value:list}))}D.customers=list}catch(e){}}}
-    const id=isNew?crypto.randomUUID():o.id;
-    const row={id,line:'orchid',order_date:d.date,customer:String(d.customer).trim(),sales_order_no:d.so.trim()||null,po:d.po.trim()||null,notes:d.notes.trim()||null,
+    const name=String(d.customer).trim().replace(/\s+/g,' '),hit=D.customers.find(c=>c.toLowerCase()===name.toLowerCase());d.customer=hit||name;
+    const p={id,order_date:d.date,customer:d.customer,sales_order_no:d.so.trim()||null,po:d.po.trim()||null,notes:d.notes.trim()||null,
       carrier:d.carrier.trim()||null,ship_date:d.shipDate||null,freight_cost:d.freight===''?null:+d.freight};
-    try{
-      await must(isNew?sb.from('orders').insert(row):sb.from('orders').update(row).eq('id',id));
-      await must(sb.from('order_lines').delete().eq('order_id',id));
-      await must(sb.from('order_lines').insert(lines.map(l=>({order_id:id,bin_id:binOf(l.bin).id,qty:+l.qty,load_type:l.load||null}))));
-      closeModal();await refresh();toast(isNew?'Order added':'Order saved');
-    }catch(e){btn.disabled=false;err('Couldn’t save: '+(e.message||e))}
+    try{await must(sb.rpc('save_sales_order',{p,p_lines:lines.map(l=>({bin_id:binOf(l.bin).id,qty:+l.qty,load_type:l.load||null})),p_expected:isNew?null:(o.updatedAt||null)}))}
+    catch(e){btn.disabled=false;return fail(e,'Couldn’t save: ')}
+    if(!hit)await addCustomer(name);
+    livePending=false;closeModal();toast(isNew?'Order added':'Order saved');try{await refresh()}catch(e){}
   };
   if(isNew)v('customer').focus();
+}
+/* add a new customer name to settings orchid_customers (re-read first, no duplicates, sorted) */
+async function addCustomer(n){
+  try{const cur=await must(sb.from('settings').select('value').eq('key','orchid_customers').maybeSingle());const list=Array.isArray(cur&&cur.value)?cur.value:[];
+    if(!list.some(c=>String(c).toLowerCase()===n.toLowerCase())){list.push(n);list.sort((x,y)=>String(x).localeCompare(String(y)));await must(sb.from('settings').upsert({key:'orchid_customers',value:list}))}
+    D.customers=list}catch(e){}
 }
 function viewOrder(o){
   modal(`Order · ${o.customer}`,`<div class="ro"><dl>
@@ -463,10 +485,11 @@ function viewOrder(o){
 /* ---------- windows ---------- */
 function modal(title,body,foot,cls=''){
   $('#modalRoot').innerHTML=`<div class="scrim" id="scrim"><div class="modal ${cls}" role="dialog" aria-modal="true" aria-label="${esc(title)}">
-    <div class="modal-h"><h3>${esc(title)}</h3><button class="btn icon" data-close aria-label="Close">✕</button></div>
+    <div class="modal-h"><h3>${esc(title)}</h3><button class="btn ghost icon" data-close aria-label="Close">✕</button></div>
     <div class="modal-b">${body}</div>${foot?`<div class="modal-f">${foot}</div>`:''}</div></div>`;
 }
-const closeModal=()=>$('#modalRoot').innerHTML='';
+const modalOpen=()=>!!$('#modalRoot').innerHTML;
+const closeModal=()=>{$('#modalRoot').innerHTML='';if(livePending){livePending=false;quietRefresh()}};
 $('#modalRoot').addEventListener('click',e=>{
   if(e.target.id==='scrim'||e.target.closest('[data-close]'))return closeModal();
   const r=e.target.closest('tr[data-order]');if(r){const o=D.orders.find(x=>x.id===r.dataset.order);if(o)openOrder(o)}
@@ -482,6 +505,21 @@ $('#addOrder').onclick=()=>openOrder(null);
 
 /* ---------- sign in ---------- */
 async function refresh(){await load();render()}
+/* live updates: realtime changes (debounced) + a 60 s poll; never redraw under an open window */
+let liveT=0,livePending=false,liveBusy=false,liveOn=false;
+async function quietRefresh(){
+  if(liveBusy)return;liveBusy=true;
+  const y=window.scrollY,a=document.activeElement,q=a&&a.id==='q'?[a.selectionStart,a.selectionEnd]:null;
+  try{await load();if(modalOpen()){livePending=true;return}render();window.scrollTo(0,y);
+    if(q){const n=$('#q');if(n){n.focus();n.setSelectionRange(q[0],q[1])}}}
+  catch(e){}finally{liveBusy=false}
+}
+function onChange(){clearTimeout(liveT);liveT=setTimeout(()=>{if(modalOpen())livePending=true;else quietRefresh()},1500)}
+function startLive(){
+  if(liveOn)return;liveOn=true;
+  try{sb.channel('d14-sales').on('postgres_changes',{event:'*',schema:'dept14'},onChange).subscribe()}catch(e){}
+  setInterval(()=>{if(!document.hidden&&!modalOpen()&&Date.now()-D.loadedAt>=55000)quietRefresh()},60000);
+}
 function showLogin(msg){$('#login').hidden=false;$('#appShell').hidden=true;$('#loginErr').textContent=msg||'';$('#lgEmail').focus()}
 async function boot(){
   if(!sb){document.body.innerHTML='<p style="padding:30px">The page can’t reach the database.</p>';return}
@@ -490,7 +528,7 @@ async function boot(){
   $('#whoEmail').textContent=session.user.email||'';
   $('#login').hidden=true;$('#appShell').hidden=false;
   try{await load()}catch(e){$('#loading').textContent='Couldn’t load the data: '+(e.message||e);return}
-  $('#loading').hidden=true;$('#view').hidden=false;render();
+  $('#loading').hidden=true;$('#view').hidden=false;render();startLive();
 }
 $('#loginForm').onsubmit=async e=>{
   e.preventDefault();const btn=$('#lgBtn');btn.disabled=true;btn.textContent='Signing in…';
@@ -501,8 +539,8 @@ $('#loginForm').onsubmit=async e=>{
 };
 $('#signOut').onclick=async()=>{await sb.auth.signOut();location.reload()};
 document.addEventListener('visibilitychange',async()=>{
-  if(document.hidden||!D.loadedAt||$('#modalRoot').innerHTML||Date.now()-D.loadedAt<60000)return;
-  try{await refresh()}catch(e){}
+  if(document.hidden||!D.loadedAt||modalOpen()||Date.now()-D.loadedAt<60000)return;
+  quietRefresh();
 });
 boot();
 </script>

@@ -142,7 +142,7 @@ main{padding:20px 20px 60px;margin:0 auto;display:grid;gap:20px}
 .add-card:hover{border-color:var(--accent);color:var(--accent)}
 
 /* Buttons + inputs */
-.btn{background:var(--surface);border:1px solid var(--line-strong);border-radius:6px;padding:6px 11px;font-size:.88rem;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn{background:var(--surface);border:1px solid var(--line-strong);border-radius:6px;padding:0 11px;min-height:34px;font-size:.88rem;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .btn:hover{border-color:var(--ink)}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .btn.danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 55%,var(--line-strong))}
@@ -181,7 +181,7 @@ table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width
 .grid th.rn{z-index:3;background:var(--sunken)}
 .grid tbody tr{background:var(--surface);cursor:pointer}
 .grid tbody tr:hover{background:var(--sunken)}
-.grid td.r{text-align:right}
+.grid td.r,.grid th.r{text-align:right}
 .grid tr.void td:not(.rn){color:var(--faint);text-decoration:line-through}
 .grid tr.grp td{background:var(--bg);font-weight:600;cursor:default;height:34px}
 .grid tr.grp:hover{background:var(--bg)}
@@ -194,7 +194,9 @@ table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width
 
 /* Modal */
 .scrim{position:fixed;inset:0;background:rgb(0 0 0 / .45);z-index:40;display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px;overflow:auto}
-.modal{background:var(--surface);border-radius:12px;width:min(720px,100%);border:1px solid var(--line-strong)}
+.modal{background:var(--surface);border-radius:12px;width:min(720px,100%);border:1px solid var(--line-strong);max-height:calc(100vh - 8vh);display:flex;flex-direction:column}
+.modal>.modal-b{overflow:auto;min-height:0;flex:1 1 auto}
+.modal>.modal-h,.modal>.modal-f{flex:none}
 .inv{padding:0;display:grid}
 .inv-sec{display:grid;gap:12px;padding:18px 18px 20px 20px;border-top:1px solid var(--line);border-left:5px solid var(--acc);background:linear-gradient(90deg,color-mix(in srgb,var(--acc) 6%,transparent),transparent 40%)}
 .inv-sec:first-child{border-top:0}
@@ -428,7 +430,7 @@ table.eom-t{width:100%;border-collapse:collapse;table-layout:fixed}
 .cal-w,.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
 .cal-w span{font:600 .72rem var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:0 6px}
 .cal-d{all:unset;box-sizing:border-box;cursor:pointer;min-height:92px;border:1px solid var(--line);border-radius:6px;padding:5px 7px;display:flex;flex-direction:column;gap:1px;background:var(--surface);font-size:.78rem;line-height:1.3;overflow:hidden;min-width:0}
-.cal-d:hover,.cal-d:focus-visible{border-color:var(--accent)}
+.cal-d:hover,.cal-d:focus-visible{background:var(--accent-soft)}
 .cal-d.out{opacity:.4}
 .cal-d.we{background:var(--sunken)}
 .cal-d.miss{background:color-mix(in srgb,var(--bad) 16%,var(--surface));border-color:color-mix(in srgb,var(--bad) 55%,transparent)}
@@ -453,7 +455,7 @@ table.eom-t{width:100%;border-collapse:collapse;table-layout:fixed}
 .cal-ph{font:600 .62rem/1.3 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}
 .run-ph .ph-dl{position:absolute;bottom:4px;right:4px;width:28px;height:28px;border-radius:99px;background:rgba(0,0,0,.6);color:#fff;display:grid;place-items:center;text-decoration:none;font-weight:700}
 .run-ph .ph-cap{position:absolute;bottom:4px;left:6px;font:600 .65rem var(--f-mono);text-transform:uppercase;color:#fff;text-shadow:0 1px 2px #000}
-.cal-miss{font:600 .6rem/1.4 var(--f-mono);text-transform:uppercase;letter-spacing:.05em;color:color-mix(in srgb,var(--bad) 80%,var(--muted));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-miss{font:600 .66rem/1.4 var(--f-mono);text-transform:uppercase;letter-spacing:.05em;color:color-mix(in srgb,var(--bad) 80%,var(--muted));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cal-l.c-dryer b{color:#C4761E}.cal-l.c-pick b{color:#4E8F3A}.cal-l.c-bag b{color:#5E8F4A}.cal-l.c-off{color:var(--muted);font-style:italic}
 .cal-plan{font-size:.72rem;font-weight:600;background:color-mix(in srgb,var(--accent) 16%,transparent);border-left:3px solid var(--accent);border-radius:3px;padding:1px 5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .dsec{display:grid;gap:8px;padding-bottom:14px;border-bottom:1px solid var(--line)}
@@ -575,6 +577,26 @@ table.grid.me{width:100%}
 .detail dd{margin:0}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:.9rem;z-index:50}
 /* phones: the whole dashboard works at 375px wide; only wide tables scroll sideways inside their own box */
+@media (max-width:900px){
+  nav.lines{flex-wrap:wrap;row-gap:8px}
+  nav.lines .input-btn{order:5;flex:1 1 calc(33.333% - 6px);margin:0;white-space:nowrap}
+  nav.lines [data-line=settings]{margin-left:auto!important}
+  nav.subtabs{flex-wrap:wrap}
+  .bd-row{grid-template-columns:minmax(70px,120px) minmax(0,1fr) auto}
+  .bd-row .bd-pct{display:none}
+}
+@media (max-width:700px){
+  .eom-h{flex-wrap:wrap}.eom-tools{flex-wrap:wrap}
+  .eom{padding:16px 12px}.eom-wrap{padding:10px}
+  .eom table.eom-t{min-width:520px}.eom{overflow-x:auto}
+}
+@media (max-width:520px){
+  .ord-lines thead{display:none}
+  .ord-lines tr{display:grid;grid-template-columns:1fr 110px 36px;gap:6px;margin-bottom:10px}
+  .ord-lines td{padding:0!important;width:auto!important}
+  .ord-lines td:first-child{grid-column:1/-1}
+  .ord-lines tr:not(:has(.ord-load)){grid-template-columns:1fr 36px}
+}
 @media (max-width:760px){
   .top{position:static}
   .top-in{gap:6px 10px}
@@ -782,7 +804,7 @@ const saveDB=()=>store.set('db',DB);
 
 /* ---------- item helpers ---------- */
 function itemLabel(code,size){
-  const [k,v]=code.split(':');
+  const [k,...rest]=code.split(':'),v=rest.join(':');
   if(code==='CB2:tote')return 'Raw CB2 (toted)';
   if(k==='CB2')return 'Raw CB2';
   if(k==='CC1')return v+' (CC1)';
@@ -799,6 +821,7 @@ const active=rs=>rs.filter(r=>r.status==='active');
 
 /* ---------- periods ---------- */
 const TODAY=(()=>{const d=new Date();d.setHours(12,0,0,0);return d})();
+setInterval(()=>{const n=new Date();n.setHours(12,0,0,0);if(n.getTime()!==TODAY.getTime()){TODAY.setTime(n.getTime());if(typeof render==='function')render()}},60000);
 const PERIODS={
   /* "This month" compares to the same days of last month, so the delta is fair early in the month */
   month:{label:'This month',range(o=0){const a=new Date(TODAY.getFullYear(),TODAY.getMonth()-o,1);const end=new Date(TODAY.getFullYear(),TODAY.getMonth()-o+1,0);const b=new Date(a.getFullYear(),a.getMonth(),Math.min(TODAY.getDate(),end.getDate()));return [iso(a),iso(b)]}},
@@ -963,7 +986,7 @@ const tags=a=>(a||[]).map(t=>`<span class="pill">${esc(t)}</span>`).join('');
 const TABLES={
   biochar:{
     inventory:{label:'Inventory',view:'inventory',cols:[],groups:{},rows:()=>[]},
-    runs:{label:'Production log',simple:true,addLabel:'+ Add',rows:()=>DB.bio,addable:true,canVoid:true,pre:()=>calHTML('bio'),
+    runs:{label:'Production log',simple:true,addLabel:'Add +',rows:()=>DB.bio,addable:true,canVoid:true,pre:()=>calHTML('bio'),
       groups:{'':'None',job:'Job type',month:'Month',crew:'Crew'},
       cols:[
         {k:'date',l:'Date',t:'📅',get:r=>r.date,fmt:v=>fmtDate(v)},
@@ -987,7 +1010,7 @@ const TABLES={
     monthend:{label:'Reports',report:true,cols:[],groups:{},rows:()=>[]},
   },
   orchid:{
-    dryer:{label:'Dryer log',simple:true,addLabel:'+ Add',rows:()=>DB.orc,addable:true,canVoid:true,
+    dryer:{label:'Dryer log',simple:true,addLabel:'Add +',rows:()=>DB.orc,addable:true,canVoid:true,
       groups:{'':'None',product:'Product in',dest:'Destination',month:'Month',crew:'Crew'},
       cols:[
         {k:'date',l:'Date',t:'📅',get:r=>r.date,fmt:v=>fmtDate(v)},
@@ -1002,7 +1025,7 @@ const TABLES={
         {k:'crew',l:'Crew',t:'👥',get:r=>r.crew.join(', '),fmt:(v,r)=>tags(r.crew)},
         {k:'notes',l:'Notes',t:'¶',get:r=>r.notes},
       ]},
-    picker:{label:'Picker log',simple:true,rows:()=>DB.oin.filter(e=>e.type==='pick'),addable:true,addLabel:'+ Add',onAdd:()=>openInputForm(null,'pick'),
+    picker:{label:'Picker log',simple:true,rows:()=>DB.oin.filter(e=>e.type==='pick'),addable:true,addLabel:'Add +',onAdd:()=>openInputForm(null,'pick'),
       groups:{},
       cols:[
         {k:'date',l:'Date',get:r=>r.date,fmt:v=>fmtDate(v)},
@@ -1016,7 +1039,7 @@ const TABLES={
         {k:'hours',l:'Hours',num:1,get:r=>r.hours||'',sum:1},
         {k:'notes',l:'Notes',get:r=>r.notes||''},
       ]},
-    bagging:{label:'Bagging log',simple:true,rows:()=>DB.oin.filter(e=>e.type==='bag'),addable:true,addLabel:'+ Add',onAdd:()=>openInputForm(null,'bag'),
+    bagging:{label:'Bagging log',simple:true,rows:()=>DB.oin.filter(e=>e.type==='bag'),addable:true,addLabel:'Add +',onAdd:()=>openInputForm(null,'bag'),
       groups:{},
       cols:[
         {k:'date',l:'Date',get:r=>r.date,fmt:v=>fmtDate(v)},
@@ -1027,7 +1050,7 @@ const TABLES={
         {k:'notes',l:'Notes',get:r=>r.notes||''},
       ]},
     inventory:{label:'Inventory',view:'orcinv',cols:[],groups:{},rows:()=>[]},
-    sales:{label:'Sales log',simple:true,rows:()=>DB.orders.filter(o=>o.line===UI.line),addable:true,addLabel:'+ Add order',onAdd:()=>openOrderForm(null,UI.line),
+    sales:{label:'Sales log',simple:true,rows:()=>DB.orders.filter(o=>o.line===UI.line),addable:true,addLabel:'Add +',onAdd:()=>openOrderForm(null,UI.line),
       groups:{'':'None',customer:'Customer',done:'Completed',month:'Month'},
       /* biochar sales only need the date, products and notes */
       get cols(){return UI.line==='biochar'?this.allCols.filter(c=>!['so','po','ready','carrier','shipDate','freight'].includes(c.k)):this.allCols},
@@ -1050,7 +1073,7 @@ const TABLES={
 
 TABLES.orchid.reports={label:'Reports',report:true,cols:[],groups:{},rows:()=>[]};
 /* Purchased log: one per line (biochar raw char; orchid green products). */
-const purchTable=line=>({label:'Purchased log',simple:true,rows:()=>DB.purch.filter(r=>purchMat(r.material).line===line),addable:true,addLabel:'+ Add',onAdd:()=>openInputForm(null,'buy',line),groups:{},
+const purchTable=line=>({label:'Purchased log',simple:true,rows:()=>DB.purch.filter(r=>purchMat(r.material).line===line),addable:true,addLabel:'Add +',onAdd:()=>openInputForm(null,'buy',line),groups:{},
   cols:[
     {k:'date',l:'Date',get:r=>r.date,fmt:v=>fmtDate(v)},
     {k:'material',l:'Material',get:r=>r.material},
@@ -1084,7 +1107,7 @@ function showCards(){const on=UI.line==='orchid'?UI.table.orchid==='reports':UI.
 function renderToolbar(){
   const T=curTable(),k=tkey(),hidden=UI.hidden[k]||[],grp=UI.group[k]||'',sort=UI.sort[k];
   const jobFilter=UI.line==='biochar'&&UI.table.biochar==='runs';
-  if(T.simple){$('#toolbar').innerHTML=`<input type="search" id="q" placeholder="Search" value="${esc(UI.q)}">${sort?`<button class="btn on" data-clearsort>Sorted: ${T.cols.find(c=>c.k===sort.k)?.l} ${sort.d>0?'↑':'↓'} ✕</button>`:''}<span class="sp"></span>${T.addable?`<button class="btn primary" id="add">${T.addLabel}</button>`:''}`;return}
+  if(T.simple){$('#toolbar').innerHTML=`<input type="search" id="q" placeholder="Search" value="${esc(UI.q)}">${sort?`<button class="btn on" data-clearsort>Sorted: ${T.cols.find(c=>c.k===sort.k)?.l} ${sort.d>0?'↑':'↓'} ✕</button>`:''}<span class="sp"></span>${isSales()?'<span class="count" id="count"></span>':''}${T.addable?`<button class="btn primary" id="add">${T.addLabel}</button>`:''}`;return}
   $('#toolbar').innerHTML=`
     ${jobFilter?`<div style="display:flex;gap:4px">${['','wash','sock','bag'].map(j=>`<button class="btn ${UI.filterJob===j?'on':''}" data-job="${j}">${j?j[0].toUpperCase()+j.slice(1):'All'}</button>`).join('')}</div>`:''}
     <div class="pop"><button class="btn ${hidden.length?'on':''}" data-pop="hide">Hide fields${hidden.length?` (${hidden.length})`:''}</button>
@@ -1095,7 +1118,7 @@ function renderToolbar(){
     <span class="count" id="count"></span>
     <input type="search" id="q" placeholder="Search" value="${esc(UI.q)}">
     <button class="btn" id="csv">CSV</button>
-    ${T.addable?`<button class="btn primary" id="add">${T.addLabel||(UI.table[UI.line]==='inventory'?'± Adjust inventory':'+ Add run')}</button>`:''}`;
+    ${T.addable?`<button class="btn primary" id="add">${T.addLabel||(UI.table[UI.line]==='inventory'?'± Adjust inventory':'Add +')}</button>`:''}`;
 }
 $('#toolbar').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
@@ -1168,7 +1191,7 @@ function modal(title,body,foot){
     <div class="modal-b">${body}</div>${foot?`<div class="modal-f">${foot}</div>`:''}</div></div>`;
   const f=$('#modalRoot').querySelector('input,select,button:not([data-close])');f&&f.focus();
 }
-const closeModal=()=>$('#modalRoot').innerHTML='';
+const closeModal=()=>{$('#modalRoot').innerHTML='';if(typeof Live!=='undefined'&&Live.pending)setTimeout(Live.check,300)};
 $('#modalRoot').addEventListener('click',e=>{if(e.target.id==='scrim'||e.target.closest('[data-close]'))closeModal()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#modalRoot').innerHTML)closeModal()});
 
@@ -1202,7 +1225,7 @@ function lineRow(l,i){
   const cust=isCustomItem(l.item),selVal=cust?l.item.split(':')[0]+':__custom':l.item;
   return `<tr data-i="${i}">
     <td><select data-f="dir"><option value="in" ${l.dir==='in'?'selected':''}>Used</option><option value="out" ${l.dir==='out'?'selected':''}>Made</option></select></td>
-    <td><select data-f="item">${[...itemKeys().slice(0,2+BLENDS.length),'CC1:__custom',...itemKeys().slice(2+BLENDS.length),'BAG:__custom'].map(k=>`<option value="${k}" ${k===selVal?'selected':''}>${esc(k==='SO1:custom'?'Custom sock':k==='CC1:__custom'?'Custom blend…':k==='BAG:__custom'?'Custom bag…':itemLabel(k))}</option>`).join('')}</select></td>
+    <td><select data-f="item">${[...itemKeys().slice(0,2+BLENDS.length),'CC1:__custom',...itemKeys().slice(2+BLENDS.length),'BAG:__custom'].map(k=>`<option value="${esc(k)}" ${k===selVal?'selected':''}>${esc(k==='SO1:custom'?'Custom sock':k==='CC1:__custom'?'Custom blend…':k==='BAG:__custom'?'Custom bag…':itemLabel(k))}</option>`).join('')}</select></td>
     <td><input type="number" data-f="qty" min="0" step="0.5" value="${l.qty??''}" aria-label="Quantity"></td>
     <td>${l.item==='SO1:custom'?`<input type="number" data-f="size" min="0" step="0.5" value="${l.size??''}" placeholder="ft" aria-label="Custom length in feet">`:cust?`<input type="text" data-f="cname" value="${esc(l.item.split(':').slice(1).join(':'))}" placeholder="Blend name" aria-label="Custom blend name">`:''}</td>
     <td class="muted">${unitOf(l.item)}</td>
@@ -1234,20 +1257,20 @@ function openRunEditor(run){
       <label class="field"><span>Hours</span><input type="number" name="hours" min="0.25" max="24" step="0.25" value="${d.hours}"></label>
       <label class="field"><span>Status</span><select name="status"><option value="active" ${d.status==='active'?'selected':''}>Counts in totals</option><option value="void" ${d.status==='void'?'selected':''}>Voided</option></select></label>
       <label class="field full" id="vrWrap" ${d.status==='void'?'':'hidden'}><span>Void reason</span><input type="text" name="voidReason" value="${esc(d.voidReason||'')}"></label>
-      <div class="field full"><span>Crew</span><div class="chk">${crewFor('biochar',d.crew).map(c=>`<label><input type="checkbox" name="crew" value="${c}" ${d.crew.includes(c)?'checked':''}><span>${c}</span></label>`).join('')}</div></div>
+      <div class="field full"><span>Crew</span><div class="chk">${crewFor('biochar',d.crew).map(c=>`<label><input type="checkbox" name="crew" value="${esc(c)}" ${d.crew.includes(c)?'checked':''}><span>${esc(c)}</span></label>`).join('')}</div></div>
     </div>
     <div class="sect">Material used and made</div>
     <div style="overflow-x:auto"><table class="lines"><thead><tr><th style="width:96px"></th><th>Product</th><th style="width:96px">Qty</th><th style="width:130px">Size / name</th><th style="width:30px"></th><th style="width:36px"></th></tr></thead><tbody id="lb"></tbody></table></div>
-    <div><button type="button" class="btn" id="addLine">+ Add line</button></div>
+    <div><button type="button" class="btn" id="addLine">Add +</button></div>
     ${isNew?'':'<div id="runPhotos"></div>'}
     <div class="sect">Shipping and notes</div>
     <div class="fields">
       <label class="field"><span>Boxes</span><input type="number" name="boxes" min="0" value="${d.boxes||''}"></label>
       <label class="field"><span>Pallets</span><input type="number" name="pallets" min="0" value="${d.pallets||''}"></label>
-      <label class="field full"><span>Orders (comma separated)</span><input type="text" name="orders" value="${esc(d.orders.join(', '))}"></label>
+      <label class="field full"><span>Orders</span><input type="text" name="orders" value="${esc(d.orders.join(', '))}"></label>
       <label class="field full"><span>Notes</span><textarea name="notes" rows="2">${esc(d.notes)}</textarea></label>
     </div>
-    ${isNew?'':`<div class="muted" style="font-size:.82rem">${d.source==='manager'?'Added by manager':'Submitted from crew form'}${d.editedAt?` · last edited ${new Date(d.editedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}`:''}</div>`}
+    ${isNew?'':`<div class="muted" style="font-size:.82rem">${d.source==='form'?'Crew sheet':d.source==='import'?'Imported':'Manager'}${d.editedAt?` · last edited ${new Date(d.editedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}`:''}</div>`}
     <div class="err" id="formErr"></div>`,
     `${isNew?'':'<button class="btn danger" id="delRun" style="margin-right:auto">Delete</button>'}<button class="btn" data-close>Cancel</button><button class="btn primary" id="saveRun">${isNew?'Add run':'Save changes'}</button>`);
   const m=$('#modalRoot'),lb=$('#lb');
@@ -1359,7 +1382,8 @@ function openCustomTote(runId,i){
     if(!same&&!SETTINGS.toteSizes.some(t=>+t.yd===yd&&!(t.blends||[]).length))SETTINGS.toteSizes.push({name,yd});
     r.pendingTotes.splice(i,1);
     r.lines.push({dir:'out',item:p.key,qty:Math.round(p.count*yd*100)/100,totes:p.count,toteSize:yd});
-    UI.flash=r.id;saveDB();store.set('settings',SETTINGS);closeModal();render();UI.flash=null;toast(`${fmtN(p.count*yd,2)} yd added to ${p.key.replace(/^CC1:/,'')}`)};
+    const cnt=DB.counts[p.key];UI.flash=r.id;saveDB();store.set('settings',SETTINGS);closeModal();render();UI.flash=null;
+    toast(cnt&&cnt.date>=r.date?`Saved on the ${fmtDate(r.date)} sheet · the ${fmtDate(cnt.date)} count already covers it`:`${fmtN(p.count*yd,2)} yd added to ${p.key.replace(/^CC1:/,'')}`)};
 }
 /* Active biochar orders: one spreadsheet row per product line, top to bottom by type (color mark on the left), then date. */
 function bioActiveOrders(){
@@ -1373,16 +1397,16 @@ function bioActiveOrders(){
       <td class="ao-type"><span class="ao-mark" aria-hidden="true"></span>${sec.title}</td><td>${esc(p.name)}</td><td class="r num">${fmtN(l.qty,1)}</td><td>${esc(p.unit)}</td><td>${esc(o.customer||'')}</td><td>${fmtDate(o.date)}</td><td>${esc(o.notes||'')}</td></tr>`}).join('')}
     </tbody></table>`:'<span class="muted">No open orders.</span>'}</section>`;
 }
-/* Active orchid orders: spreadsheet rows ranked 1, 2, 3... Drag a row (or use the arrows) to change the order. */
+/* Active orchid orders: spreadsheet rows ranked 1, 2, 3... Drag a row to change the order. */
 function orcActiveOrders(){
   const open=rankedOrchid();
   return `<section class="ao"><div class="ao-h"><h3>Active orders</h3><span class="muted">${open.length}</span></div>
-    ${open.length?`<table class="grid ao-t"><thead><tr><th class="ao-g"></th><th class="rn">#</th><th>Customer</th><th>Sales order #</th><th>Products</th><th>Load</th><th>Order date</th><th class="c">Ready</th><th>Ship date</th><th>Carrier</th><th>Notes</th><th class="ao-mvh"></th></tr></thead><tbody id="aoList">
+    ${open.length?`<table class="grid ao-t"><thead><tr><th class="ao-g"></th><th class="rn">#</th><th>Customer</th><th>Sales order #</th><th>Products</th><th>Load</th><th>Order date</th><th class="c">Ready</th><th>Ship date</th><th>Carrier</th><th>Notes</th></tr></thead><tbody id="aoList">
     ${open.map((o,i)=>`<tr class="ao-row" draggable="true" data-oid="${esc(o.id)}">
       <td class="ao-g"><span class="ao-grip" aria-hidden="true">⋮⋮</span></td><td class="rn num">${i+1}</td>
       <td>${esc(o.customer||'')}</td><td class="num">${esc(o.so||'')}</td><td>${esc(orderSummary(o))}</td>
       <td>${esc([...new Set(o.lines.map(l=>l.load).filter(Boolean))].join(', '))}</td><td>${fmtDate(o.date)}</td><td class="c"><input type="checkbox" data-ready="${esc(o.id)}" ${o.ready?'checked':''} aria-label="Ready"></td><td>${o.shipDate?fmtDate(o.shipDate):''}</td><td>${esc(o.carrier||'')}</td><td>${esc(o.notes||'')}</td>
-      <td class="ao-mv"><button type="button" class="btn ghost" data-mv="-1" ${i?'':'disabled'} aria-label="Move ${esc(o.customer)} up">↑</button><button type="button" class="btn ghost" data-mv="1" ${i<open.length-1?'':'disabled'} aria-label="Move ${esc(o.customer)} down">↓</button></td></tr>`).join('')}
+</tr>`).join('')}
     </tbody></table>`:'<span class="muted">No open orders.</span>'}
   </section>`;
 }
@@ -1390,9 +1414,6 @@ let AO_DRAG=null;
 $('#gridWrap').addEventListener('click',e=>{
   const it=e.target.closest('[data-order]');if(it){const o=DB.orders.find(x=>x.id===it.dataset.order);if(o)openOrderForm(o);return}
   const row=e.target.closest('.ao-row');if(!row)return;
-  const mv=e.target.closest('[data-mv]');const ids=rankedOrchid().map(o=>o.id);
-  if(mv){const i=ids.indexOf(row.dataset.oid),j=i+ +mv.dataset.mv;if(j<0||j>=ids.length)return;[ids[i],ids[j]]=[ids[j],ids[i]];setRank(ids);
-    $(`.ao-row[data-oid="${CSS.escape(ids[j])}"] [data-mv="${mv.dataset.mv}"]`)?.focus();return}
   if(e.target.closest('.ao-grip'))return;
   const o=DB.orders.find(x=>x.id===row.dataset.oid);if(o)openOrderForm(o);
 });
@@ -1401,12 +1422,15 @@ $('#gridWrap').addEventListener('dragover',e=>{const r=e.target.closest('.ao-row
   document.querySelectorAll('.ao-row.drop-before,.ao-row.drop-after').forEach(x=>x.classList.remove('drop-before','drop-after'));
   if(r.dataset.oid===AO_DRAG)return;const b=r.getBoundingClientRect();r.classList.add(e.clientY<b.top+b.height/2?'drop-before':'drop-after')});
 $('#gridWrap').addEventListener('drop',e=>{const r=e.target.closest('.ao-row');if(!r||!AO_DRAG)return;e.preventDefault();
+  if(r.dataset.oid===AO_DRAG){AO_DRAG=null;document.querySelectorAll('.ao-row').forEach(x=>x.classList.remove('dragging','drop-before','drop-after'));return}
   const after=r.classList.contains('drop-after'),ids=rankedOrchid().map(o=>o.id).filter(id=>id!==AO_DRAG);
   let at=ids.indexOf(r.dataset.oid);if(at<0)at=ids.length;else if(after)at++;ids.splice(at,0,AO_DRAG);AO_DRAG=null;setRank(ids)});
 $('#gridWrap').addEventListener('dragend',()=>{AO_DRAG=null;document.querySelectorAll('.ao-row').forEach(x=>x.classList.remove('dragging','drop-before','drop-after'))});
+/* chart width in px = the space it's drawn in (min 320) */
+const chartW=()=>Math.max(320,Math.round(($('#gridWrap')&&$('#gridWrap').clientWidth||900)-60));
 function renderInventory(){
   const h=onHand(),oo=openOrders('biochar');
-  $('#toolbar').innerHTML=`<span class="sp"></span>`;
+  $('#toolbar').innerHTML='';$('#toolbar').hidden=true;
   const one=sec=>{const items=secItems(sec,h);
     const units=[...new Set(items.map(x=>x.unit))];const tot=items.reduce((a,x)=>a+(h[x.key]||0),0);
     return `<section class="inv-sec acc-${sec.acc}">
@@ -1447,7 +1471,7 @@ function openAddProduct(sec){
 function removeItem(sec,x){
   if(!x.custom){const list=sec.list();const i=list.findIndex(v=>String(v)===String(x.val));if(i>=0)list.splice(i,1)}
   HIDDEN()[x.key]=iso(TODAY);
-  delete DB.counts[x.key];
+  DB.counts[x.key]={qty:0,date:iso(TODAY)};
   store.set('settings',SETTINGS);saveDB();
 }
 function openCounts(sec,focusKey){
@@ -1603,9 +1627,9 @@ function openAddBin(group){
 }
 function deleteBin(name){
   const k='O:'+name,q=onHandOrc()[k]||0;
-  if(!confirm(`Delete ${name}?${Math.abs(q)>1e-9?`\n\nIt still shows ${fmtN(q,2)} ${orcUnit(name)} on hand. That number goes away with it.`:''}\n\nPast entries and sales keep the name.`))return;
+  if(!confirm(`Delete ${name}?${Math.abs(q)>1e-9?`\n\nIt still shows ${fmtN(q,2)} ${orcUnit(name)} on hand. That number goes to 0.`:''}\n\nPast entries and sales keep the name.`))return;
   SETTINGS.orc.extraBins=extraBins().filter(b=>b.name!==name);
-  delete DB.counts[k];
+  DB.counts[k]={qty:0,date:iso(TODAY)};
   store.set('settings',SETTINGS);saveDB();render();toast(`${name} deleted`);
 }
 function renderOrcInventory(){
@@ -1661,7 +1685,7 @@ function openInputForm(rec,type,line){
   const d=isNew?{grate:'',type:type||(UI.lastInType==='bag'?'bag':'pick'),date:iso(TODAY),material:isNew&&type==='buy'&&line?(purchMats().find(m=>m.line===line)||{}).name||'':'',hours:'',units:'',yards:'',pallets:'',amount:'',po:'',notes:''}:{...rec,type:isBuy?'buy':rec.type};
   const draw=()=>{
     const pm=purchMats();
-    const mats=d.type==='pick'?ORC_PICK:d.type==='buy'?pm.map(m=>m.name):['Small Dried','#1 Medium Dried',...extraBins().filter(b=>b.kind==='dried').map(b=>b.name)];
+    const mats=d.type==='pick'?ORC_PICK:d.type==='buy'?pm.map(m=>m.name):binNames('dried');
     if(!mats.includes(d.material))d.material=mats[0];
     const opts=list=>list.map(m=>`<option ${m===d.material?'selected':''}>${esc(m)}</option>`).join('');
     const sel=d.type==='buy'
@@ -1724,7 +1748,14 @@ function saleProducts(line){
     return secItems(sec,h).map(x=>({key:x.key,unit:x.unit==='ea'?(k==='socks'?'socks':'bags'):x.unit,
       name:k==='washed'?`${x.name} (washed char)`:k==='bags'?`${x.name} bags`:k==='socks'?`${x.name} socks`:`Raw char · ${x.name.toLowerCase()}`}))});
 }
-const saleProduct=(line,key)=>saleProducts(line).find(p=>p.key===key)||{key,name:key.replace(/^O:/,''),unit:line==='orchid'?orcUnit(key.slice(2)):'ea'};
+const saleProduct=(line,key)=>saleProducts(line).find(p=>p.key===key)||(line==='orchid'?{key,name:key.replace(/^O:/,''),unit:orcUnit(key.slice(2))}:bioProduct(key));
+/* a biochar product's name and unit from its key, even when it isn't on hand right now */
+function bioProduct(key){const [k,...rest]=key.split(':'),v=rest.join(':');
+  if(k==='CB2')return {key,name:v==='tote'?'Raw char · toted':'Raw char · bulk bin',unit:v==='tote'?'totes':'yd'};
+  if(k==='CC1')return {key,name:`${v} (washed char)`,unit:'yd'};
+  if(k==='BAG')return {key,name:`${v} bags`,unit:'bags'};
+  if(k==='SO1')return {key,name:v.startsWith('custom')?`${v.split(':')[1]||'?'} ft (custom) socks`:`${v} ft socks`,unit:'socks'};
+  return {key,name:k==='MAT'?v:key,unit:'ea'}}
 const orderSummary=o=>o.lines.map(l=>{const p=saleProduct(o.line,l.key);return `${fmtN(l.qty,2)} ${p.unit} ${p.name}`}).join(', ');
 function openOrderForm(rec,line){
   const isNew=!rec,L=line||rec.line;
@@ -1771,7 +1802,7 @@ function openOrderForm(rec,line){
   $('#saveOrder').onclick=()=>{grab();const err=t=>{const e=$('#formErr');e.textContent=t;e.hidden=false};
     if(!d.date)return err('Pick the order date.');
     if(!String(d.customer||'').trim())return err('Enter the customer.');
-    {const n=String(d.customer).trim(),hit=custList(L).find(c=>c.toLowerCase()===n.toLowerCase());if(hit)d.customer=hit;else addCust(n)}
+    let newCust=null;{const n=String(d.customer).trim(),hit=custList(L).find(c=>c.toLowerCase()===n.toLowerCase());if(hit)d.customer=hit;else newCust=n}
     const lines=d.lines.filter(l=>l.key||+l.qty);
     if(!lines.length)return err('Add at least one product.');
     if(lines.some(l=>!l.key))return err('Pick a product for each line.');
@@ -1781,6 +1812,7 @@ function openOrderForm(rec,line){
     const out={...keep,id:isNew?crypto.randomUUID():rec.id,line:L,date:d.date,customer:String(d.customer).trim(),so:String(d.so||'').trim(),po:String(d.po||'').trim(),ready:!!d.ready,notes:d.notes.trim(),done:d.done,
       doneOn:d.done?(wasDone?(rec.doneOn||iso(TODAY)):iso(TODAY)):null,lines:lines.map(l=>({key:l.key,qty:+l.qty,...(L==='orchid'&&l.load?{load:l.load}:{})}))};
     if(isNew)DB.orders.push(out);else{Object.keys(rec).forEach(k=>delete rec[k]);Object.assign(rec,out)}
+    if(newCust)addCust(newCust);
     UI.flash=out.id;saveDB();closeModal();render();UI.flash=null;toast(isNew?'Order saved':'Changes saved')};
 }
 /* tick "Ready" (orchid) right in the grid or the active orders */
@@ -1793,7 +1825,7 @@ $('#gridWrap').addEventListener('click',e=>{
 $('#gridWrap').addEventListener('click',e=>{
   const cb=e.target.closest('[data-done]');if(!cb)return;
   e.stopPropagation();const s=DB.orders.find(x=>x.id===cb.dataset.done);if(!s)return;
-  s.done=!s.done;s.doneOn=s.done?iso(TODAY):null;UI.flash=s.id;saveDB();render();UI.flash=null;toast(s.done?'Marked completed':'Marked open');
+  s.done=!s.done;s.doneOn=s.done?iso(TODAY):null;if(s.done)s.priority=null;UI.flash=s.id;saveDB();render();UI.flash=null;toast(s.done?'Marked completed':'Marked open');
 },true);
 
 /* demo data for the orchid tabs */
@@ -1862,9 +1894,10 @@ function eomData(month){
   const job=j=>{const jr=rs.filter(r=>r.job===j),hrs=jr.reduce((a,r)=>a+r.hours,0),eq=hrs*SETTINGS.ratio[j];
     const sum=(dir,pred)=>jr.reduce((a,r)=>a+linesSum(r,dir,pred),0);return {labor:hrs-eq,equip:eq,sum}};
   const w=job('wash'),b=job('bag'),s=job('sock');
-  const bags=b.sum('out',l=>l.item.startsWith('BAG'));
+  const bags=rs.reduce((a,r)=>a+linesSum(r,'out',l=>l.item.startsWith('BAG')),0); // bags made on any job (sock runs make some too)
+  const totedIn=w.sum('in',l=>l.item==='CB2:tote');
   return [
-    {title:'Washing totals',acc:'wash',cols:['Labor hours','Labor hours w/ equip','14-14-CB2 in','Totes in','14-14-CC1 out'],
+    {title:'Washing totals',acc:'wash',totedIn,cols:['Labor hours','Labor hours w/ equip','14-14-CB2 in','Totes in','14-14-CC1 out'],
       vals:[w.labor,w.equip,w.sum('in',l=>l.item==='CB2'),w.sum('in',l=>l.item==='MAT:Blank white totes'),w.sum('out',l=>l.item.startsWith('CC1'))]},
     {title:'Bag totals',acc:'bag',cols:['Labor hours','Labor hours w/ equip','14-14-CC1 in','07-86-15W made'],
       vals:[b.labor,b.equip,b.sum('in',l=>l.item.startsWith('CC1')),bags]},
@@ -1884,7 +1917,7 @@ function renderEOM(target){
   const [W,B,S]=data;
   const cell=(v,code,unit)=>v==null?'<td class="eom-na" aria-label="Not used">—</td>':`<td><span class="eom-v num">${fmtN(v,1)}</span>${unit?`<span class="eom-u">${unit}</span>`:''}${code?`<span class="eom-code num">${code}</span>`:''}</td>`;
   const rows=[
-    {name:'Washing',acc:'wash',c:[cell(W.vals[0],'','hours'),cell(W.vals[1],'','hours'),cell(W.vals[2],'14-14-CB2','yd'),cell(W.vals[3],'Blank white','totes'),cell(W.vals[4],'14-14-CC1','yd')]},
+    {name:'Washing',acc:'wash',c:[cell(W.vals[0],'','hours'),cell(W.vals[1],'','hours'),(W.totedIn?`<td><span class="eom-v num">${fmtN(W.vals[2],1)}</span><span class="eom-u">yd</span> <span class="eom-v num">+ ${fmtN(W.totedIn,1)}</span><span class="eom-u">totes</span><span class="eom-code num">14-14-CB2</span></td>`:cell(W.vals[2],'14-14-CB2','yd')),cell(W.vals[3],'Blank white','totes'),cell(W.vals[4],'14-14-CC1','yd')]},
     {name:'Bags',acc:'bag',c:[cell(B.vals[0],'','hours'),cell(B.vals[1],'','hours'),cell(B.vals[2],'14-14-CC1','yd'),cell(null),cell(B.vals[3],'07-86-15W','bags')]},
     {name:'Socks',acc:'sock',c:[cell(S.vals[0],'','hours'),cell(S.vals[1],'','hours'),cell(null),cell(null),cell(S.vals[2],'14-14-SO1','socks')]},
   ];
@@ -1899,7 +1932,7 @@ function renderEOM(target){
   box.querySelector('#eomMonth').onchange=e=>{UI.month=e.target.value;renderEOM(box)};
   box.querySelector('#eomCopy').onclick=()=>{
     const v=(x,u,code)=>x==null?'—':`${fmtN(x,1)} ${u}${code?` (${code})`:''}`;
-    const R=[['Washing',v(W.vals[0],'hours'),v(W.vals[1],'hours'),v(W.vals[2],'yd','14-14-CB2'),v(W.vals[3],'totes'),v(W.vals[4],'yd','14-14-CC1')],
+    const R=[['Washing',v(W.vals[0],'hours'),v(W.vals[1],'hours'),W.totedIn?`${fmtN(W.vals[2],1)} yd + ${fmtN(W.totedIn,1)} totes (14-14-CB2)`:v(W.vals[2],'yd','14-14-CB2'),v(W.vals[3],'totes'),v(W.vals[4],'yd','14-14-CC1')],
       ['Bags',v(B.vals[0],'hours'),v(B.vals[1],'hours'),v(B.vals[2],'yd','14-14-CC1'),'—',v(B.vals[3],'bags','07-86-15W')],
       ['Socks',v(S.vals[0],'hours'),v(S.vals[1],'hours'),'—','—',v(S.vals[2],'socks','14-14-SO1')]];
     copyTable(`Dept 14 Biochar · Month-end · ${monthLabel(UI.month)}`,['','Labor hours','Labor hours w/ equip','Material in','Totes in','Made / out'],R,$('#eomCopy'));
@@ -1971,7 +2004,7 @@ function bdTrend(job,from,to,hiWeek){
   const lo=weeks[0],hi=iso(addDays(dOf(weeks[weeks.length-1]),6));
   const v=Object.fromEntries(weeks.map(k=>[k,0]));
   active(DB.bio).filter(r=>r.job===job&&r.date>=lo&&r.date<=hi&&r.date>=from&&r.date<=to).forEach(r=>{const k=iso(mondayOf(dOf(r.date)));if(k in v)v[k]+=out(r)});
-  const vals=weeks.map(k=>v[k]),max=niceMax(Math.max(...vals,0)||1),W=900,H=200,pl=44,pb=26,pt=8,pr=6,iw=W-pl-pr,ih=H-pt-pb,n=weeks.length,bw=iw/n,barW=Math.max(3,Math.min(44,bw*.62));
+  const vals=weeks.map(k=>v[k]),max=niceMax(Math.max(...vals,0)||1),W=chartW(),H=200,pl=44,pb=26,pt=8,pr=6,iw=W-pl-pr,ih=H-pt-pb,n=weeks.length,bw=iw/n,barW=Math.max(3,Math.min(44,bw*.62));
   const y=q=>pt+ih-(q/max)*ih,every=Math.ceil(n/13);
   const lab=k=>dOf(k).toLocaleDateString('en-US',{month:'short',day:'numeric'});
   let bars='';weeks.forEach((k,i)=>{const h=Math.max(0,y(0)-y(vals[i])),x=pl+i*bw+(bw-barW)/2;
@@ -2035,7 +2068,7 @@ function odWeekChart(title,unit,rows,valFn,from,to,hiWeek){
   const weeks=[];for(let x=mondayOf(dOf(from));x<=dOf(to);x.setDate(x.getDate()+7))weeks.push(iso(x));
   const v=Object.fromEntries(weeks.map(k=>[k,0]));
   rows.filter(r=>r.date>=from&&r.date<=to).forEach(r=>{const k=iso(mondayOf(dOf(r.date)));if(k in v)v[k]+=valFn(r)});
-  const vals=weeks.map(k=>v[k]),max=niceMax(Math.max(...vals,0)||1),W=900,H=200,pl=44,pb=26,pt=8,pr=6,iw=W-pl-pr,ih=H-pt-pb,n=weeks.length,bw=iw/n,barW=Math.max(3,Math.min(44,bw*.62));
+  const vals=weeks.map(k=>v[k]),max=niceMax(Math.max(...vals,0)||1),W=chartW(),H=200,pl=44,pb=26,pt=8,pr=6,iw=W-pl-pr,ih=H-pt-pb,n=weeks.length,bw=iw/n,barW=Math.max(3,Math.min(44,bw*.62));
   const y=q=>pt+ih-(q/max)*ih,every=Math.ceil(n/13),lab=k=>dOf(k).toLocaleDateString('en-US',{month:'short',day:'numeric'});
   let bars='';weeks.forEach((k,i)=>{const h=Math.max(0,y(0)-y(vals[i])),x=pl+i*bw+(bw-barW)/2;
     if(h>0)bars+=`<path d="${roundTop(x,y(0)-h,barW,h,Math.min(4,h))}" fill="var(--s-one)" opacity="${hiWeek&&k!==hiWeek?.45:1}"><title>Week of ${lab(k)}: ${fmtN(vals[i],1)} ${unit}</title></path>`;
@@ -2338,7 +2371,7 @@ function rbChart(R,rows,nG){
   if(isRatio||!g2)order.forEach(a=>{const tot=isRatio?R.val(R.out.filter(o=>o.g[0]===a).reduce((acc,o)=>{acc.n+=o.acc.n;Object.entries(o.acc.sum).forEach(([k,v])=>acc.sum[k]=(acc.sum[k]||0)+v);Object.entries(o.acc.min).forEach(([k,v])=>acc.min[k]=acc.min[k]==null?v:Math.min(acc.min[k],v));Object.entries(o.acc.max).forEach(([k,v])=>acc.max[k]=acc.max[k]==null?v:Math.max(acc.max[k],v));return acc},{n:0,sum:{},min:{},max:{}}),m):Object.values(by[a]).reduce((x,y)=>x+y,0);by[a]={'':tot}});
   const n=order.length;if(!n)return '';
   const totals=order.map(a=>Object.values(by[a]).reduce((x,y)=>x+Math.max(0,y),0));
-  const max=niceMax(Math.max(...totals,0)||1),W=900,H=240,pl=52,pb=n>14?60:30,pt=10,pr=8,iw=W-pl-pr,ih=H-pt-pb,bw=iw/n,barW=Math.max(3,Math.min(48,bw*.62));
+  const max=niceMax(Math.max(...totals,0)||1),W=chartW(),H=240,pl=52,pb=n>14?60:30,pt=10,pr=8,iw=W-pl-pr,ih=H-pt-pb,bw=iw/n,barW=Math.max(3,Math.min(48,bw*.62));
   const y=v=>pt+ih-(v/max)*ih,slot=k=>k===''?'one':k==='Other'?'other':String(keys.indexOf(k)+1);
   let bars='';
   order.forEach((a,i)=>{let acc=0;const x=pl+i*bw+(bw-barW)/2;const ks=keys.filter(k=>(by[a][k]||0)>0);
@@ -2459,7 +2492,7 @@ function renderTrends(){
   const S=trendSeries();
   $('#trCsv').onclick=()=>downloadCSV([['Period',...S.keys.map(k=>k==='total'?M.label:splitLabel(S.kind,k))],...S.grid.map(g=>[g.b,...S.keys.map(k=>r1(g.v[k]||0))])],`dept14-${UI.line}-${T.m}-by-${T.by}.csv`);
   const totals=S.grid.map(g=>S.keys.reduce((a,k)=>a+(g.v[k]||0),0));
-  const max=Math.max(...totals,0)||1,nice=niceMax(max),W=900,H=300,pl=48,pb=28,pt=12,pr=8,iw=W-pl-pr,ih=H-pt-pb,n=S.grid.length,bw=iw/n,barW=Math.max(4,Math.min(56,bw*.62));
+  const max=Math.max(...totals,0)||1,nice=niceMax(max),W=chartW(),H=300,pl=48,pb=28,pt=12,pr=8,iw=W-pl-pr,ih=H-pt-pb,n=S.grid.length,bw=iw/n,barW=Math.max(4,Math.min(56,bw*.62));
   const y=v=>pt+ih-(v/nice)*ih;
   const ticks=[0,.25,.5,.75,1].map(f=>nice*f);
   const every=Math.ceil(n/12);
@@ -2688,9 +2721,9 @@ function orcCalHTML(){
       else if(cr.off)lines+=`<span class="cal-l c-off">${KNAME[k]} off</span>`;
       else if(inM&&!we&&ds<today&&first[k]&&ds>=first[k])lines+=`<span class="cal-miss">No ${KNAME[k].toLowerCase()} data</span>`;
       if(cr.note)lines+=`<span class="cal-note">${esc(cr.note)}</span>`});
-    (ships[ds]||[]).forEach(o=>lines+=`<span class="cal-o ship">Ships · ${esc(o.customer)}</span>`);
+    (ships[ds]||[]).forEach(o=>lines+=`<span class="cal-o ship ${o.done?'done':''}">Ships · ${esc(o.customer)}</span>`);
     (ords[ds]||[]).forEach(o=>lines+=`<span class="cal-o ${o.done?'done':''}">Order · ${esc(o.customer)}</span>`);
-    cells+=`<button type="button" class="cal-d ${inM?'':'out'} ${we?'we':''} ${ds===today?'today':''} ${any||plan?'has':''}" data-calday="${ds}" aria-label="${d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}"><span class="cal-n">${d.getDate()}</span>${lines}</button>`}
+    cells+=`<button type="button" class="cal-d ${inM?'':'out'} ${we?'we':''} ${ds===today?'today':''} ${any||plan||(ships[ds]||[]).length||(ords[ds]||[]).length?'has':''}" data-calday="${ds}" aria-label="${d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}"><span class="cal-n">${d.getDate()}</span>${lines}</button>`}
   const mt=new Date(y,m-1,15).toLocaleDateString('en-US',{month:'long',year:'numeric'});
   return `<section class="cal" data-cal="orc">
     <div class="cal-h"><button type="button" class="btn icon" data-calnav="-1" aria-label="Previous month">‹</button><h3>${mt}</h3><button type="button" class="btn icon" data-calnav="1" aria-label="Next month">›</button>
@@ -2852,7 +2885,7 @@ function bonusPanel(){
       <thead><tr><th>${fmtD(R[0])} – ${fmtD(R[1])}</th><th class="n">Qty</th><th class="n">Rate</th><th class="n">Bonus</th></tr></thead>
       <tbody>
         <tr><td>Yards into dryer</td><td class="n num">${fmtN(yd,1)}</td><td class="n num">${money(S.bonusPerYardIn)}</td><td class="n num">${money(yAmt)}</td></tr>
-        <tr><td>Totes <span class="muted">(${fmtN(totYd,2)} yd out to totes ÷ ${fmtN(ypt,2)})</span></td><td class="n num">${fmtN(tt,2)}</td><td class="n num">${money(S.bonusPerTote)}</td><td class="n num">${money(tAmt)}</td></tr>
+        <tr><td>Totes</td><td class="n num">${fmtN(tt,2)}</td><td class="n num">${money(S.bonusPerTote)}</td><td class="n num">${money(tAmt)}</td></tr>
       </tbody>
       <tfoot><tr><td colspan="3">Total <span class="muted">· ${rs.length} dryer run${rs.length===1?'':'s'}</span></td><td class="n num"><b>${money(yAmt+tAmt)}</b></td></tr></tfoot>
     </table>`;
@@ -3165,7 +3198,7 @@ function keyOfLine(it,custom_name){
   return 'MAT:'+it.name;
 }
 function itemOfKey(key,size){
-  const [k,v,extra]=key.split(':');const I=Live.items;
+  const [k,...rest]=key.split(':'),v=k==='SO1'?rest[0]:rest.join(':'),extra=k==='SO1'?rest[1]:undefined;const I=Live.items;
   const pick=(kind,blend)=>I.find(i=>i.kind===kind&&!i.is_custom&&i.blend===blend);
   const custom=kind=>I.find(i=>i.kind===kind&&i.is_custom);
   if(k==='CB2')return {item_id:(I.find(i=>i.kind==='raw'&&i.unit===(v==='tote'?'totes':'yd'))||{}).id};
@@ -3208,6 +3241,7 @@ Live.load=async function(){
           ...bagging.map(b=>({id:b.id,type:'bag',date:b.production_date,material:bn(b.from_bin_id),yards:+b.yards_used,pallets:+b.pallets,hours:+b.hours,units:0,notes:b.notes||''}))];
   Live.hasPrio=!orders.length||'priority' in orders[0];
   if(!orders.length)Live.hasPrio=!(await sb.from('orders').select('priority').limit(1)).error;
+  Live.hasAtomic=!(await sb.rpc('replace_order_lines',{p_order:'00000000-0000-0000-0000-000000000000',p_lines:[]})).error;
   Live.hasShip=orders.length?'ready' in orders[0]:!(await sb.from('orders').select('ready').limit(1)).error;
   DB.orders=orders.map(o=>({id:o.id,line:o.line,date:o.order_date,customer:o.customer,so:o.sales_order_no||'',notes:o.notes||'',done:o.completed,doneOn:o.completed_on||null,priority:o.priority??null,
     po:o.po||'',ready:!!o.ready,readyOn:o.ready_on||null,carrier:o.carrier||'',shipDate:o.ship_date||null,freight:o.freight_cost!=null?+o.freight_cost:null,
@@ -3293,26 +3327,32 @@ Live.sync=async function(){
       for(const c of COLS){
         const cur=new Map((DB[c]||[]).map(r=>[r.id,r]));
         for(const [id,r] of cur){const was=B[c].get(id);if(was===JSON.stringify(r))continue;
-          const kind=c==='oin'?r.type:c;
-          if(c==='oin'&&was){const old=JSON.parse(was);if(old.type!==r.type)await must(sb.from(TABLE[old.type]).delete().eq('id',id))}
-          await must(sb.from(TABLE[kind]).upsert(ROW[kind](r)));
-          if(c==='bio'){
-            await must(sb.from('run_workers').delete().eq('run_id',id));
-            const ws=(r.crew||[]).map(n=>Live.empId(n)).filter(Boolean).map(e=>({run_id:id,employee_id:e}));
-            if(ws.length)await must(sb.from('run_workers').insert(ws));
-            await must(sb.from('run_lines').delete().eq('run_id',id));
-            const ls=(r.lines||[]).filter(l=>+l.qty>0).map(l=>({run_id:id,direction:l.dir,qty:+l.qty,...itemOfKey(l.item,l.size),...(Live.hasTotes&&l.totes?{tote_count:+l.totes,tote_size_yd:+l.toteSize}:{})}));
-            if(ls.length)await must(sb.from('run_lines').insert(ls));
+          const kind=c==='oin'?r.type:c;let old=was?JSON.parse(was):null;
+          if(c==='oin'&&old&&old.type!==r.type){await must(sb.from(TABLE[old.type]).delete().eq('id',id));old=null}
+          /* new rows are written whole; changed rows only send the fields this screen changed, so a stale copy
+             never overwrites what the sales page or someone else saved since */
+          const rowNew=ROW[kind](r);
+          if(!old)await must(sb.from(TABLE[kind]).upsert(rowNew));
+          else{const rowOld=ROW[kind](old),patch={};
+            Object.keys(rowNew).forEach(k=>{if(k!=='updated_at'&&JSON.stringify(rowNew[k])!==JSON.stringify(rowOld[k]))patch[k]=rowNew[k]});
+            if(Object.keys(patch).length)await must(sb.from(TABLE[kind]).update(patch).eq('id',id))}
+          const changed=f=>!old||JSON.stringify(old[f]||[])!==JSON.stringify(r[f]||[]);
+          if(c==='bio'&&(changed('crew')||changed('lines'))){
+            const ws=(r.crew||[]).map(n=>Live.empId(n)).filter(Boolean);
+            const ls=(r.lines||[]).filter(l=>+l.qty>0).map(l=>({direction:l.dir,qty:+l.qty,...itemOfKey(l.item,l.size),...(Live.hasTotes&&l.totes?{tote_count:+l.totes,tote_size_yd:+l.toteSize}:{})}));
+            if(Live.hasAtomic)await must(sb.rpc('replace_run_children',{p_run:id,p_workers:ws,p_lines:ls}));
+            else{await must(sb.from('run_workers').delete().eq('run_id',id));if(ws.length)await must(sb.from('run_workers').insert(ws.map(e=>({run_id:id,employee_id:e}))));
+              await must(sb.from('run_lines').delete().eq('run_id',id));if(ls.length)await must(sb.from('run_lines').insert(ls.map(l=>({run_id:id,...l}))))}
           }
-          if(c==='orders'){
-            await must(sb.from('order_lines').delete().eq('order_id',id));
-            const ls=(r.lines||[]).filter(l=>+l.qty>0).map(l=>({order_id:id,qty:+l.qty,load_type:l.load||null,...(l.key.startsWith('O:')?{bin_id:Live.binId(l.key.slice(2))}:itemOfKey(l.key))}));
-            if(ls.length)await must(sb.from('order_lines').insert(ls));
+          if(c==='orders'&&changed('lines')){
+            const ls=(r.lines||[]).filter(l=>+l.qty>0).map(l=>({qty:+l.qty,load_type:l.load||null,...(l.key.startsWith('O:')?{bin_id:Live.binId(l.key.slice(2))}:itemOfKey(l.key))}));
+            if(Live.hasAtomic)await must(sb.rpc('replace_order_lines',{p_order:id,p_lines:ls}));
+            else{await must(sb.from('order_lines').delete().eq('order_id',id));if(ls.length)await must(sb.from('order_lines').insert(ls.map(l=>({order_id:id,...l}))))}
           }
-          if(c==='orc'){
-            await must(sb.from('dryer_run_workers').delete().eq('run_id',id));
-            const ws=(r.crew||[]).map(n=>Live.empId(n)).filter(Boolean).map(e=>({run_id:id,employee_id:e}));
-            if(ws.length)await must(sb.from('dryer_run_workers').insert(ws));
+          if(c==='orc'&&changed('crew')){
+            const ws=(r.crew||[]).map(n=>Live.empId(n)).filter(Boolean);
+            if(Live.hasAtomic)await must(sb.rpc('replace_dryer_workers',{p_run:id,p_workers:ws}));
+            else{await must(sb.from('dryer_run_workers').delete().eq('run_id',id));if(ws.length)await must(sb.from('dryer_run_workers').insert(ws.map(e=>({run_id:id,employee_id:e}))))}
           }
         }
         for(const [id,was] of B[c]){if(cur.has(id))continue;const old=JSON.parse(was);await must(sb.from(TABLE[c==='oin'?old.type:c]).delete().eq('id',id))}
@@ -3320,8 +3360,11 @@ Live.sync=async function(){
       /* counts: a changed count is a new count row; a removed count deletes that line's counts */
       const oldC=JSON.parse(B.counts),newC=DB.counts||{};
       const target=k=>k.startsWith('O:')?{bin_id:Live.binId(k.slice(2))}:itemOfKey(k);
-      for(const [k,v] of Object.entries(newC)){if(JSON.stringify(oldC[k])===JSON.stringify(v))continue;
-        await must(sb.from('inventory_counts').insert({...target(k),qty:+v.qty,counted_on:v.date}))}
+      const keyQ=(q,t)=>{q=t.bin_id?q.eq('bin_id',t.bin_id):q.eq('item_id',t.item_id);q=t.custom_name?q.eq('custom_name',t.custom_name):q.is('custom_name',null);
+        return t.custom_size_ft?q.eq('custom_size_ft',t.custom_size_ft):q.is('custom_size_ft',null)};
+      for(const [k,v] of Object.entries(newC)){if(JSON.stringify(oldC[k])===JSON.stringify(v))continue;const t=target(k);
+        if(oldC[k]&&oldC[k].date>=v.date)await must(keyQ(sb.from('inventory_counts').delete().gte('counted_on',v.date),t));
+        await must(sb.from('inventory_counts').insert({...t,qty:+v.qty,counted_on:v.date}))}
       for(const k of Object.keys(oldC)){if(newC[k])continue;const t=target(k);let q=sb.from('inventory_counts').delete();
         q=t.bin_id?q.eq('bin_id',t.bin_id):q.eq('item_id',t.item_id);
         q=t.custom_name?q.eq('custom_name',t.custom_name):q.is('custom_name',null);
@@ -3333,7 +3376,7 @@ Live.sync=async function(){
     }while(Live.again);
   }catch(e){
     console.error(e);toast('⚠ Couldn’t save: '+(e.message||e)+'. Reloading from the database.');
-    try{await Live.load();render()}catch(_){}
+    try{await Live.load();VH.list=[];VH.ptr=-1;VH_CUR=vhState();vhPersist();vhButtons();render()}catch(_){}
   }finally{Live.running=false}
 };
 Live.syncSettings=async function(){
@@ -3345,8 +3388,12 @@ Live.syncSettings=async function(){
   if(JSON.stringify(old.orc)!==JSON.stringify(cur.orc))await up('orchid',{yards_per_unit:cur.orc.y,ratios:cur.orc.r,profiles:cur.orc.p,active:cur.orc.a});
   if(JSON.stringify(old.dash)!==JSON.stringify(cur.dash))await up('dashboard',cur.dash);
   if(JSON.stringify(old.totes)!==JSON.stringify(cur.totes))await up('tote_sizes',cur.totes);
-  if(JSON.stringify(old.bioCust)!==JSON.stringify(cur.bioCust))await up('biochar_customers',cur.bioCust);
-  if(JSON.stringify(old.orcCust)!==JSON.stringify(cur.orcCust))await up('orchid_customers',cur.orcCust);
+  const mergeUp=async(key,list,mine)=>{const {data}=await sb.from('settings').select('value').eq('key',key).maybeSingle();
+    const all=[...(Array.isArray(data&&data.value)?data.value:[]),...list],seen=new Set(),out=[];
+    all.forEach(n=>{const k=String(n).toLowerCase();if(!seen.has(k)){seen.add(k);out.push(n)}});out.sort((a,b)=>a.localeCompare(b));
+    await up(key,out);mine.splice(0,mine.length,...out)};
+  if(JSON.stringify(old.bioCust)!==JSON.stringify(cur.bioCust))await mergeUp('biochar_customers',cur.bioCust,SETTINGS.bioCustomers);
+  if(JSON.stringify(old.orcCust)!==JSON.stringify(cur.orcCust))await mergeUp('orchid_customers',cur.orcCust,SETTINGS.orcCustomers);
   /* crew */
   for(const c of SETTINGS.crew){if(!c.name)continue;
     const row={name:c.name,on_biochar_sheet:!!c.biochar,on_dryer_sheet:!!c.orchid,active:true};
@@ -3374,7 +3421,7 @@ Live.syncSettings=async function(){
   const oldB=new Set(old.bins.map(b=>b.name)),curB=new Set(cur.bins.map(b=>b.name));
   for(const b of cur.bins.filter(b=>!oldB.has(b.name)))
     await must(sb.from('bins').upsert({name:b.name,kind:b.kind,unit:b.kind==='bagged'?'pallets':b.kind==='totes'?'totes':'yd',note:b.note||null,on_map:true,dryer_input:b.kind==='green',purchasable:b.kind==='green',
-      totes_to:b.kind==='green'?'Medium totes':null,bags_to:b.kind==='dried'?'Medium bagged':null,is_core:false,active:true,sort:{green:170,dried:230,bagged:315,totes:335}[b.kind]},{onConflict:'name'}));
+      totes_to:b.kind==='green'?(smallish(b.name)?'Small totes':'Medium totes'):null,bags_to:b.kind==='dried'?'Medium bagged':null,is_core:false,active:true,sort:{green:170,dried:230,bagged:315,totes:335}[b.kind]},{onConflict:'name'}));
   for(const b of old.bins.filter(b=>!curB.has(b.name)))await must(sb.from('bins').update({active:false}).eq('name',b.name).eq('is_core',false));
   if(cur.bins.length!==old.bins.length||[...curB].some(n=>!oldB.has(n)))Live.bins=await fetchAll('bins','*',q=>q.order('sort'));
   /* bin notes */
@@ -3397,9 +3444,9 @@ Live.boot=async function(){
   if(!sb){document.body.innerHTML='<p style="padding:30px">The dashboard can’t reach the database (config.js didn’t load).</p>';return}
   const {data:{session}}=await sb.auth.getSession();
   if(!session)return Live.showLogin();
-  ME=session.user.email||'manager';$('#whoEmail').textContent=ME;
+  ME=session.user.email||'manager';Live.myId=session.user.id;$('#whoEmail').textContent=ME;
   $('#login').hidden=true;$('#appShell').hidden=false;$('#loading').hidden=false;
-  try{await Live.load();await Live.seedReports()}
+  try{await Live.load();await Live.seedReports();await Live.markLog();Live.startLive()}
   catch(e){console.error(e);$('#loading').textContent='Couldn’t load the data: '+(e.message||e);return}
   $('#loading').hidden=true;
   /* version history starts fresh for each sign-in on this browser */
@@ -3415,10 +3462,31 @@ $('#loginForm').onsubmit=async e=>{
 };
 $('#signOut').onclick=async()=>{await sb.auth.signOut();location.reload()};
 /* pick up other people's changes when you come back to the tab */
-document.addEventListener('visibilitychange',async()=>{
-  if(document.hidden||!Live.base||Live.running||$('#modalRoot').innerHTML||Date.now()-Live.loadedAt<60000)return;
-  try{await Live.load();VH.list=[];VH.ptr=-1;VH_CUR=vhState();vhPersist();vhButtons();render()}catch(e){}
-});
+/* ---- live updates ----
+   Any change in the dept14 tables (realtime), a 30 s poll, or coming back to the tab asks the change log
+   whether someone ELSE changed something since we loaded. Only then the data reloads; it waits while a
+   window is open, a save is running, or a box is being typed in, and runs right after. */
+Live.lastLog=0;Live.pending=false;
+Live.markLog=async()=>{const {data}=await sb.from('change_log').select('id').order('id',{ascending:false}).limit(1);if(data&&data[0])Live.lastLog=data[0].id};
+Live.busy=()=>{const a=document.activeElement;
+  return !Live.base||Live.running||!!$('#modalRoot').innerHTML||!!document.getElementById('calMenu')||!!document.querySelector('.vh')||
+    !!(a&&a!==document.body&&(a.tagName==='TEXTAREA'||a.isContentEditable||(a.tagName==='INPUT'&&a.type!=='checkbox'&&a.type!=='radio')))};
+Live.check=async()=>{
+  if(!Live.base||Live.checking)return;Live.checking=true;
+  try{const {data}=await sb.from('change_log').select('id,by_user').gt('id',Live.lastLog).order('id').limit(1000);
+    if(data&&data.length){Live.lastLog=data[data.length-1].id;if(data.some(r=>r.by_user!==Live.myId))Live.pending=true}
+    if(Live.pending&&!Live.busy()){Live.pending=false;const y=scrollY;
+      await Live.load();VH.list=[];VH.ptr=-1;VH_CUR=vhState();vhPersist();vhButtons();render();scrollTo(0,y)}}
+  catch(e){console.warn(e)}finally{Live.checking=false}
+};
+let liveTimer=null;const liveSoon=()=>{clearTimeout(liveTimer);liveTimer=setTimeout(Live.check,1200)};
+Live.startLive=()=>{
+  if(Live.channel)return;
+  try{Live.channel=sb.channel('d14-dash').on('postgres_changes',{event:'*',schema:'dept14'},liveSoon).subscribe()}catch(e){}
+  setInterval(()=>{if(!document.hidden)Live.check()},30000);
+};
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)Live.check()});
+document.addEventListener('focusout',()=>{if(Live.pending)setTimeout(Live.check,300)});
 
 LIVE_Q=Live.queue;
 Live.boot();
