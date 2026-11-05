@@ -850,7 +850,7 @@ const TABLES={
         {k:'notes',l:'Notes',get:r=>r.notes||''},
       ]},
     inventory:{label:'Inventory',view:'orcinv',cols:[],groups:{},rows:()=>[]},
-    sales:{label:'Sales',rows:()=>DB.orders.filter(o=>o.line===UI.line),addable:true,addLabel:'+ Add order',onAdd:()=>openOrderForm(null,UI.line),
+    sales:{label:'Sales',simple:true,rows:()=>DB.orders.filter(o=>o.line===UI.line),addable:true,addLabel:'+ Add order',onAdd:()=>openOrderForm(null,UI.line),
       groups:{'':'None',customer:'Customer',done:'Completed',month:'Month'},
       cols:[
         {k:'date',l:'Order date',get:r=>r.date,fmt:v=>fmtDate(v)},
