@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Dept 14 - Specialty Product Sales</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="../../config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Sales page for Dept 14 orchid bark: sign in → Inventory (active orders + bins) · Sales log · Calendar.
+   Sales add and edit their orders (until shipped) and the shipping info; everything else is view only. */
+:root{
+  --bg:#F3F4F1; --surface:#FFFFFF; --sunken:#EAECE7; --ink:#1B211D; --muted:#5F6A63; --line:#DADFD8; --line-strong:#C3CAC1;
+  --accent:#2F6B47; --accent-ink:#FFFFFF; --accent-soft:#E2EEE6; --bar:#1B211D; --bar-ink:#F3F4F1; --bad:#B23A30;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --r:8px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#121614; --surface:#1A201C; --sunken:#222924; --ink:#E6EBE7; --muted:#9AA69F; --line:#2D3530; --line-strong:#3B4540;
+  --accent:#74BF8E; --accent-ink:#0E1511; --accent-soft:#1F3227; --bar:#0B0E0C; --bar-ink:#E6EBE7; --bad:#EE7B6F; color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --bg:#121614; --surface:#1A201C; --sunken:#222924; --ink:#E6EBE7; --muted:#9AA69F; --line:#2D3530; --line-strong:#3B4540;
+  --accent:#74BF8E; --accent-ink:#0E1511; --accent-soft:#1F3227; --bar:#0B0E0C; --bar-ink:#E6EBE7; --bad:#EE7B6F; color-scheme:dark; }
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 var(--f-body)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:.9em}
+.muted{color:var(--muted)}
+h1,h2,h3{font-family:var(--f-display);margin:0;letter-spacing:.02em}
+
+/* sign-in (same as the manager dashboard) */
+.login{--mb-bg:#f1f3ef;--mb-surface:#fff;--mb-fg:#182019;--mb-muted:#5e6a61;--mb-line:#d3dad2;--mb-line-strong:#aab4ab;--mb-accent:#2c7a44;--mb-accent-ink:#fff;--mb-danger:#b23a3a;--mb-shadow:0 6px 24px rgba(20,30,22,.12);
+  position:fixed;inset:0;z-index:60;background:var(--mb-bg);color:var(--mb-fg);display:flex;align-items:center;justify-content:center;padding:16px;font-family:"Barlow","Helvetica Neue",Arial,sans-serif;font-size:14px;line-height:1.35}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .login{--mb-bg:#141814;--mb-surface:#1d231e;--mb-fg:#e7ece6;--mb-muted:#9ba69c;--mb-line:#2f382f;--mb-line-strong:#4a564b;--mb-accent:#4fb56e;--mb-accent-ink:#0f1a12;--mb-danger:#e06666;--mb-shadow:0 6px 24px rgba(0,0,0,.45)}}
+:root[data-theme="dark"] .login{--mb-bg:#141814;--mb-surface:#1d231e;--mb-fg:#e7ece6;--mb-muted:#9ba69c;--mb-line:#2f382f;--mb-line-strong:#4a564b;--mb-accent:#4fb56e;--mb-accent-ink:#0f1a12;--mb-danger:#e06666;--mb-shadow:0 6px 24px rgba(0,0,0,.45)}
+.login-card{background:var(--mb-surface);border:1px solid var(--mb-line);border-radius:10px;padding:24px;width:min(440px,100%);display:flex;flex-direction:column;gap:12px;box-shadow:var(--mb-shadow)}
+.login-card h2{margin:0;font-family:"Barlow Condensed","Arial Narrow",Arial,sans-serif;font-size:22px;line-height:1.1;font-weight:700;text-transform:uppercase;letter-spacing:.01em;white-space:nowrap}
+@media (max-width:440px){.login-card h2{white-space:normal}}
+.login .hint{margin:0;font-size:12px}
+.login .field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.login .field label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--mb-muted)}
+.login .field input{border:1px solid var(--mb-line-strong);border-radius:6px;padding:8px 10px;background:var(--mb-bg);color:var(--mb-fg);font:inherit;width:100%}
+.login .mb-btn{border:1px solid var(--mb-accent);background:var(--mb-accent);color:var(--mb-accent-ink);border-radius:6px;padding:7px 12px;font:inherit;font-weight:600;line-height:1;cursor:pointer}
+.login .mb-btn:disabled{opacity:.6;cursor:default}
+
+/* top bar + tabs */
+.top{background:var(--bar);color:var(--bar-ink);position:sticky;top:0;z-index:20}
+.top-in{display:flex;align-items:center;gap:16px;padding:10px 20px 0;flex-wrap:wrap}
+.brand{margin-right:auto;padding-bottom:10px}
+.brand h1{font-size:1.6rem;text-transform:uppercase}
+.who{font-size:.85rem;opacity:.8;margin-bottom:10px}
+.signout{background:none;border:0;color:inherit;opacity:.8;cursor:pointer;font:inherit;text-decoration:underline;padding:0}
+nav.lines{display:flex;gap:4px;padding:0 20px;width:100%;align-items:flex-end}
+nav.lines button[role=tab]{background:none;border:0;color:inherit;opacity:.6;padding:10px 16px 9px;font:600 1.05rem/1 var(--f-display);text-transform:uppercase;letter-spacing:.08em;border-bottom:3px solid transparent;cursor:pointer}
+nav.lines button[aria-selected="true"]{opacity:1;border-bottom-color:var(--accent)}
+nav.lines .input-btn{align-self:center;margin:0 0 4px auto;background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;padding:7px 16px;font:700 .9rem/1 var(--f-display);text-transform:uppercase;letter-spacing:.07em;cursor:pointer}
+main{padding:20px 20px 60px;display:grid;gap:20px}
+.base{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;min-height:calc(100vh - 200px)}
+.toolbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line)}
+.toolbar .sp{flex:1}
+.toolbar input[type=search]{border:1px solid var(--line-strong);border-radius:6px;padding:6px 10px;background:var(--surface);width:220px}
+.btn{background:var(--surface);border:1px solid var(--line-strong);border-radius:6px;padding:6px 11px;font-size:.88rem;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{background:var(--sunken)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 50%,transparent)}
+.btn.icon{width:32px;height:32px;padding:0;justify-content:center}
+.empty{padding:40px;text-align:center;color:var(--muted)}
+.loading-all{padding:40px;text-align:center;color:var(--muted)}
+
+/* spreadsheet grid */
+.grid-wrap{overflow-x:auto}
+.grid{width:100%;border-collapse:collapse;font-size:.9rem}
+.grid th{text-align:left;font:600 .72rem var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line-strong);background:var(--sunken);white-space:nowrap}
+.grid td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+.grid td.r,.grid th.r{text-align:right}
+.grid td.c,.grid th.c{text-align:center}
+.grid tbody tr{cursor:pointer}
+.grid tbody tr:hover td{background:var(--accent-soft)}
+.grid tr.done td{color:var(--muted)}
+.tag{display:inline-block;font:600 .68rem/1.2 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;padding:2px 7px;border-radius:99px;border:1px solid var(--line-strong);white-space:nowrap}
+.tag.ready{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.tag.shipped{background:color-mix(in srgb,#E3A94B 20%,transparent);border-color:#E3A94B}
+.tag.done{opacity:.7}
+
+/* active orders */
+.ao{padding:16px 18px 18px 20px;border-bottom:1px solid var(--line);display:grid;gap:12px;overflow-x:auto}
+.ao-h{display:flex;align-items:center;gap:10px}
+.ao-h h3{font-size:1.1rem;text-transform:uppercase;letter-spacing:.05em}
+.ao .grid{min-width:760px}
+
+/* bin map (view only) */
+.binmap-wrap{overflow-x:auto;padding:16px 18px}
+.binmap-wrap+.binmap-wrap{padding-top:0}
+.inv-div{border:0;border-top:1px solid var(--line-strong);margin:4px 18px}
+.binmap{border-collapse:collapse;font-size:.88rem;table-layout:fixed}
+.binmap th,.binmap td{border:1px solid var(--line);padding:6px 10px;text-align:right;vertical-align:top}
+.binmap .bh{padding:9px 10px;font:700 .82rem/1.2 var(--f-mono);letter-spacing:.05em;color:#fff;text-align:center;text-transform:uppercase}
+.binmap .bh.green{background:#274E13}.binmap .bh.dried{background:#C4761E}.binmap .bh.material{background:#6B4E2E}.binmap .bh.bagged,.binmap .bh.totes{background:#5E8F4A}
+.bm-two{display:grid;grid-template-columns:1fr 1fr;align-items:start}
+.bm-two>.n{text-align:left}
+.bm-after{display:grid;justify-items:end;border-left:1px solid color-mix(in srgb,var(--ink) 14%,transparent);padding-left:8px}
+.binmap .n{font:700 clamp(1rem,1.25vw,1.5rem)/1.1 var(--f-display);white-space:nowrap}
+.binmap .n small{font:500 .7rem var(--f-body);color:var(--muted);margin-left:3px}
+.binmap .n.neg{color:var(--bad)}
+.bm-lab{font:500 .58rem/1.3 var(--f-mono);text-transform:uppercase;letter-spacing:.07em;color:var(--muted);white-space:nowrap}
+.bm-note{text-align:left!important;font-size:.78rem;font-style:italic;color:var(--muted)}
+@media (max-width:1100px){.binmap{width:auto!important;table-layout:auto}.binmap .bh{min-width:170px}}
+
+/* calendar */
+.cal{padding:14px 18px 16px;display:grid;gap:8px}
+.cal-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cal-h h3{margin:0 4px;min-width:150px;text-align:center;font-size:1.1rem;text-transform:uppercase;letter-spacing:.05em}
+.cal-w,.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cal-w span{font:600 .72rem var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:0 6px}
+.cal-d{all:unset;box-sizing:border-box;cursor:pointer;min-height:104px;border:1px solid var(--line);border-radius:6px;padding:5px 7px;display:flex;flex-direction:column;gap:1px;background:var(--surface);font-size:.76rem;line-height:1.3;overflow:hidden;min-width:0}
+.cal-d:hover,.cal-d:focus-visible{border-color:var(--accent)}
+.cal-d.out{opacity:.4}
+.cal-d.we{background:var(--sunken)}
+.cal-d.today{box-shadow:inset 0 0 0 2px var(--accent)}
+.cal-n{font:700 .85rem/1.2 var(--f-mono);margin-bottom:2px}
+.cal-l{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-l b{font-weight:600}
+.cal-l.c-dry b{color:#C4761E}.cal-l.c-pick b{color:#4E8F3A}.cal-l.c-bag b{color:#5E8F4A}
+.cal-o{font-size:.7rem;border-radius:4px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:color-mix(in srgb,#E3A94B 22%,transparent)}
+.cal-o.ship{background:var(--accent-soft)}
+.cal-note{font-size:.7rem;font-style:italic;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-off{font:600 .62rem/1 var(--f-mono);text-transform:uppercase;color:var(--muted);margin-left:6px}
+.sect{font:600 .78rem var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-top:4px}
+
+/* windows */
+.scrim{position:fixed;inset:0;background:rgb(0 0 0 / .45);z-index:40;display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px;overflow:auto}
+.modal{background:var(--surface);border-radius:12px;width:min(620px,100%);border:1px solid var(--line-strong)}
+.modal.wide{width:min(760px,100%)}
+.modal-h{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line)}
+.modal-h h3{font-size:1.25rem}
+.modal-b{padding:18px 20px 20px;display:grid;gap:16px}
+.modal-b>table{width:100%}
+.modal-f{display:flex;gap:8px;justify-content:flex-end;padding:14px 20px;border-top:1px solid var(--line)}
+.in-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 14px}
+.field{display:grid;gap:6px;align-content:start;min-width:0}
+.field>span{font:600 .7rem/1 var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.field.full{grid-column:1/-1}
+.in-form input,.in-form select,.in-form textarea{width:100%;height:40px;border:1px solid var(--line-strong);border-radius:6px;padding:0 10px;background:var(--surface)}
+.in-form textarea{height:auto;padding:8px 10px;min-height:64px;resize:vertical}
+.in-form input[type=number]::-webkit-inner-spin-button,.in-form input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.in-form input[type=number]{-moz-appearance:textfield}
+.in-form .bad{border-color:var(--bad)}
+.in-sfx{position:relative;display:block}
+.in-sfx input{padding-right:58px}
+.in-sfx i{position:absolute;right:11px;top:50%;transform:translateY(-50%);font-style:normal;font-size:.82rem;color:var(--muted);pointer-events:none}
+.in-sect{grid-column:1/-1;font:600 .78rem var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-top:1px solid var(--line);padding-top:12px;margin-top:2px}
+.ord-lines{width:100%;border-collapse:collapse}
+.ord-lines th{text-align:left;font:600 .7rem/1 var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:0 6px 6px 0}
+.ord-lines td{padding:0 6px 8px 0;vertical-align:middle}
+.ord-lines td:nth-child(2),.ord-lines th:nth-child(2){width:130px}
+.ord-lines td.ord-load,.ord-lines th:nth-child(3){width:110px}
+.ord-lines td:last-child{width:36px;padding-right:0}
+.in-err{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad);border-radius:6px;padding:8px 12px;font-weight:600}
+.ro{font-size:.92rem}
+.ro dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0}
+.ro dt{font:600 .7rem/1.6 var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.ro dd{margin:0}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--bar);color:var(--bar-ink);padding:10px 16px;border-radius:8px;z-index:70;font-size:.9rem;box-shadow:0 6px 20px rgb(0 0 0 / .3)}
+
+@media (max-width:760px){
+  .top{position:static}
+  .top-in{gap:6px 10px;padding:10px 12px 0}
+  .brand{width:100%;padding-bottom:4px}.brand h1{font-size:1.15rem}
+  .who{font-size:.78rem;margin-bottom:6px}
+  nav.lines{flex-wrap:wrap;padding:0 12px 10px;row-gap:8px}
+  nav.lines button[role=tab]{padding:8px 10px 7px;font-size:.92rem}
+  nav.lines .input-btn{flex:1 1 100%;margin:0;padding:10px}
+  main{padding:14px 12px 50px}
+  .toolbar input[type=search]{flex:1 1 140px;width:auto;min-width:0}
+  .cal{padding:12px 10px}.cal-h h3{min-width:0;font-size:1rem}.cal-w span{padding:0 2px;font-size:.62rem}
+  .cal-d{min-height:54px}.cal-l,.cal-o,.cal-note{display:none}.cal-d.has::after{content:'';width:6px;height:6px;border-radius:99px;background:var(--accent);margin-top:2px}
+  .scrim{padding:8px 6px}.modal-b{padding:12px}.modal-b>table{display:block;overflow-x:auto;max-width:100%}.modal-h,.modal-f{padding-left:12px;padding-right:12px}
+}
+@media (max-width:520px){.in-form{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="login" id="login" hidden>
+  <form class="login-card" id="loginForm">
+    <h2>Dept 14 - Specialty Product Sales</h2>
+    <div class="field"><label for="lgEmail">Email</label><input id="lgEmail" type="email" autocomplete="username" required></div>
+    <div class="field"><label for="lgPass">Password</label><input id="lgPass" type="password" autocomplete="current-password" required></div>
+    <div class="hint" id="loginErr" role="alert" style="color:var(--mb-danger)"></div>
+    <button type="submit" class="mb-btn" id="lgBtn">Sign in</button>
+  </form>
+</div>
+<div id="appShell" hidden>
+<header class="top">
+  <div class="top-in">
+    <div class="brand"><h1>Dept 14 - Specialty Product Sales</h1></div>
+    <span class="who"><span id="whoEmail"></span> · <button type="button" class="signout" id="signOut">Sign out</button></span>
+  </div>
+  <nav class="lines" role="tablist" id="tabs">
+    <button role="tab" data-tab="inv" aria-selected="true">Inventory</button>
+    <button role="tab" data-tab="sales" aria-selected="false">Sales log</button>
+    <button role="tab" data-tab="cal" aria-selected="false">Calendar</button>
+    <button type="button" class="input-btn" id="addOrder">Sales input</button>
+  </nav>
+</header>
+<main>
+  <div class="loading-all" id="loading">Loading…</div>
+  <section class="base" id="view" hidden></section>
+</main>
+</div>
+<div id="modalRoot"></div>
+
+<script>
+/* =============================================================
+   Dept 14 sales page (orchid bark). Same Supabase logins as the
+   manager dashboard. Sales can add orders and change them (and their
+   shipping info: carrier, ship date, freight) until they ship; the
+   rest is view only. They never write ready / completed / ranking:
+   the manager owns those on the dashboard.
+   ============================================================= */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store={get(k,d){try{const v=localStorage.getItem('d14s.'+k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem('d14s.'+k,JSON.stringify(v))}catch(e){}}};
+const fmtN=(n,d=1)=>(+n||0).toLocaleString('en-US',{maximumFractionDigits:d});
+const fmtDate=s=>s?new Date(s+'T12:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}):'';
+const today=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)};
+const isoOf=d=>{const x=new Date(d);x.setMinutes(x.getMinutes()-x.getTimezoneOffset());return x.toISOString().slice(0,10)};
+const toast=t=>{const el=document.createElement('div');el.className='toast';el.textContent=t;document.body.appendChild(el);setTimeout(()=>el.remove(),2600)};
+const CFG=window.MIX_BOARD_CONFIG||{};
+const sb=window.supabase&&CFG.SUPABASE_URL?window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{db:{schema:'dept14'}}):null;
+const must=async p=>{const r=await p;if(r.error)throw r.error;return r.data};
+async function all(table,select='*',filter){const out=[];for(let f=0;;f+=1000){let q=sb.from(table).select(select).range(f,f+999);if(filter)q=filter(q);const d=await must(q);out.push(...d);if(d.length<1000)break}return out}
+
+/* ---------- data ---------- */
+const D={bins:[],onhand:{},orders:[],dryer:[],picker:[],bagging:[],cal:[],loadedAt:0};
+const binName=id=>(D.bins.find(b=>b.id===id)||{}).name||'';
+const binOf=name=>D.bins.find(b=>b.name===name)||{};
+const unitOf=name=>({pallets:'pallets',totes:'totes'})[binOf(name).unit]||'yd';
+async function load(){
+  const [bins,oh,orders,dryer,picker,bagging]=await Promise.all([
+    all('bins','*',q=>q.order('sort')),all('orchid_on_hand'),
+    all('orders','*,order_lines(*)',q=>q.eq('line','orchid')),
+    all('dryer_runs','*',q=>q.eq('status','active')),all('picker_estimates'),all('bagging_runs')]);
+  D.bins=bins.filter(b=>b.active);
+  D.onhand=Object.fromEntries(oh.map(r=>[r.name,{q:+r.on_hand||0,o:+r.on_open_orders||0}]));
+  D.orders=orders.map(o=>({id:o.id,date:o.order_date,customer:o.customer||'',so:o.sales_order_no||'',po:o.po||'',notes:o.notes||'',done:!!o.completed,doneOn:o.completed_on,
+    ready:!!o.ready,readyOn:o.ready_on,carrier:o.carrier||'',shipDate:o.ship_date,freight:o.freight_cost!=null?+o.freight_cost:null,priority:o.priority,
+    lines:(o.order_lines||[]).map(l=>({bin:binName(l.bin_id),qty:+l.qty,load:l.load_type||''}))}));
+  D.dryer=dryer.map(r=>({date:r.production_date,product:binName(r.product_bin_id),yin:+r.yards_in,yout:+r.yards_out,dest:r.destination,bin:binName(r.bin_id),totes:r.totes!=null?+r.totes:null,hours:+r.hours}));
+  D.picker=picker.map(r=>({date:r.production_date,material:r.material,units:+r.units,yards:+r.yards,small:+r.small_green,medium:+r.medium_green,hours:+r.hours}));
+  D.bagging=bagging.map(r=>({date:r.production_date,from:binName(r.from_bin_id),yards:+r.yards_used,pallets:+r.pallets,hours:+r.hours}));
+  try{D.cal=await all('calendar_days')}catch(e){D.cal=[]}
+  D.loadedAt=Date.now();
+}
+const shipped=o=>o.done||(o.shipDate&&o.shipDate<today());
+const canEdit=o=>!shipped(o);
+const summary=o=>o.lines.map(l=>`${fmtN(l.qty,2)} ${unitOf(l.bin)} ${l.bin}`).join(', ');
+const loads=o=>[...new Set(o.lines.map(l=>l.load).filter(Boolean))].join(', ');
+const statusTag=o=>o.done?'<span class="tag done">Completed</span>':o.shipDate&&o.shipDate<=today()?'<span class="tag shipped">Shipped</span>':o.ready?'<span class="tag ready">Ready</span>':'<span class="tag">Open</span>';
+/* products sales can sell: the bins on the map plus bagged and totes */
+const products=()=>D.bins.filter(b=>b.on_map||b.kind==='bagged'||b.kind==='totes').map(b=>b.name);
+
+/* ---------- views ---------- */
+const UI={tab:store.get('tab','inv'),q:'',month:today().slice(0,7)};
+function render(){
+  document.querySelectorAll('#tabs [data-tab]').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===UI.tab));
+  ({inv:renderInv,sales:renderSales,cal:renderCal})[UI.tab]();
+}
+function activeOrders(){
+  const open=D.orders.filter(o=>!o.done).sort((a,b)=>(a.priority??1e9)-(b.priority??1e9)||a.date.localeCompare(b.date));
+  return `<section class="ao"><div class="ao-h"><h3>Active orders</h3><span class="muted">${open.length}</span></div>
+    ${open.length?`<table class="grid"><thead><tr><th class="r">#</th><th>Customer</th><th>Sales order #</th><th>PO</th><th>Products</th><th>Load</th><th>Order date</th><th>Status</th><th>Ship date</th><th>Carrier</th></tr></thead><tbody>
+    ${open.map((o,i)=>`<tr data-order="${esc(o.id)}"><td class="r num">${i+1}</td><td>${esc(o.customer)}</td><td class="num">${esc(o.so)}</td><td class="num">${esc(o.po)}</td><td>${esc(summary(o))}</td><td>${esc(loads(o))}</td><td>${fmtDate(o.date)}</td><td>${statusTag(o)}</td><td>${fmtDate(o.shipDate)}</td><td>${esc(o.carrier)}</td></tr>`).join('')}
+    </tbody></table>`:'<span class="muted">No open orders.</span>'}</section>`;
+}
+function renderInv(){
+  const kinds=k=>D.bins.filter(b=>b.on_map&&b.kind===k);
+  const green=kinds('green'),W=Math.max(6,green.length);
+  const two=b=>{const h=D.onhand[b.name]||{q:0,o:0},u=unitOf(b.name),af=h.q-h.o;
+    return `<span class="bm-two"><span class="n ${h.q<0?'neg':''}">${fmtN(h.q,2)}<small>${u}</small></span><span class="bm-after"><span class="n ${af<-1e-9?'neg':''}">${fmtN(af,2)}<small>${u}</small></span><span class="bm-lab">after sales</span></span></span>`};
+  const tbl=(cols,notes=true)=>cols.length?`<div class="binmap-wrap"><table class="binmap" style="width:${Math.min(100,cols.length/W*100)}%">
+    <thead><tr>${cols.map(b=>`<th class="bh ${b.kind}">${esc(b.name)}</th>`).join('')}</tr></thead>
+    <tbody><tr>${cols.map(b=>`<td>${two(b)}</td>`).join('')}</tr>${notes?`<tr>${cols.map(b=>`<td class="bm-note">${esc(b.note||'')}</td>`).join('')}</tr>`:''}</tbody></table></div>`:'';
+  const bagged=D.bins.filter(b=>b.kind==='bagged'||b.kind==='totes');
+  $('#view').innerHTML=activeOrders()+tbl(green)+tbl(kinds('dried'))+'<hr class="inv-div">'+tbl(kinds('material'))+'<hr class="inv-div">'+tbl(bagged,false);
+}
+function renderSales(){
+  const q=UI.q.toLowerCase();
+  const rows=D.orders.filter(o=>!q||[o.customer,o.so,o.po,o.notes,o.carrier,summary(o)].join(' ').toLowerCase().includes(q))
+    .sort((a,b)=>(a.done-b.done)||b.date.localeCompare(a.date));
+  $('#view').innerHTML=`<div class="toolbar"><input type="search" id="q" placeholder="Search" value="${esc(UI.q)}"><span class="sp"></span><button class="btn primary" id="add2">+ Add order</button></div>
+    <div class="grid-wrap">${rows.length?`<table class="grid"><thead><tr><th>Order date</th><th>Customer</th><th>Sales order #</th><th>PO</th><th>Products</th><th>Load</th><th>Status</th><th>Ship date</th><th>Carrier</th><th class="r">Freight</th><th>Notes</th></tr></thead><tbody>
+    ${rows.map(o=>`<tr data-order="${esc(o.id)}" class="${o.done?'done':''}"><td>${fmtDate(o.date)}</td><td>${esc(o.customer)}</td><td class="num">${esc(o.so)}</td><td class="num">${esc(o.po)}</td><td>${esc(summary(o))}</td><td>${esc(loads(o))}</td><td>${statusTag(o)}</td><td>${fmtDate(o.shipDate)}</td><td>${esc(o.carrier)}</td><td class="r num">${o.freight!=null?'$'+fmtN(o.freight,2):''}</td><td>${esc(o.notes)}</td></tr>`).join('')}
+    </tbody></table>`:'<div class="empty">No records.</div>'}</div>`;
+  const s=$('#q');s.oninput=()=>{UI.q=s.value;const p=s.selectionStart;renderSales();const n=$('#q');n.focus();n.setSelectionRange(p,p)};
+  $('#add2').onclick=()=>openOrder(null);
+}
+/* one calendar for all of orchid: dryer, picker, bagging, orders placed and orders shipping */
+function dayData(ds){
+  return {dryer:D.dryer.filter(r=>r.date===ds),picker:D.picker.filter(r=>r.date===ds),bagging:D.bagging.filter(r=>r.date===ds),
+    placed:D.orders.filter(o=>o.date===ds),shipping:D.orders.filter(o=>o.shipDate===ds),notes:D.cal.filter(c=>c.day===ds&&c.kind!=='bio')};
+}
+function renderCal(){
+  const [y,m]=UI.month.split('-').map(Number),t=today();
+  const start=new Date(y,m-1,1,12);start.setDate(1-start.getDay());
+  let cells='';
+  for(let i=0;i<42;i++){const d=new Date(start);d.setDate(start.getDate()+i);const ds=isoOf(d),inM=d.getMonth()===m-1;if(i===35&&!inM)break;
+    const x=dayData(ds),we=d.getDay()===0||d.getDay()===6,L=[];
+    if(x.dryer.length)L.push(['dry',`Dryer`,`${fmtN(x.dryer.reduce((a,r)=>a+r.yin,0),1)} → ${fmtN(x.dryer.reduce((a,r)=>a+r.yout,0),1)} yd`]);
+    if(x.picker.length)L.push(['pick','Picker',`${fmtN(x.picker.reduce((a,r)=>a+r.units,0),1)} units`]);
+    if(x.bagging.length)L.push(['bag','Bagging',`${fmtN(x.bagging.reduce((a,r)=>a+r.pallets,0),0)} pallets`]);
+    const has=L.length||x.placed.length||x.shipping.length;
+    const off=x.notes.filter(n=>n.off).map(n=>({dryer:'Dryer',pick:'Picker',bag:'Bagging'})[n.kind]);
+    cells+=`<button type="button" class="cal-d ${inM?'':'out'} ${we?'we':''} ${ds===t?'today':''} ${has?'has':''}" data-day="${ds}" aria-label="${d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}">
+      <span class="cal-n">${d.getDate()}${off.length&&!L.length?'<span class="cal-off">Off</span>':''}</span>
+      ${L.map(([c,a,b])=>`<span class="cal-l c-${c}"><b>${a}</b> ${esc(b)}</span>`).join('')}
+      ${x.notes.filter(n=>n.note).map(n=>`<span class="cal-note">${esc(n.note)}</span>`).join('')}
+      ${x.shipping.map(o=>`<span class="cal-o ship">Ships · ${esc(o.customer)}</span>`).join('')}
+      ${x.placed.map(o=>`<span class="cal-o">Order · ${esc(o.customer)}</span>`).join('')}
+    </button>`}
+  const mt=new Date(y,m-1,15).toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  $('#view').innerHTML=`<section class="cal"><div class="cal-h"><button type="button" class="btn icon" data-nav="-1" aria-label="Previous month">‹</button><h3>${mt}</h3><button type="button" class="btn icon" data-nav="1" aria-label="Next month">›</button><button type="button" class="btn" data-nav="0">Today</button></div>
+    <div class="cal-w">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(w=>`<span>${w}</span>`).join('')}</div><div class="cal-grid">${cells}</div></section>`;
+}
+function openDay(ds){
+  const x=dayData(ds),t=(head,rows)=>`<table class="grid"><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
+  const sec=(title,body)=>`<div class="sect">${title}</div>${body}`;
+  const KN={dryer:'Dryer',pick:'Picker',bag:'Bagging'};
+  let b='';
+  if(x.dryer.length)b+=sec('Dryer',t(['Product','In','Out','Went to'],x.dryer.map(r=>`<tr><td>${esc(r.product)}</td><td class="num">${fmtN(r.yin,1)} yd</td><td class="num">${fmtN(r.yout,1)} yd</td><td>${esc(r.dest==='bin'?r.bin:'Totes'+(r.totes?' · '+fmtN(r.totes,2):''))}</td></tr>`)));
+  if(x.picker.length)b+=sec('Picker',t(['Material','Units','Yards','Small (est.)','Medium (est.)'],x.picker.map(r=>`<tr><td>${esc(r.material)}</td><td class="num">${fmtN(r.units,1)}</td><td class="num">${fmtN(r.yards,1)}</td><td class="num">${fmtN(r.small,1)}</td><td class="num">${fmtN(r.medium,1)}</td></tr>`)));
+  if(x.bagging.length)b+=sec('Bagging',t(['Bagged from','Yards','Pallets'],x.bagging.map(r=>`<tr><td>${esc(r.from)}</td><td class="num">${fmtN(r.yards,1)}</td><td class="num">${fmtN(r.pallets,0)}</td></tr>`)));
+  if(x.shipping.length)b+=sec('Shipping',t(['Customer','Products','Carrier','Status'],x.shipping.map(o=>`<tr data-order="${esc(o.id)}"><td>${esc(o.customer)}</td><td>${esc(summary(o))}</td><td>${esc(o.carrier)}</td><td>${statusTag(o)}</td></tr>`)));
+  if(x.placed.length)b+=sec('Orders placed',t(['Customer','Products','Status'],x.placed.map(o=>`<tr data-order="${esc(o.id)}"><td>${esc(o.customer)}</td><td>${esc(summary(o))}</td><td>${statusTag(o)}</td></tr>`)));
+  if(x.notes.length)b+=sec('Notes',`<div class="ro"><dl>${x.notes.map(n=>`<dt>${KN[n.kind]||''}</dt><dd>${n.off?'Off':''}${n.off&&n.note?' · ':''}${esc(n.note||'')}</dd>`).join('')}</dl></div>`);
+  modal(new Date(ds+'T12:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}),b||'<div class="muted">No entries.</div>','<button class="btn" data-close>Close</button>','wide');
+}
+
+/* ---------- order window: add, or change until it ships ---------- */
+function openOrder(o){
+  const isNew=!o,edit=isNew||canEdit(o);
+  if(!edit)return viewOrder(o);
+  const d=isNew?{date:today(),customer:'',so:'',po:'',notes:'',carrier:'',shipDate:'',freight:'',lines:[{bin:'',qty:'',load:''}]}
+               :{...o,shipDate:o.shipDate||'',freight:o.freight??'',lines:o.lines.map(l=>({...l}))};
+  const prods=products(),customers=[...new Set(D.orders.map(x=>x.customer).filter(Boolean))].sort(),carriers=[...new Set(D.orders.map(x=>x.carrier).filter(Boolean))].sort();
+  const lineRow=(l,i)=>`<tr data-i="${i}"><td><select data-f="bin" aria-label="Product"><option value="">Pick a product</option>${prods.map(p=>`<option ${p===l.bin?'selected':''}>${esc(p)}</option>`).join('')}${l.bin&&!prods.includes(l.bin)?`<option selected>${esc(l.bin)}</option>`:''}</select></td>
+    <td><span class="in-sfx"><input type="number" data-f="qty" min="0" step="0.5" value="${l.qty??''}" aria-label="Quantity" inputmode="decimal"><i>${l.bin?unitOf(l.bin):''}</i></span></td>
+    <td class="ord-load"><select data-f="load" aria-label="Load type"><option value="">—</option>${['BULK','BAGS','TOTES'].map(x=>`<option ${x===l.load?'selected':''}>${x}</option>`).join('')}</select></td>
+    <td>${d.lines.length>1?`<button type="button" class="btn icon" data-rm="${i}" aria-label="Remove line">✕</button>`:''}</td></tr>`;
+  modal(isNew?'Sales input':`Order · ${o.customer}`,`
+    <div class="in-form">
+      <label class="field full"><span>Customer</span><input type="text" name="customer" list="custList" value="${esc(d.customer)}" autocomplete="off"><datalist id="custList">${customers.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label>
+      <label class="field"><span>Order date</span><input type="date" name="date" value="${d.date}"></label>
+      <label class="field"><span>Sales order #</span><input type="text" name="so" value="${esc(d.so)}" autocomplete="off"></label>
+      <label class="field"><span>PO</span><input type="text" name="po" value="${esc(d.po)}" autocomplete="off"></label>
+      ${!isNew?`<div class="field"><span>Status</span><div style="padding-top:8px">${statusTag(o)}${o.ready&&o.readyOn?` <span class="muted">${fmtDate(o.readyOn)}</span>`:''}</div></div>`:''}
+      <div class="field full"><table class="ord-lines"><thead><tr><th>Product</th><th>Qty</th><th>Load</th><th></th></tr></thead><tbody id="ordLines">${d.lines.map(lineRow).join('')}</tbody></table>
+        <button type="button" class="btn" id="addLine" style="justify-self:start">Add +</button></div>
+      <label class="field full"><span>Notes</span><textarea name="notes" rows="2">${esc(d.notes)}</textarea></label>
+      <div class="in-sect">Shipping</div>
+      <label class="field"><span>Carrier</span><input type="text" name="carrier" list="carList" value="${esc(d.carrier)}" autocomplete="off"><datalist id="carList">${carriers.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label>
+      <label class="field"><span>Ship date</span><input type="date" name="shipDate" value="${d.shipDate}"></label>
+      <label class="field"><span>Freight cost</span><span class="in-sfx"><input type="number" name="freight" min="0" step="0.01" value="${d.freight}" inputmode="decimal"><i>$</i></span></label>
+    </div>
+    <div class="in-err" id="formErr" role="alert" hidden></div>`,
+    `${isNew?'':'<button class="btn danger" id="delOrder" style="margin-right:auto">Cancel order</button>'}<button class="btn" data-close>Close</button><button class="btn primary" id="saveOrder">${isNew?'Save':'Save changes'}</button>`);
+  const m=$('#modalRoot'),tb=$('#ordLines'),v=n=>m.querySelector(`[name=${n}]`);
+  const grab=()=>{['date','customer','so','po','notes','carrier','shipDate','freight'].forEach(n=>d[n]=v(n).value);
+    tb.querySelectorAll('tr[data-i]').forEach(tr=>{const l=d.lines[+tr.dataset.i];tr.querySelectorAll('[data-f]').forEach(el=>l[el.dataset.f]=el.value)})};
+  const redraw=()=>{tb.innerHTML=d.lines.map(lineRow).join('')};
+  tb.addEventListener('change',e=>{if(e.target.dataset.f==='bin'){grab();redraw()}});
+  tb.addEventListener('click',e=>{const b=e.target.closest('[data-rm]');if(b){grab();d.lines.splice(+b.dataset.rm,1);redraw()}});
+  $('#addLine').onclick=()=>{grab();d.lines.push({bin:'',qty:'',load:''});redraw();tb.querySelector('tr:last-child select')?.focus()};
+  const del=$('#delOrder');if(del)del.onclick=async()=>{if(!confirm(`Cancel the ${o.customer} order? It will be deleted.`))return;
+    del.disabled=true;try{await must(sb.from('orders').delete().eq('id',o.id));closeModal();await refresh();toast('Order cancelled')}catch(e){del.disabled=false;err('Couldn’t cancel: '+e.message)}};
+  const err=t=>{const e=$('#formErr');e.textContent=t;e.hidden=false};
+  $('#saveOrder').onclick=async()=>{grab();
+    if(!String(d.customer).trim())return err('Enter the customer.');
+    if(!d.date)return err('Pick the order date.');
+    const lines=d.lines.filter(l=>l.bin||+l.qty);
+    if(!lines.length)return err('Add at least one product.');
+    if(lines.some(l=>!l.bin))return err('Pick a product for each line.');
+    if(lines.some(l=>!(+l.qty>0)))return err('Enter a quantity for each line.');
+    if(d.freight!==''&&!(+d.freight>=0))return err('Freight cost must be a number.');
+    const btn=$('#saveOrder');btn.disabled=true;
+    const id=isNew?crypto.randomUUID():o.id;
+    const row={id,line:'orchid',order_date:d.date,customer:String(d.customer).trim(),sales_order_no:d.so.trim()||null,po:d.po.trim()||null,notes:d.notes.trim()||null,
+      carrier:d.carrier.trim()||null,ship_date:d.shipDate||null,freight_cost:d.freight===''?null:+d.freight};
+    try{
+      await must(isNew?sb.from('orders').insert(row):sb.from('orders').update(row).eq('id',id));
+      await must(sb.from('order_lines').delete().eq('order_id',id));
+      await must(sb.from('order_lines').insert(lines.map(l=>({order_id:id,bin_id:binOf(l.bin).id,qty:+l.qty,load_type:l.load||null}))));
+      closeModal();await refresh();toast(isNew?'Order added':'Order saved');
+    }catch(e){btn.disabled=false;err('Couldn’t save: '+(e.message||e))}
+  };
+  if(isNew)v('customer').focus();
+}
+function viewOrder(o){
+  modal(`Order · ${o.customer}`,`<div class="ro"><dl>
+    <dt>Status</dt><dd>${statusTag(o)}</dd>
+    <dt>Order date</dt><dd>${fmtDate(o.date)}</dd>
+    <dt>Sales order #</dt><dd>${esc(o.so)}</dd><dt>PO</dt><dd>${esc(o.po)}</dd>
+    <dt>Products</dt><dd>${o.lines.map(l=>`${fmtN(l.qty,2)} ${unitOf(l.bin)} ${esc(l.bin)}${l.load?' · '+esc(l.load):''}`).join('<br>')}</dd>
+    <dt>Carrier</dt><dd>${esc(o.carrier)}</dd><dt>Ship date</dt><dd>${fmtDate(o.shipDate)}</dd><dt>Freight</dt><dd>${o.freight!=null?'$'+fmtN(o.freight,2):''}</dd>
+    ${o.done?`<dt>Completed</dt><dd>${fmtDate(o.doneOn)}</dd>`:''}
+    <dt>Notes</dt><dd>${esc(o.notes)}</dd></dl></div>`,'<button class="btn" data-close>Close</button>');
+}
+
+/* ---------- windows ---------- */
+function modal(title,body,foot,cls=''){
+  $('#modalRoot').innerHTML=`<div class="scrim" id="scrim"><div class="modal ${cls}" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+    <div class="modal-h"><h3>${esc(title)}</h3><button class="btn icon" data-close aria-label="Close">✕</button></div>
+    <div class="modal-b">${body}</div>${foot?`<div class="modal-f">${foot}</div>`:''}</div></div>`;
+}
+const closeModal=()=>$('#modalRoot').innerHTML='';
+$('#modalRoot').addEventListener('click',e=>{
+  if(e.target.id==='scrim'||e.target.closest('[data-close]'))return closeModal();
+  const r=e.target.closest('tr[data-order]');if(r){const o=D.orders.find(x=>x.id===r.dataset.order);if(o)openOrder(o)}
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#modalRoot').innerHTML)closeModal()});
+$('#view').addEventListener('click',e=>{
+  const r=e.target.closest('tr[data-order]');if(r){const o=D.orders.find(x=>x.id===r.dataset.order);if(o)openOrder(o);return}
+  const n=e.target.closest('[data-nav]');if(n){const k=+n.dataset.nav;if(!k)UI.month=today().slice(0,7);else{const [y,m]=UI.month.split('-').map(Number);const d=new Date(y,m-1+k,1,12);UI.month=isoOf(d).slice(0,7)}renderCal();return}
+  const d=e.target.closest('[data-day]');if(d)openDay(d.dataset.day);
+});
+$('#tabs').addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(!b)return;UI.tab=b.dataset.tab;store.set('tab',UI.tab);render()});
+$('#addOrder').onclick=()=>openOrder(null);
+
+/* ---------- sign in ---------- */
+async function refresh(){await load();render()}
+function showLogin(msg){$('#login').hidden=false;$('#appShell').hidden=true;$('#loginErr').textContent=msg||'';$('#lgEmail').focus()}
+async function boot(){
+  if(!sb){document.body.innerHTML='<p style="padding:30px">The page can’t reach the database.</p>';return}
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session)return showLogin();
+  $('#whoEmail').textContent=session.user.email||'';
+  $('#login').hidden=true;$('#appShell').hidden=false;
+  try{await load()}catch(e){$('#loading').textContent='Couldn’t load the data: '+(e.message||e);return}
+  $('#loading').hidden=true;$('#view').hidden=false;render();
+}
+$('#loginForm').onsubmit=async e=>{
+  e.preventDefault();const btn=$('#lgBtn');btn.disabled=true;btn.textContent='Signing in…';
+  const {error}=await sb.auth.signInWithPassword({email:$('#lgEmail').value.trim(),password:$('#lgPass').value});
+  btn.disabled=false;btn.textContent='Sign in';
+  if(error)return showLogin(error.message==='Invalid login credentials'?'That email and password don’t match a login.':error.message);
+  $('#lgPass').value='';boot();
+};
+$('#signOut').onclick=async()=>{await sb.auth.signOut();location.reload()};
+document.addEventListener('visibilitychange',async()=>{
+  if(document.hidden||!D.loadedAt||$('#modalRoot').innerHTML||Date.now()-D.loadedAt<60000)return;
+  try{await refresh()}catch(e){}
+});
+boot();
+</script>
+</body>
+</html>
