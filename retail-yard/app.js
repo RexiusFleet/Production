@@ -240,10 +240,11 @@ function friendlyError(e){
 }
 
 const ROLES = {
-  inventory:{label:'Inventory', tabs:['yard','pulls','backfill','hauls','ledger','setup']},
-  hauling:{label:'Bulk hauling', tabs:['yard','backfill','hauls']},
-  admin:{label:'Admin', tabs:['yard','pulls','backfill','hauls','ledger','setup']},
-  viewer:{label:'View only', tabs:['yard','hauls']},
+  // Ordering, scheduled deliveries and confirming deliveries all live on the Order Product tab.
+  inventory:{label:'Inventory', tabs:['yard','pulls','backfill','ledger','setup']},
+  hauling:{label:'Bulk hauling', tabs:['yard','backfill']},
+  admin:{label:'Admin', tabs:['yard','pulls','backfill','ledger','setup']},
+  viewer:{label:'View only', tabs:['yard','backfill']},
 };
 const TAB_LABELS = {yard:'Yard', pulls:'Draw', backfill:'Order Product', hauls:'Hauls', ledger:'Ledger', setup:'Setup'};
 const DEMO_USERS = [
@@ -473,6 +474,7 @@ const can={
   request:()=>has('inventory','admin'),
   dispatch:m=> m==='bulk' ? has('hauling','admin') : has('inventory','admin'),
   haul:()=>has('hauling','inventory','admin'),
+  confirmDelivery:()=>has('inventory','admin'),   // Jeff (and admins) confirm deliveries; that's what adds product to the bin
   adjust:()=>has('inventory','admin'),
   setup:()=>has('inventory','admin'),
   binCapacity:()=>has('hauling','inventory','admin'),
@@ -550,7 +552,7 @@ function gauge(b,s){
 }
 function statusChip(s){
   const map={open:['Open','c-acc'],pulled:['Pulled','c-ok'],cancelled:['Cancelled','c-mute'],pending:['To pull','c-acc'],unmapped:['Needs mapping','c-warn'],ignored:['Ignored','c-mute'],
-    requested:['Requested','c-warn'],scheduled:['Scheduled','c-info'],in_progress:['In progress','c-info'],delivered:['Delivered','c-ok'],en_route:['En route','c-info']};
+    requested:['Requested','c-warn'],scheduled:['Scheduled','c-info'],in_progress:['In progress','c-info'],delivered:['Delivered','c-ok'],en_route:['En route','c-info'],confirmed:['Delivered ✓','c-ok']};
   const [t,c]=map[s]||[s,'c-mute']; return `<span class="chip ${c}">${esc(t)}</span>`;
 }
 const confirmBtn=(act,label,attrs,cls='')=>`<button class="btn sm ${cls}" data-act="${act}" data-confirm="${esc(label)}" ${attrs}>${esc(label)}</button>`;
@@ -609,6 +611,8 @@ VIEWS.yard={
               <div class="btns"><button class="btn sm primary" data-act="quickReq" data-bin="${b.id}">Order product</button></div></div>`);
           }});
         if(D.unmapped.length) items.push(`<div class="alert" style="--c:var(--warn)"><p><b>${D.unmapped.length} Shopify line${D.unmapped.length>1?'s':''}</b> are on hold. They draw from inventory once their product is linked.</p><div class="btns"><button class="btn sm" data-act="tab" data-tab="pulls">Link products</button></div></div>`);
+        const toConfirm=S.hauls.filter(h=>['scheduled','en_route'].includes(h.status)&&(h.status==='en_route'||dayDiff(h.haul_on)<=0)).length;
+        if(toConfirm) items.push(`<div class="alert" style="--c:var(--ok)"><p><b>${toConfirm} deliver${toConfirm>1?'ies':'y'}</b> due today or en route. Confirm ${toConfirm>1?'them':'it'} when the product arrives.</p><div class="btns"><button class="btn sm" data-act="tab" data-tab="backfill">Confirm deliveries</button></div></div>`);
         const slingers=S.backfills.filter(r=>r.method==='slinger'&&r.status==='requested');
         if(slingers.length) items.push(`<div class="alert" style="--c:var(--info)"><p><b>${slingers.length} slinger request${slingers.length>1?'s':''}</b> waiting for you to schedule.</p><div class="btns"><button class="btn sm" data-act="tab" data-tab="backfill">Schedule</button></div></div>`);
       }
@@ -804,16 +808,28 @@ VIEWS.backfill={
         <div class="form-actions full"><button class="btn primary">Send order</button><span class="hint" id="rq-hint"></span></div>
       </form></details>`:''}
     <div class="sec"><div class="sec-head"><h2>Product orders</h2><div class="filters" data-dyn="bFilters"></div></div>
+      <p class="muted" style="margin:0;font-size:.85rem">Order → schedule a truck → ${can.confirmDelivery()?'confirm the delivery here when it arrives':'the yard confirms the delivery when it arrives'}. Product is added to the bin only when a delivery is confirmed.</p>
       <div class="cols" data-dyn="bBoard"></div></div>
+    ${can.confirmDelivery()?`<details class="panel panel-pad adder">
+      <summary class="sec-head"><h2>Log a delivery without an order</h2><span class="btn sm">Log delivery</span></summary>
+      <form class="form" data-form="haulFree" autocomplete="off">
+        <label class="field"><span>Product</span><select id="hf-bin" name="product_id" required data-act-change="haulCalc">${productOptions()}</select></label>
+        ${truckFields(null)}
+        <label class="field"><span>Date</span><input id="hf-date" name="haul_on" type="date" value="${isoDay()}"></label>
+        <label class="field"><span>Hauled by</span><select id="hf-method" name="method"><option value="bulk">Bulk truck</option><option value="slinger">Slinger</option></select></label>
+        <label class="field"><span>Status</span><select id="hf-status" name="status"><option value="delivered">Delivered (add to bin now)</option><option value="scheduled">Scheduled (confirm later)</option></select></label>
+        <div class="form-actions full"><button class="btn primary">Save</button><span class="hint">Shows on the board as an order with this truck.</span></div>
+      </form></details>`:''}
   </section>`,
   dyn:{
     bFilters(){ return [['all','All'],['bulk','Bulk · Kevin'],['slinger','Slinger · Jeff']].map(([k,l])=>`<button data-act="bfFilter" data-v="${k}" aria-pressed="${UI.bfFilter===k}">${l}</button>`).join(''); },
     bBoard(){
       const f=UI.bfFilter;
       const list=S.backfills.filter(r=>r.status!=='cancelled'&&(f==='all'||r.method===f));
-      const cols=[['requested','Requested'],['scheduled','Scheduled'],['in_progress','In progress'],['delivered','Delivered · 14 days']];
+      // No separate "In progress" column: orders with a truck en route or partly delivered stay under Scheduled.
+      const cols=[['requested','Requested'],['scheduled','Scheduled'],['delivered','Delivered · 14 days']];
       return cols.map(([k,l])=>{
-        let items=list.filter(r=>r.status===k);
+        let items=list.filter(r=>r.status===k||(k==='scheduled'&&r.status==='in_progress'));
         if(k==='delivered') items=items.filter(r=>dayDiff((r.needed_by||r.created_at).slice(0,10))>=-14);
         items.sort((a,b)=>(a.needed_by||'').localeCompare(b.needed_by||''));
         return `<div class="col"><div class="col-h"><h3>${l}</h3><span class="n">${items.length}</span></div>
@@ -822,6 +838,20 @@ VIEWS.backfill={
     },
   },
 };
+function haulLine(h){
+  // One truck on an order card, with the actions for whoever is looking:
+  //   Jeff / admin → Confirm delivered (adds to the bin) · Undo
+  //   dispatcher (Kevin for bulk, Jeff for slingers) → En route · Cancel
+  const open=['scheduled','en_route'].includes(h.status);
+  const disp=can.dispatch(h.method)||has('admin');
+  let act='';
+  if(open&&can.confirmDelivery()) act+=`<button class="btn sm order" data-act="haulStatus" data-v="delivered" data-id="${h.id}">Confirm delivered</button>`;
+  if(h.status==='scheduled'&&disp) act+=`<button class="btn sm" data-act="haulStatus" data-v="en_route" data-id="${h.id}">En route</button>`;
+  if(open&&disp) act+=confirmBtn('haulCancel','Cancel',`data-id="${h.id}"`,'ghost');
+  if(h.status==='delivered'&&can.confirmDelivery()) act+=confirmBtn('haulUndo','Undo',`data-id="${h.id}"`,'ghost');
+  return `<div class="haul-line"><div class="hl-top"><span>Truck ${esc(h.truck_no)}${h.loads>1?' × '+h.loads:''} · ${esc(fmtDate(h.haul_on))}</span><span class="num">${fmtN(h.volume_yd)} yd³ ${statusChip(h.status==='delivered'?'confirmed':h.status)}</span></div>
+    ${act?`<div class="hl-act">${act}</div>`:''}</div>`;
+}
 function reqCard(r){
   const hs=S.hauls.filter(h=>h.request_id===r.id&&h.status!=='cancelled');
   const del=hs.filter(h=>h.status==='delivered').reduce((s,h)=>s+Number(h.volume_yd),0);
@@ -837,7 +867,7 @@ function reqCard(r){
     ${r.method==='bulk'&&remaining>0?(()=>{ const sug=trucks().map(t=>{ const c=truckCap(t.no,r.product_id,'dry'); return c?`${Math.ceil(remaining/c)} load${Math.ceil(remaining/c)>1?'s':''} on ${esc(t.no)}`:null; }).filter(Boolean);
       return sug.length?`<div class="meta">≈ ${sug.join(' · ')} <span class="muted">(dry)</span></div>`:`<div class="meta" style="color:var(--warn)">No truck capacity on file for this product</div>`; })():''}
     ${hs.length?`<div class="progress" title="${fmtN(del)} of ${fmtN(r.qty_yd)} yd³ delivered"><i style="width:${Math.min(100,del/r.qty_yd*100)}%"></i></div>
-      <div class="hauls-mini">${hs.map(h=>`<div><span>Truck ${esc(h.truck_no)}${h.loads>1?' × '+h.loads:''} · ${esc(fmtDate(h.haul_on))}</span><span class="num">${fmtN(h.volume_yd)} yd³ ${statusChip(h.status)}</span></div>`).join('')}</div>`:''}
+      <div class="hauls-mini">${hs.map(haulLine).join('')}</div>`:''}
     ${canD?(open?`<form class="form inline-form" data-form="haul" data-req="${r.id}" data-pid="${r.product_id}" data-remaining="${remaining}" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr))">
         ${truckFields(r.product_id,{remaining,method:r.method})}
         <label class="field"><span>Date</span><input name="haul_on" type="date" value="${dayDiff(r.needed_by)>=0?r.needed_by:isoDay()}"></label>
@@ -847,62 +877,6 @@ function reqCard(r){
     <div class="meta">Requested by ${esc(r.created_by_name||'—')}</div>
   </article>`;
 }
-
-/* ---------- Hauls ---------- */
-VIEWS.hauls={
-  shell:()=>`<section class="view">
-    <div class="summary" data-dyn="hSummary"></div>
-    ${can.haul()?`<details class="panel panel-pad adder">
-      <summary class="sec-head"><h2>Log a haul</h2><span class="btn sm primary">Add haul</span></summary>
-      <form class="form" data-form="haulFree" autocomplete="off">
-        <label class="field"><span>Product</span><select id="hf-bin" name="product_id" required data-act-change="haulCalc">${productOptions()}</select></label>
-        ${truckFields(null)}
-        <label class="field"><span>Date</span><input id="hf-date" name="haul_on" type="date" value="${isoDay()}"></label>
-        <label class="field"><span>Hauled by</span><select id="hf-method" name="method">${has('hauling')&&!has('admin')?'<option value="bulk">Bulk truck</option>':'<option value="bulk">Bulk truck</option><option value="slinger">Slinger</option>'}</select></label>
-        <label class="field"><span>Status</span><select id="hf-status" name="status"><option value="scheduled">Scheduled</option><option value="delivered">Already delivered</option></select></label>
-        <label class="field full"><span>For request (optional)</span><select id="hf-req" name="request_id"><option value="">Not tied to a request</option>${S.backfills.filter(r=>!['delivered','cancelled'].includes(r.status)).map(r=>`<option value="${r.id}">${esc(prodName(r.product_id))} · ${fmtYd(r.qty_yd)} · needed ${esc(fmtDate(r.needed_by))}</option>`).join('')}</select></label>
-        <div class="form-actions full"><button class="btn primary">Save haul</button><span class="hint">Delivered hauls add to the bin right away.</span></div>
-      </form></details>`:''}
-    <div class="sec"><div class="sec-head"><h2>Hauls</h2><div class="filters" data-dyn="hFilters"></div></div>
-      <div class="rows" data-dyn="hList"></div></div>
-  </section>`,
-  dyn:{
-    hSummary(){
-      const wk=S.hauls.filter(h=>h.status==='delivered'&&dayDiff(h.haul_on)>-7);
-      const yd=wk.reduce((s,h)=>s+Number(h.volume_yd),0);
-      const trucks={}; wk.forEach(h=>trucks[h.truck_no]=(trucks[h.truck_no]||0)+Number(h.volume_yd));
-      const top=Object.entries(trucks).sort((a,b)=>b[1]-a[1])[0];
-      const up=D.openHauls;
-      return `<div><span class="k">Delivered · 7 days</span><span class="v num">${fmtN(yd)}<small>yd³</small></span><span class="s">${wk.length} loads</span></div>
-        <div><span class="k">Scheduled</span><span class="v num">${up.filter(h=>h.status==='scheduled').length}</span><span class="s">${fmtYd(up.filter(h=>h.status==='scheduled').reduce((s,h)=>s+Number(h.volume_yd),0))}</span></div>
-        <div><span class="k">En route</span><span class="v num">${up.filter(h=>h.status==='en_route').length}</span><span class="s">On the road now</span></div>
-        <div><span class="k">Top truck · 7 days</span><span class="v num">${top?esc(top[0]):'—'}</span><span class="s">${top?fmtYd(top[1]):'No deliveries yet'}</span></div>`;
-    },
-    hFilters(){ return [['upcoming','Upcoming'],['delivered','Delivered'],['all','All']].map(([k,l])=>`<button data-act="haulFilter" data-v="${k}" aria-pressed="${UI.haulFilter===k}">${l}</button>`).join(''); },
-    hList(){
-      const f=UI.haulFilter;
-      const list=S.hauls.filter(h=>f==='all'||(f==='upcoming'?['scheduled','en_route'].includes(h.status):h.status==='delivered'))
-        .sort((a,b)=>f==='upcoming'?a.haul_on.localeCompare(b.haul_on):b.haul_on.localeCompare(a.haul_on)).slice(0,200);
-      if(!list.length) return `<div class="empty">${f==='upcoming'?'No hauls scheduled.':'No hauls to show.'}</div>`;
-      return list.map(h=>{
-        const mine=can.dispatch(h.method)||has('admin','inventory');
-        let act='';
-        if(mine){
-          if(h.status==='scheduled') act+=`<button class="btn sm" data-act="haulStatus" data-v="en_route" data-id="${h.id}">En route</button>`;
-          if(['scheduled','en_route'].includes(h.status)) act+=`<button class="btn sm primary" data-act="haulStatus" data-v="delivered" data-id="${h.id}">Delivered</button>`+confirmBtn('haulCancel','Cancel',`data-id="${h.id}"`,'ghost');
-          if(h.status==='delivered') act+=confirmBtn('haulUndo','Undo delivery',`data-id="${h.id}"`,'ghost');
-        }
-        return `<div class="row ${h.status==='cancelled'?'dim':''}">
-          <span class="chip ${h.method==='bulk'?'c-info':'c-acc'}">${METHOD[h.method].label}</span>
-          <div class="main"><span class="t">${esc(prodName(h.product_id))}</span><span class="m">Truck ${esc(h.truck_no)}${h.loads>1?' · '+h.loads+' loads':''}${h.conditions?' · '+esc(h.conditions):''}${h.request_id?' · for a product order':''}${h.created_by_name?' · '+esc(h.created_by_name):''}</span></div>
-          <span class="vol">${fmtN(h.volume_yd)} yd³<small>${fmtUnits(h.volume_yd)}</small></span>
-          <span class="date">${esc(fmtDate(h.haul_on))}</span>
-          <span class="st">${statusChip(h.status)}</span>
-          <span class="act">${act}</span></div>`;
-      }).join('');
-    },
-  },
-};
 
 /* ---------- Ledger ---------- */
 VIEWS.ledger={
@@ -1007,8 +981,10 @@ function header(){
   const tabs=tabsFor();
   const pullBadge=D.unmapped.length;
   const kevinBadge=S.backfills.filter(r=>r.method==='bulk'&&r.status==='requested').length;
+  const confirmBadge=S.hauls.filter(h=>['scheduled','en_route'].includes(h.status)&&(h.status==='en_route'||dayDiff(h.haul_on)<=0)).length;
   const badge=t=> t==='pulls'&&pullBadge&&can.pull()?`<span class="badge">${pullBadge}</span>`
-    : t==='backfill'&&has('hauling')&&kevinBadge?`<span class="badge">${kevinBadge}</span>`:'';
+    : t==='backfill'&&has('hauling')&&kevinBadge?`<span class="badge">${kevinBadge}</span>`
+    : t==='backfill'&&can.confirmDelivery()&&confirmBadge?`<span class="badge" title="Deliveries to confirm">${confirmBadge}</span>`:'';
   const who = A.mode==='demo'
     ? `<label class="who"><span>Viewing as</span><select id="demo-user" data-act-change="demoUser">${DEMO_USERS.map(u=>`<option value="${u.id}" ${u.name===S.me.name?'selected':''}>${esc(u.name)} · ${ROLES[u.role].label}</option>`).join('')}</select></label>`
     : `<span class="who">${esc(S.me.name)} · ${esc((ROLES[role()]||ROLES.viewer).label)} <button class="btn sm ghost" style="color:inherit" data-act="changePw">Change password</button><button class="btn sm ghost" style="color:inherit" data-act="signOut">Sign out</button></span>`;
@@ -1160,9 +1136,9 @@ const ACT={
   },
   undoIO(d){ run(()=>A.update('internal_orders',d.id,{status:'cancelled'}),'Order undone. Volume returned to the bin.'); },
   cancelReq(d){ run(()=>A.update('backfill_requests',d.id,{status:'cancelled'}),'Request cancelled.'); },
-  haulStatus(d){ run(()=>A.update('hauls',d.id,{status:d.v}), d.v==='delivered'?'Delivered. Volume added to the bin.':'Marked en route.'); },
+  haulStatus(d){ run(()=>A.update('hauls',d.id,{status:d.v}), d.v==='delivered'?'Delivery confirmed. Volume added to the bin.':'Marked en route.'); },
   haulCancel(d){ run(()=>A.update('hauls',d.id,{status:'cancelled'}),'Haul cancelled.'); },
-  haulUndo(d){ run(()=>A.update('hauls',d.id,{status:'scheduled'}),'Delivery reversed.'); },
+  haulUndo(d){ run(()=>A.update('hauls',d.id,{status:'scheduled'}),'Delivery undone. Volume taken back out of the bin.'); },
   mapOpen(d){ UI.mapLine=d.id; renderDyn(true); },
   mapClose(){ UI.mapLine=null; renderDyn(true); },
   ignoreLine(d){
@@ -1266,13 +1242,18 @@ const FORM={
     await run(()=>A.insert('hauls',{request_id:r.id,method:r.method,truck_no:tr,loads:Math.max(1,parseInt(fd.get('loads'),10)||1),conditions:fd.get('conditions'),bin_id:r.bin_id,product_id:r.product_id,volume_yd:r1(fd.get('volume')),haul_on:fd.get('haul_on')||isoDay(),status:'scheduled'}),'Haul scheduled.');
   },
   async haulFree(fd,f){
-    const reqId=fd.get('request_id')||null; const r=reqId?S.backfills.find(x=>x.id===reqId):null;
-    const bin=r?D.bin[r.bin_id]:D.bin[D.defaultBin(fd.get('product_id'))];
+    // A delivery that arrived (or is booked) without an order: create the order and its truck
+    // together, so everything shows on the one Order Product board.
+    const pid=fd.get('product_id'); const bin=D.bin[D.defaultBin(pid)];
     if(!bin){ toast('That product has no bin. Add one in Setup.',true); return; }
     const tr=truckOf(fd); if(!tr){ toast('Enter the truck number.',true); return; }
-    await run(()=>A.insert('hauls',{request_id:reqId,method:r?r.method:fd.get('method'),truck_no:tr,loads:Math.max(1,parseInt(fd.get('loads'),10)||1),conditions:fd.get('conditions'),bin_id:bin.id,product_id:bin.product_id,volume_yd:r1(fd.get('volume')),haul_on:fd.get('haul_on')||isoDay(),status:fd.get('status')}),
-      fd.get('status')==='delivered'?'Haul saved. Volume added to the bin.':'Haul scheduled.');
-    f.reset(); $('#hf-date').value=isoDay();
+    const vol=r1(fd.get('volume')); if(!(vol>0)){ toast('Enter the volume.',true); return; }
+    const day=fd.get('haul_on')||isoDay(), method=fd.get('method'), status=fd.get('status');
+    const ok=await run(async()=>{
+      const req=await A.insert('backfill_requests',{bin_id:bin.id,product_id:bin.product_id,qty_yd:vol,needed_by:day,method,status:'requested',notes:'Logged delivery (no order placed)'});
+      await A.insert('hauls',{request_id:req.id,method,truck_no:tr,loads:Math.max(1,parseInt(fd.get('loads'),10)||1),conditions:fd.get('conditions'),bin_id:bin.id,product_id:bin.product_id,volume_yd:vol,haul_on:day,status});
+    }, status==='delivered'?'Delivery logged. Volume added to the bin.':'Delivery scheduled. Confirm it when it arrives.');
+    if(ok){ f.reset(); if($('#hf-date')) $('#hf-date').value=isoDay(); }
   },
   async binCount(fd,f){
     const b=D.bin[f.dataset.id]; if(!b) return;

@@ -17,8 +17,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<script src="config.js?v=8493dd4e76"></script>
-<script src="vendor/supabase.js?v=8493dd4e76"></script>
+<script src="config.js?v=e9b47f4443"></script>
+<script src="vendor/supabase.js?v=e9b47f4443"></script>
 <style>
 /* Layout: sticky yard header + tab rail; each view is a working surface — bins as walled bays, queues as dense rows. */
 :root{
@@ -291,7 +291,7 @@ details.adder[open]>summary{margin-bottom:14px}
 .tl .q.neg{color:var(--bad)} .tl .q.pos{color:var(--ok)}
 
 /* Backfill cards */
-.cols{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:start}
+.cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start}
 @media (max-width:1100px){.cols{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:620px){.cols{grid-template-columns:minmax(0,1fr)}}
 .col{display:grid;gap:8px;align-content:start}
@@ -302,8 +302,11 @@ details.adder[open]>summary{margin-bottom:14px}
 .card .top-line{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .card .big{font:700 1.4rem/1 var(--f-display)}
 .card .meta{font-size:.8rem;color:var(--muted)}
-.hauls-mini{display:grid;gap:4px;font-size:.8rem}
-.hauls-mini div{display:flex;gap:6px;align-items:center;justify-content:space-between}
+.hauls-mini{display:grid;gap:6px;font-size:.8rem}
+.haul-line{display:grid;gap:6px;padding:6px 0;border-top:1px solid var(--line)}
+.haul-line:first-child{border-top:0;padding-top:0}
+.hl-top{display:flex;gap:6px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.hl-act{display:flex;gap:6px;flex-wrap:wrap}
 .progress{height:6px;border-radius:99px;background:var(--sunken);overflow:hidden}
 .progress i{display:block;height:100%;background:var(--accent)}
 .col .empty{padding:10px;font-size:.85rem;border:1px dashed var(--line);border-radius:var(--r)}
@@ -326,4 +329,4 @@ td.n{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-num
 
 <div id="app"></div>
 <div id="toast" class="toast" hidden></div>
-<script src="app.js?v=8493dd4e76"></script>
+<script src="app.js?v=e9b47f4443"></script>
