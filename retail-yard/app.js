@@ -841,13 +841,12 @@ VIEWS.backfill={
 function haulLine(h){
   // One truck on an order card, with the actions for whoever is looking:
   //   Jeff / admin → Confirm delivered (adds to the bin) · Undo
-  //   dispatcher (Kevin for bulk, Jeff for slingers) → En route · Cancel
+  //   dispatcher (Kevin for bulk, Jeff for slingers) → Cancel
   const open=['scheduled','en_route'].includes(h.status);
-  const disp=can.dispatch(h.method)||has('admin');
+  const disp=can.dispatch(h.method)||can.confirmDelivery();
   let act='';
   if(open&&can.confirmDelivery()) act+=`<button class="btn sm order" data-act="haulStatus" data-v="delivered" data-id="${h.id}">Confirm delivered</button>`;
-  if(h.status==='scheduled'&&disp) act+=`<button class="btn sm" data-act="haulStatus" data-v="en_route" data-id="${h.id}">En route</button>`;
-  if(open&&disp) act+=confirmBtn('haulCancel','Cancel',`data-id="${h.id}"`,'ghost');
+  if(open&&disp) act+=confirmBtn('haulCancel','Cancel',`data-id="${h.id}"`,'cancel');
   if(h.status==='delivered'&&can.confirmDelivery()) act+=confirmBtn('haulUndo','Undo',`data-id="${h.id}"`,'ghost');
   return `<div class="haul-line"><div class="hl-top"><span>Truck ${esc(h.truck_no)}${h.loads>1?' × '+h.loads:''} · ${esc(fmtDate(h.haul_on))}</span><span class="num">${fmtN(h.volume_yd)} yd³ ${statusChip(h.status==='delivered'?'confirmed':h.status)}</span></div>
     ${act?`<div class="hl-act">${act}</div>`:''}</div>`;
@@ -864,7 +863,7 @@ function reqCard(r){
     <div class="top-line"><span class="chip ${r.method==='bulk'?'c-info':'c-acc'}">${METHOD[r.method].label}</span>${late?'<span class="chip c-bad">Late</span>':''}</div>
     <div><div class="big num">${fmtYd(r.qty_yd)}</div><div style="font-weight:600">${esc(prodName(r.product_id))}</div></div>
     <div class="meta">Needed ${esc(whenDate(r.needed_by))} · ${esc(METHOD[r.method].who)} dispatches${r.notes?'<br>'+esc(r.notes):''}</div>
-    ${r.method==='bulk'&&remaining>0?(()=>{ const sug=trucks().map(t=>{ const c=truckCap(t.no,r.product_id,'dry'); return c?`${Math.ceil(remaining/c)} load${Math.ceil(remaining/c)>1?'s':''} on ${esc(t.no)}`:null; }).filter(Boolean);
+    ${r.method==='bulk'&&remaining>0&&!hs.length?(()=>{ const sug=trucks().map(t=>{ const c=truckCap(t.no,r.product_id,'dry'); return c?`${Math.ceil(remaining/c)} load${Math.ceil(remaining/c)>1?'s':''} on ${esc(t.no)}`:null; }).filter(Boolean);
       return sug.length?`<div class="meta">≈ ${sug.join(' · ')} <span class="muted">(dry)</span></div>`:`<div class="meta" style="color:var(--warn)">No truck capacity on file for this product</div>`; })():''}
     ${hs.length?`<div class="progress" title="${fmtN(del)} of ${fmtN(r.qty_yd)} yd³ delivered"><i style="width:${Math.min(100,del/r.qty_yd*100)}%"></i></div>
       <div class="hauls-mini">${hs.map(haulLine).join('')}</div>`:''}
@@ -872,8 +871,8 @@ function reqCard(r){
         ${truckFields(r.product_id,{remaining,method:r.method})}
         <label class="field"><span>Date</span><input name="haul_on" type="date" value="${dayDiff(r.needed_by)>=0?r.needed_by:isoDay()}"></label>
         <div class="form-actions full"><button class="btn primary sm">Schedule haul</button><button type="button" class="btn sm ghost" data-act="haulClose">Close</button></div></form>`
-      :`<div class="form-actions"><button class="btn sm primary" data-act="haulOpen" data-id="${r.id}">${hs.length?'Add another truck':'Schedule truck'}</button>
-        ${r.status==='requested'&&can.request()?confirmBtn('cancelReq','Cancel request',`data-id="${r.id}"`,'ghost'):''}</div>`):''}
+      :hs.length?'':`<div class="form-actions"><button class="btn sm primary" data-act="haulOpen" data-id="${r.id}">Schedule truck</button>
+        ${r.status==='requested'&&can.request()?confirmBtn('cancelReq','Cancel request',`data-id="${r.id}"`,'cancel'):''}</div>`):''}
     <div class="meta">Requested by ${esc(r.created_by_name||'—')}</div>
   </article>`;
 }

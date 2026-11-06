@@ -17,8 +17,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<script src="config.js?v=e9b47f4443"></script>
-<script src="vendor/supabase.js?v=e9b47f4443"></script>
+<script src="config.js?v=33ca4bc9e2"></script>
+<script src="vendor/supabase.js?v=33ca4bc9e2"></script>
 <style>
 /* Layout: sticky yard header + tab rail; each view is a working surface — bins as walled bays, queues as dense rows. */
 :root{
@@ -230,6 +230,8 @@ body.modal-open{overflow:hidden}
 .btn.primary:hover{filter:brightness(1.08)}
 .btn.sm{padding:5px 9px;font-size:.8rem}
 .btn.ghost{background:transparent}
+.btn.cancel{background:transparent;color:var(--bad);border-color:var(--bad)}
+.btn.cancel:hover{background:color-mix(in srgb,var(--bad) 10%,transparent)}
 .btn.danger{color:var(--bad)}
 .btn.armed{background:var(--bad);color:#fff;border-color:var(--bad)}
 .btn:disabled{opacity:.5;cursor:not-allowed}
@@ -329,4 +331,4 @@ td.n{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-num
 
 <div id="app"></div>
 <div id="toast" class="toast" hidden></div>
-<script src="app.js?v=e9b47f4443"></script>
+<script src="app.js?v=33ca4bc9e2"></script>
