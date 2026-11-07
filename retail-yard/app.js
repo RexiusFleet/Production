@@ -102,6 +102,14 @@ const WRITE_SCHEMAS={
     volume_yd:V.num(0.01,2000,{req:true,label:'Volume'}), haul_on:V.date(366,366,{req:true,label:'Date'}),
     status:V.oneOf(['scheduled','delivered'],{req:true}) },
   'hauls.update':{ status:V.oneOf(['scheduled','en_route','delivered','cancelled']) },
+  'debris_events.insert':{
+    kind:V.oneOf(['intake','grind','removal'],{req:true}), bin_id:V.id({req:true,label:'Pile'}),
+    qty_yd:V.num(0.01,2000,{req:true,label:'Volume'}), to_bin_id:V.id({null:true,label:'Ground pile'}),
+    to_qty_yd:V.num(0.01,2000,{null:true,label:'Ground material made'}), source:V.str(120,{null:true,label:'From'}),
+    hauler:V.str(40,{null:true,label:'Hauler'}), loads:V.int(1,50,{null:true,label:'Loads'}),
+    happened_on:V.date(366,366,{req:true,label:'Date'}), status:V.oneOf(['done','scheduled'],{req:true}),
+    notes:V.str(500,{null:true,label:'Notes'}) },
+  'debris_events.update':{ status:V.oneOf(['done','cancelled']) },
   'movements.insert':{
     bin_id:V.id({req:true}), product_id:V.id({null:true}), qty_yd:V.num(-5000,5000,{req:true,nonZero:true,label:'Volume'}),
     kind:V.oneOf(['count','adjustment'],{req:true}), occurred_on:V.date(366,1,{req:true,label:'Date'}), note:V.str(300,{null:true,label:'Reason'}) },
@@ -241,15 +249,17 @@ function friendlyError(e){
 
 const ROLES = {
   // Ordering, scheduled deliveries and confirming deliveries all live on the Order Product tab.
-  inventory:{label:'Inventory', tabs:['yard','pulls','backfill','ledger','setup']},
-  hauling:{label:'Bulk hauling', tabs:['yard','backfill']},
-  admin:{label:'Admin', tabs:['yard','pulls','backfill','ledger','setup']},
-  viewer:{label:'View only', tabs:['yard','backfill']},
+  inventory:{label:'Inventory', tabs:['yard','debris','pulls','backfill','ledger','setup']},
+  hauling:{label:'Bulk hauling', tabs:['yard','debris','backfill']},
+  debris:{label:'Yard debris', tabs:['yard','debris','backfill']},   // Mike: debris side; retail read-only
+  admin:{label:'Admin', tabs:['yard','debris','pulls','backfill','ledger','setup']},
+  viewer:{label:'View only', tabs:['yard','debris','backfill']},
 };
-const TAB_LABELS = {yard:'Yard', pulls:'Draw', backfill:'Order Product', hauls:'Hauls', ledger:'Ledger', setup:'Setup'};
+const TAB_LABELS = {yard:'Retail Bins', debris:'Yard Debris', pulls:'Draw', backfill:'Order Product', hauls:'Hauls', ledger:'Ledger', setup:'Setup'};
 const DEMO_USERS = [
   {id:'u-jeff', name:'Jeff Davis', role:'inventory'},
   {id:'u-kevin', name:'Kevin Roemer', email:'kevinr@rexius.com', role:'hauling'},
+  {id:'u-mike', name:'Mike', email:'mikeg@rexius.com', role:'debris'},
   {id:'u-admin', name:'Admin', role:'admin'},
 ];
 const METHOD = {bulk:{label:'Bulk truck', who:'Kevin Roemer'}, slinger:{label:'Slinger', who:'Jeff Davis'}};
@@ -294,22 +304,43 @@ const SHOPIFY_VARIANT={"Red Ultrakote":"Red","Black Ultrakote":"Black"};
 const DEFAULT_TRUCKS=[{"no": "85", "cap": {"bark": {"dry": 37.5, "wet": 37.5}, "sawdust": {"dry": 37.5, "wet": 37.5}, "primary": {"dry": 22.5, "wet": 18.75}, "fng": {"dry": 18.75, "wet": 15.0}, "turf": {"dry": 18.75, "wet": 15.0}, "compost": {"dry": 30, "wet": 25}}}, {"no": "98", "cap": {"bark": {"dry": 60.0, "wet": 48.75}, "primary": {"dry": 45.0, "wet": 37.5}, "fng": {"dry": 37.5, "wet": 30.0}, "turf": {"dry": 37.5, "wet": 30.0}, "compost": {"dry": 52.5, "wet": 45.0}}}];
 const HAUL_GROUPS={"bark": "Barks / Fiberex", "sawdust": "Sawdust", "primary": "Primary", "fng": "Flower-n-Garden", "turf": "Turf Start", "compost": "Compost"};
 const PRODUCT_HAUL_GROUP={"Econobark": "bark", "Beautibark": "bark", "Hemlock": "bark", "Decobark Nuggets": "bark", "Red Ultrakote": "bark", "Black Ultrakote": "bark", "Fiberex": "bark", "Sawdust": "sawdust", "Alder Sawdust": "sawdust", "Primary": "primary", "Flower-n-Garden": "fng", "Turf Start": "turf", "GVO Compost": "compost", "LFNW": "compost", "Steer Plus": "compost"};
-const SHOPIFY_IGNORE=["Grass Seed", "Coir Fibre", "Chicken Compost", "Perlite", "3.8Ft Peat Moss", "Tip Fees", "Christmas Tree Fees", "Dump Card", "Bio-Bags", "Sand Bags", "Tip Fees-Curbside NEW", "Tip Fees-Food Waste NEW", "Bags", "Sanipac", "Chip Truck", "Opus Grows Mix #2", "Opus Grows Mix Zero", "Worm Castings", "Filled Tote"];
+const SHOPIFY_IGNORE=["Grass Seed", "Coir Fibre", "Chicken Compost", "Perlite", "3.8Ft Peat Moss", "Christmas Tree Fees", "Dump Card", "Bio-Bags", "Sand Bags", "Tip Fees-Curbside NEW", "Tip Fees-Food Waste NEW", "Bags", "Sanipac", "Chip Truck", "Opus Grows Mix #2", "Opus Grows Mix Zero", "Worm Castings", "Filled Tote"];
 const YARD_LANDMARKS=[{"label": "Scale booth", "x": 3, "y": 29, "w": 1, "h": 3, "kind": "booth"}, {"label": "Bagged goods", "x": 6, "y": 43, "w": 1, "h": 4, "kind": "bags"}];
+/* Yard Debris piles: [code, product, role, map column, Shopify "Tip Fees" variant] */
+const DEBRIS_BINS=[["EXC","Excavation","dump",1,"Dirt and Rock"],["GREEN","Green Waste","grind",2,"Yard Debris"],["WOOD","Wood Debris","grind",3,"Wood Waste"],["GROUND","Ground Debris","ground",4,null]];
 function seedDemo(){
   const names=[...new Set(YARD_BINS.map(b=>b[1]).filter(Boolean))];
   const prods=names.map(n=>({id:uid(),name:n,sku:null,shopify_product_id:null,shopify_titles:SHOPIFY_TITLES[n]?[SHOPIFY_TITLES[n]]:[],shopify_variant_match:SHOPIFY_VARIANT[n]||null,haul_group:PRODUCT_HAUL_GROUP[n]||null,active:true,created_at:nowISO()}));
   const pid=n=>prods.find(p=>p.name===n)?.id||null;
-  const bins=YARD_BINS.map(([code,name,cap,x,y,w,h],i)=>({id:uid(),code,product_id:pid(name),capacity_yd:cap,reorder_yd:r1(cap*.25),sort:i,active:true,notes:'',map_x:x,map_y:y,map_w:w,map_h:h,created_at:nowISO()}));
+  const bins=YARD_BINS.map(([code,name,cap,x,y,w,h],i)=>({id:uid(),code,product_id:pid(name),capacity_yd:cap,reorder_yd:r1(cap*.25),sort:i,active:true,notes:'',map_x:x,map_y:y,map_w:w,map_h:h,site:'retail',debris_role:null,created_at:nowISO()}));
+  DEBRIS_BINS.forEach(([code,name,role,x,variant],i)=>{
+    const p={id:uid(),name,sku:null,shopify_product_id:null,shopify_titles:variant?['Tip Fees']:[],shopify_variant_match:variant,haul_group:null,active:true,created_at:nowISO()};
+    prods.push(p);
+    bins.push({id:uid(),code,product_id:p.id,capacity_yd:100,reorder_yd:0,sort:101+i,active:true,notes:'',map_x:x,map_y:1,map_w:1,map_h:6,site:'debris',debris_role:role,created_at:nowISO()});
+  });
   const B=c=>bins.find(b=>b.code===c);
   const mv=[]; const M=(bin,qty,kind,note,day,by='Jeff Davis')=>mv.push({id:uid(),created_at:new Date(Date.now()+day*864e5).toISOString(),occurred_on:isoDay(day),bin_id:bin.id,product_id:bin.product_id,qty_yd:qty,kind,note,created_by_name:by});
   // Example opening levels (share of capacity) — demo only
   const frac=[.42,.48,.31,.55,.7,.33,.8, .4,.24,.66,.5,.72,.3,.58,.85,.44, .5,.36,.6,.75,.18,.52,.47,.63,.29, .55,.69,.41,.37,.8,.5,.22,.6,.45];
-  bins.forEach((b,i)=>{ if(b.product_id) M(b,r1(b.capacity_yd*(frac[i]??.5)),'count','Opening count (example)',-6); });
+  bins.forEach((b,i)=>{ if(b.product_id&&b.site!=='debris') M(b,r1(b.capacity_yd*(frac[i]??.5)),'count','Opening count (example)',-6); });
   M(B('T2'),-5,'shopify','Shopify #R4790',-3,'Shopify'); M(B('R6'),-4,'shopify','Shopify #R4801',-1,'Shopify');
   M(B('T3'),-15,'internal','Internal order — Eugene Blowers · Santa Clara',-1);
   M(B('T1'),60,'backfill','Truck 98',-1,'Kevin Roemer'); M(B('T1'),15,'backfill','Truck 85',-1,'Kevin Roemer');
   M(B('M2'),-7.5,'internal','Internal order — CAS · WO-2287',0);
+  // Yard Debris: opening counts, then example intake / grind / removal / tip fee
+  [['EXC',42],['GREEN',63],['WOOD',28],['GROUND',55]].forEach(([c,q])=>M(B(c),q,'count','Opening count (example)',-6));
+  const DE=(kind,code,qty,day,status,x={})=>({id:uid(),created_at:new Date(Date.now()+Math.min(day,0)*864e5).toISOString(),kind,bin_id:B(code).id,qty_yd:qty,to_bin_id:null,to_qty_yd:null,source:null,hauler:null,loads:null,happened_on:isoDay(day),status,done_at:status==='done'?nowISO():null,notes:null,created_by_name:'Mike',...x});
+  const debris=[
+    DE('removal','GROUND',30,1,'scheduled',{hauler:'98',loads:1,created_by_name:'Kevin Roemer'}),
+    DE('intake','GREEN',6,-1,'done',{source:'Eugene Blowers crew',created_by_name:'Jeff Davis'}),
+    DE('grind','GREEN',20,-1,'done',{to_bin_id:B('GROUND').id,to_qty_yd:9}),
+    DE('removal','EXC',12,-2,'done',{hauler:'85',loads:1,created_by_name:'Kevin Roemer'}),
+  ];
+  const sm=(e,bin,qty,kind,note)=>{ M(bin,qty,kind,note,Math.min(0,dayDiff(e.happened_on)),e.created_by_name); mv[mv.length-1].source_table='debris_events'; mv[mv.length-1].source_id=e.id; };
+  sm(debris[1],B('GREEN'),6,'intake','Debris in — Eugene Blowers crew');
+  sm(debris[2],B('GREEN'),-20,'grind','Ground into GROUND'); sm(debris[2],B('GROUND'),9,'grind','Ground from GREEN');
+  sm(debris[3],B('EXC'),-12,'removal','Hauled away — Truck 85');
+  M(B('GREEN'),2,'shopify','Shopify #R4826',0,'Shopify');
   M(B('T3'),-3,'shopify','Shopify #R4823',0,'Shopify'); M(B('T2'),-5,'shopify','Shopify #R4824',0,'Shopify'); M(B('M2'),-4,'shopify','Shopify #R4825',0,'Shopify');
   mv.sort((a,b)=>b.created_at.localeCompare(a.created_at));
 
@@ -329,6 +360,7 @@ function seedDemo(){
     L('#R4824','D. Okafor','T2','1',5,0),
     L('#R4825','S. Lindqvist','M2','1',4,0),
     L('#R4801','J. Moreno','R6','1',4,-1,'pulled'),
+    L('#R4826','K. Patel','GREEN','1',2,0),
   ];
 
   const req=(bin,qty,needed,method,status,notes)=>({id:uid(),created_at:nowISO(),bin_id:B(bin).id,product_id:B(bin).product_id,qty_yd:qty,needed_by:isoDay(needed),method,status,notes,created_by_name:'Jeff Davis'});
@@ -336,12 +368,12 @@ function seedDemo(){
   const H=(r,truck,vol,day,status)=>({id:uid(),created_at:nowISO(),request_id:r.id,method:r.method,truck_no:truck,loads:1,conditions:'dry',bin_id:r.bin_id,product_id:r.product_id,volume_yd:vol,haul_on:isoDay(day),status,delivered_at:status==='delivered'?nowISO():null,created_by_name:'Kevin Roemer'});
   const hauls=[H(rq[2],'98',60,-1,'delivered'),H(rq[2],'85',15,-1,'delivered'),H(rq[0],'85',30,1,'scheduled')];
 
-  return {v:14,userId:'u-jeff',settings:{yd_per_unit:7.5,tote_sizes:[1,1.5],trucks:DEFAULT_TRUCKS,yard_landmarks:YARD_LANDMARKS,shopify_ignore_titles:SHOPIFY_IGNORE},products:prods,bins,movements:mv,internal_orders:io,shopify_order_lines:lines,backfill_requests:rq,hauls};
+  return {v:15,debris_events:debris,userId:'u-jeff',settings:{yd_per_unit:7.5,tote_sizes:[1,1.5],trucks:DEFAULT_TRUCKS,yard_landmarks:YARD_LANDMARKS,shopify_ignore_titles:SHOPIFY_IGNORE},products:prods,bins,movements:mv,internal_orders:io,shopify_order_lines:lines,backfill_requests:rq,hauls};
 }
 
 function DemoAdapter(){
-  const KEY='ryt-demo-v14';
-  let db=store.get(KEY,null); if(!db||db.v!==14){ db=seedDemo(); }
+  const KEY='ryt-demo-v15';
+  let db=store.get(KEY,null); if(!db||db.v!==15){ db=seedDemo(); }
   const save=()=>store.set(KEY,db);
   const me=()=>DEMO_USERS.find(u=>u.id===db.userId)||DEMO_USERS[0];
   const defaultBin=pid=>db.bins.filter(b=>b.active!==false&&b.product_id===pid).sort((a,b)=>(a.sort-b.sort)||a.code.localeCompare(b.code))[0]?.id||null;
@@ -356,15 +388,37 @@ function DemoAdapter(){
     if(t==='internal_orders'||t==='shopify_order_lines'){
       const isShop=t==='shopify_order_lines';
       const label=isShop?'Shopify '+row.order_name:'Internal order — '+row.customer+(row.reference?' · '+row.reference:'');
+      const sign=id=>isShop&&db.bins.find(b=>b.id===id)?.site==='debris'?1:-1;   // tip fees add to debris piles
       if(row.status==='pulled'&&old.status!=='pulled'){
         if(!row.product_id||row.qty_yd==null) throw new Error('Link this Shopify product before it can draw from inventory');
         row.bin_id=row.bin_id||defaultBin(row.product_id);
         if(!row.bin_id) throw new Error('No bin is set up for this product');
         row.pulled_at=nowISO();
-        move({bin_id:row.bin_id,product_id:row.product_id,qty_yd:-row.qty_yd,kind:isShop?'shopify':'internal',note:label,...(isShop&&!old.status?{created_by_name:'Shopify'}:{})});
+        move({bin_id:row.bin_id,product_id:row.product_id,qty_yd:sign(row.bin_id)*row.qty_yd,kind:isShop?'shopify':'internal',note:label,...(isShop&&!old.status?{created_by_name:'Shopify'}:{})});
       } else if(old.status==='pulled'&&row.status!=='pulled'){
-        move({bin_id:old.bin_id,product_id:old.product_id,qty_yd:Number(old.qty_yd),kind:'adjustment',note:(row.status==='cancelled'&&isShop?'Order cancelled — ':isShop?'Reversed draw — ':'Order undone — ')+label});
+        move({bin_id:old.bin_id,product_id:old.product_id,qty_yd:-sign(old.bin_id)*Number(old.qty_yd),kind:'adjustment',note:(row.status==='cancelled'&&isShop?'Order cancelled — ':isShop?'Reversed draw — ':'Order undone — ')+label});
         row.pulled_at=null;
+      }
+    }
+    if(t==='debris_events'){
+      // Mirrors trg_debris_event() in schema.sql
+      const b=db.bins.find(x=>x.id===row.bin_id), tb=db.bins.find(x=>x.id===row.to_bin_id);
+      if(!b||b.site!=='debris') throw new Error('Choose a Yard Debris bin');
+      if(row.kind==='intake'&&b.debris_role==='ground') throw new Error('Ground debris is only added to by grinding');
+      if(row.kind==='grind'&&(b.debris_role!=='grind'||!tb||tb.debris_role!=='ground')) throw new Error('Only green waste and wood debris are ground, onto the ground debris pile');
+      if(row.status==='scheduled'&&row.kind!=='removal') throw new Error('Only removals can be scheduled');
+      if(old.status&&!((old.status==='scheduled'&&['done','cancelled'].includes(row.status))||(old.status==='done'&&row.status==='cancelled'))) throw new Error('That change is not allowed');
+      const who=/^\d+$/.test(row.hauler||'')?'Truck '+row.hauler:row.hauler;
+      const M=(bin,q,kind,note,extra={})=>move({bin_id:bin.id,product_id:bin.product_id,qty_yd:q,kind,note,source_table:'debris_events',source_id:row.id,...extra});
+      if(row.status==='done'&&old.status!=='done'){
+        row.done_at=nowISO(); const on={occurred_on:row.happened_on};
+        if(row.kind==='intake') M(b,Number(row.qty_yd),'intake','Debris in'+(row.source?' — '+row.source:''),on);
+        else if(row.kind==='grind'){ M(b,-Number(row.qty_yd),'grind','Ground into '+tb.code,on); M(tb,Number(row.to_qty_yd),'grind','Ground from '+b.code,on); }
+        else M(b,-Number(row.qty_yd),'removal','Hauled away'+(who?' — '+who:''),on);
+      } else if(old.status==='done'&&row.status!=='done'){
+        row.done_at=null;
+        if(row.kind==='grind'){ M(b,Number(old.qty_yd),'adjustment','Grind undone'); M(tb,-Number(old.to_qty_yd),'adjustment','Grind undone'); }
+        else M(b,(row.kind==='intake'?-1:1)*Number(old.qty_yd),'adjustment',row.kind==='intake'?'Debris in undone':'Removal undone');
       }
     }
     if(t==='hauls'){
@@ -384,12 +438,13 @@ function DemoAdapter(){
     async load(){
       const onHand={}; db.movements.forEach(m=>{onHand[m.bin_id]=(onHand[m.bin_id]||0)+Number(m.qty_yd);});
       return {products:db.products,bins:db.bins,onHand,movements:db.movements.slice(0,400),internalOrders:db.internal_orders,
-        shopifyLines:db.shopify_order_lines,backfills:db.backfill_requests,hauls:db.hauls,settings:db.settings,me:me()};
+        shopifyLines:db.shopify_order_lines,backfills:db.backfill_requests,hauls:db.hauls,debris:db.debris_events,settings:db.settings,me:me()};
     },
     async insert(t,row){
+      if(['internal_orders','backfill_requests','hauls'].includes(t)&&db.bins.find(b=>b.id===row.bin_id)?.site==='debris') throw new Error('Yard Debris bins are managed on the Yard Debris tab');
       const tmpl={id:uid(),created_at:nowISO(),created_by_name:me().name};
       const r={...tmpl,...row};
-      if(t==='hauls'||t==='shopify_order_lines'||t==='internal_orders'){ pullTrigger(t,r,{status:''}); db[t].unshift(r); }
+      if(t==='hauls'||t==='shopify_order_lines'||t==='internal_orders'||t==='debris_events'){ pullTrigger(t,r,{status:''}); db[t].unshift(r); }
       else db[t].unshift(r);
       save(); return r;
     },
@@ -432,7 +487,7 @@ function LiveAdapter(cfg){
     async signOut(){ await sb.auth.signOut(); },
     async load(){
       const {data:{user}}=await sb.auth.getUser();
-      const [products,bins,levels,movements,internalOrders,lines,backfills,hauls,settings,profile]=await Promise.all([
+      const [products,bins,levels,movements,internalOrders,lines,backfills,hauls,debris,settings,profile]=await Promise.all([
         q(sb.from('products').select('*').order('name')),
         q(sb.from('bins').select('*').order('sort').order('code')),
         q(sb.from('bin_on_hand').select('*')),
@@ -441,13 +496,14 @@ function LiveAdapter(cfg){
         q(sb.from('shopify_order_lines').select('*, shopify_orders(order_name,customer_name,created_at_shopify)').order('created_at',{ascending:false}).limit(500)),
         q(sb.from('backfill_requests').select('*').order('created_at',{ascending:false}).limit(300)),
         q(sb.from('hauls').select('*').order('haul_on',{ascending:false}).limit(500)),
+        q(sb.from('debris_events').select('*').order('created_at',{ascending:false}).limit(500)),
         q(sb.from('settings').select('*')),
         q(sb.from('profiles').select('*').eq('id',user.id).maybeSingle()),
       ]);
       const onHand={}; levels.forEach(l=>onHand[l.bin_id]=Number(l.on_hand_yd));
       const shopifyLines=lines.map(l=>({...l,order_name:l.shopify_orders?.order_name,customer_name:l.shopify_orders?.customer_name,ordered_at:l.shopify_orders?.created_at_shopify||l.created_at}));
       const st={}; settings.forEach(s=>st[s.key]=s.value);
-      return {products,bins,onHand,movements,internalOrders,shopifyLines,backfills,hauls,settings:st,
+      return {products,bins,onHand,movements,internalOrders,shopifyLines,backfills,hauls,debris,settings:st,
         me:{id:user.id,name:profile?.full_name||user.email,role:profile?.role||null}};
     },
     async insert(t,row){ const clean={...row}; delete clean.created_by_name; return q(sb.from(t).insert(clean).select().single()); },
@@ -478,6 +534,7 @@ const can={
   adjust:()=>has('inventory','admin'),
   setup:()=>has('inventory','admin'),
   binCapacity:()=>has('hauling','inventory','admin'),
+  debris:()=>has('admin','inventory','hauling','debris'),   // Yard Debris: Jeff, Kevin, Mike, admins
 };
 const tabsFor=()=> (ROLES[role()]||ROLES.viewer).tabs;
 
@@ -485,23 +542,29 @@ function derive(){
   const d={};
   d.product=Object.fromEntries(S.products.map(p=>[p.id,p]));
   d.bin=Object.fromEntries(S.bins.map(b=>[b.id,b]));
-  const activeBins=S.bins.filter(b=>b.active!==false).sort((a,b)=>(a.sort-b.sort)||a.code.localeCompare(b.code));
+  const liveBins=S.bins.filter(b=>b.active!==false).sort((a,b)=>(a.sort-b.sort)||a.code.localeCompare(b.code));
+  // activeBins = the retail side (everything the Retail Bins / Draw / Order Product tabs use).
+  const activeBins=liveBins.filter(b=>b.site!=='debris');
   d.activeBins=activeBins;
+  d.debrisBins=liveBins.filter(b=>b.site==='debris');
+  d.allBins=liveBins;
+  S.debris=S.debris||[];
   d.defaultBin=pid=>activeBins.find(b=>b.product_id===pid)?.id||null;
   d.lineBin=l=>l.bin_id||d.defaultBin(l.product_id);
   const out={}, inc={};
   // "Out" = drawn today (Shopify + internal, net of same-day reversals)
-  const todayMv=S.movements.filter(m=>(m.occurred_on||m.created_at.slice(0,10))===isoDay());
+  const todayMv=S.movements.filter(m=>(m.occurred_on||m.created_at.slice(0,10))===isoDay()&&d.bin[m.bin_id]?.site!=='debris');
   todayMv.forEach(m=>{ if(['shopify','internal'].includes(m.kind)||(m.kind==='adjustment'&&/^(Order undone|Order cancelled|Reversed draw|Reversed pull)/.test(m.note||''))) out[m.bin_id]=(out[m.bin_id]||0)-Number(m.qty_yd); });
   const openHauls=S.hauls.filter(h=>['scheduled','en_route'].includes(h.status));
   openHauls.forEach(h=>{ inc[h.bin_id]=(inc[h.bin_id]||0)+Number(h.volume_yd); });
   const openReqBins=new Set(S.backfills.filter(r=>!['delivered','cancelled'].includes(r.status)).map(r=>r.bin_id));
   d.stats={};
-  activeBins.forEach(b=>{
+  liveBins.forEach(b=>{
     const onHand=r1(S.onHand[b.id]||0), o=Math.max(0,r1(out[b.id]||0)), i=r1(inc[b.id]||0), proj=r1(onHand+i);
     const re=Number(b.reorder_yd)||0, cap=Number(b.capacity_yd)||0;
     let st='ok';
     if(!b.product_id) st='empty';
+    else if(b.site==='debris') st='debris';   // no low / full warnings on the debris piles (for now)
     else if(onHand<=0) st='out';
     else if(onHand<=re) st='low';
     else if(cap&&onHand>cap) st='over';
@@ -512,10 +575,10 @@ function derive(){
   d.drawnToday=r1(Object.values(out).reduce((a,v)=>a+Math.max(0,v),0));
   const isRev=m=>m.kind==='adjustment'&&/^(Order undone|Order cancelled|Reversed draw|Reversed pull)/.test(m.note||'');
   d.ordersToday=Math.max(0,todayMv.filter(m=>['shopify','internal'].includes(m.kind)).length-todayMv.filter(isRev).length);
-  d.shopToday=r1(S.movements.filter(m=>m.kind==='shopify'&&(m.occurred_on||m.created_at.slice(0,10))===isoDay()).reduce((s,m)=>s-Number(m.qty_yd),0));
+  d.shopToday=r1(todayMv.filter(m=>m.kind==='shopify'&&(m.occurred_on||m.created_at.slice(0,10))===isoDay()).reduce((s,m)=>s-Number(m.qty_yd),0));
   D=d;
 }
-const ST_CHIP={ok:['OK','c-ok'],low:['Low','c-warn'],watch:['Watch','c-warn'],out:['Out','c-bad'],over:['Over cap','c-info'],empty:['No product','c-mute']};
+const ST_CHIP={debris:['Yard debris','c-mute'],ok:['OK','c-ok'],low:['Low','c-warn'],watch:['Watch','c-warn'],out:['Out','c-bad'],over:['Over cap','c-info'],empty:['No product','c-mute']};
 const prodName=id=>D.product[id]?.name||'Unassigned';
 const binLabel=id=>{ const b=D.bin[id]; return b?b.code:'—'; };
 
@@ -524,8 +587,8 @@ function productOptions(sel){
   return `<option value="">Choose a product</option>`+S.products.filter(p=>p.active!==false&&D.defaultBin(p.id)).sort((x,y)=>x.name.localeCompare(y.name))
     .map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(p.name)}</option>`).join('');
 }
-function binOptions(sel, {blank='Choose a bin', withLevel=true}={}){
-  return `<option value="">${esc(blank)}</option>`+D.activeBins.filter(b=>b.product_id).map(b=>{
+function binOptions(sel, {blank='Choose a bin', withLevel=true, bins=D.activeBins}={}){
+  return `<option value="">${esc(blank)}</option>`+bins.filter(b=>b.product_id).map(b=>{
     const s=D.stats[b.id];
     return `<option value="${b.id}" ${b.id===sel?'selected':''}>${esc(prodName(b.product_id))} — ${esc(b.code)}${withLevel?` (${fmtN(s.onHand)} yd³)`:''}</option>`;
   }).join('');
@@ -583,7 +646,7 @@ VIEWS.yard={
     </div></section>`,
   dyn:{
     ySummary(){
-      const st=Object.values(D.stats);
+      const st=D.activeBins.map(b=>D.stats[b.id]);
       const total=st.reduce((s,x)=>s+x.onHand,0), out=st.reduce((s,x)=>s+x.out,0), inc=st.reduce((s,x)=>s+x.inc,0);
       const cap=D.activeBins.reduce((s,b)=>s+(Number(b.capacity_yd)||0),0);
       const low=st.filter(x=>['low','out','watch'].includes(x.st)).length;
@@ -650,26 +713,29 @@ function binCard(b){
 }
 const isPhone=()=>{ try{ return window.matchMedia('(max-width: 720px)').matches; }catch{ return false; } };
 const ZONES={T:'Top row · 150 yd bins',L:'Left side · aggregates',M:'Center row',R:'Right center row',E:'Other'};
+function mapTilePhone(b){
+  const s=D.stats[b.id]; const pct=Math.max(0,Math.min(100,s.onHand/Math.max(1,Number(b.capacity_yd)||1)*100));
+  return `<button class="ptile st-${s.st} ${UI.selBin===b.id?'sel':''}" data-act="selBin" data-id="${b.id}" aria-label="${esc(prodName(b.product_id))}, bin ${esc(b.code)}: ${fmtN(s.onHand)} of ${fmtN(b.capacity_yd)} cubic yards, ${ST_CHIP[s.st][0]}">
+      <span class="pt-top"><span class="pt-name">${esc(b.product_id?prodName(b.product_id):'Empty')}</span><span class="tcode">${esc(b.code)}</span></span>
+      <span class="pt-bar"><i style="width:${pct.toFixed(0)}%"></i></span>
+      <span class="pt-num num"><b>${fmtN(s.onHand)}</b> / ${fmtN(b.capacity_yd)} yd³${s.out?` <span class="f out">▼${fmtN(s.out)}</span>`:''}${s.inc?` <span class="f in">▲${fmtN(s.inc)}</span>`:''}</span>
+    </button>`;
+}
 function yardMapPhone(){
   const groups={};
   D.activeBins.forEach(b=>{ const z=(b.code||'?')[0].toUpperCase(); (groups[z]=groups[z]||[]).push(b); });
   const order=[...Object.keys(ZONES).filter(z=>groups[z]),...Object.keys(groups).filter(z=>!ZONES[z])];
-  return order.map(z=>`<section class="zone"><h3>${esc(ZONES[z]||z)}</h3><div class="ptiles">${groups[z].map(b=>{
-    const s=D.stats[b.id]; const pct=Math.max(0,Math.min(100,s.onHand/Math.max(1,Number(b.capacity_yd)||1)*100));
-    return `<button class="ptile st-${s.st} ${UI.selBin===b.id?'sel':''}" data-act="selBin" data-id="${b.id}" aria-label="${esc(prodName(b.product_id))}, bin ${esc(b.code)}: ${fmtN(s.onHand)} of ${fmtN(b.capacity_yd)} cubic yards, ${ST_CHIP[s.st][0]}">
-      <span class="pt-top"><span class="pt-name">${esc(b.product_id?prodName(b.product_id):'Empty')}</span><span class="tcode">${esc(b.code)}</span></span>
-      <span class="pt-bar"><i style="width:${pct.toFixed(0)}%"></i></span>
-      <span class="pt-num num"><b>${fmtN(s.onHand)}</b> / ${fmtN(b.capacity_yd)} yd³${s.out?` <span class="f out">▼${fmtN(s.out)}</span>`:''}${s.inc?` <span class="f in">▲${fmtN(s.inc)}</span>`:''}</span>
-    </button>`; }).join('')}</div></section>`).join('');
+  return order.map(z=>`<section class="zone"><h3>${esc(ZONES[z]||z)}</h3><div class="ptiles">${groups[z].map(mapTilePhone).join('')}</div></section>`).join('');
 }
-function yardMap(){
-  if(isPhone()) return yardMapPhone();
-  const placed=D.activeBins.filter(b=>b.map_x&&b.map_y);
-  const lms=(S.settings.yard_landmarks||[]).filter(l=>l&&l.x&&l.y);
+// Retail Bins by default; the Yard Debris tab passes its own piles, no landmarks and 4 columns.
+function yardMap(bins=D.activeBins,{landmarks=S.settings.yard_landmarks||[],minCols=8,phone=yardMapPhone}={}){
+  if(isPhone()) return phone();
+  const placed=bins.filter(b=>b.map_x&&b.map_y);
+  const lms=(landmarks||[]).filter(l=>l&&l.x&&l.y);
   const all=[...placed.map(b=>[b.map_y,b.map_y+(b.map_h||1)-1]),...lms.map(l=>[l.y,l.y+(l.h||1)-1])];
-  if(!all.length) return `<div class="empty panel">No bins have a map position yet. Add one in Setup.</div><div class="bins">${D.activeBins.map(binCard).join('')}</div>`;
+  if(!all.length) return `<div class="empty panel">No bins have a map position yet. Add one in Setup.</div><div class="bins">${bins.map(binCard).join('')}</div>`;
   const minY=Math.min(...all.map(a=>a[0])), maxY=Math.max(...all.map(a=>a[1]));
-  const maxX=Math.max(8,...placed.map(b=>b.map_x+(b.map_w||1)-1),...lms.map(l=>l.x+(l.w||1)-1));
+  const maxX=Math.max(minCols,...placed.map(b=>b.map_x+(b.map_w||1)-1),...lms.map(l=>l.x+(l.w||1)-1));
   // Numbers only: positions come from stored settings and go into a style attribute.
   const n=v=>Math.max(1,Math.min(500,Math.trunc(Number(v))||1));
   const pos=(x,y,w,h)=>`grid-column:${n(x)} / span ${n(w)};grid-row:${n(y-minY+1)} / span ${n(h)}`;
@@ -685,10 +751,134 @@ function yardMap(){
     </button>`;
   }).join('');
   const marks=lms.map(l=>`<div class="mark mk-${esc(l.kind||'x')}" style="${pos(l.x,l.y,l.w,l.h)}">${esc(l.label)}</div>`).join('');
-  const off=D.activeBins.filter(b=>!(b.map_x&&b.map_y));
+  const off=bins.filter(b=>!(b.map_x&&b.map_y));
   return `<div class="map-wrap"><div class="map" style="grid-template-columns:repeat(${maxX},minmax(96px,1fr));grid-template-rows:repeat(${maxY-minY+1},var(--rowh))">${tiles}${marks}</div></div>
     ${off.length?`<div class="muted" style="font-size:.82rem">Not on the map: ${off.map(b=>esc(b.code)).join(', ')}</div>`:''}`;
 }
+
+/* ---------- Yard Debris ----------
+   The opposite of the retail side: tip fees (Shopify) and intake ADD to the piles,
+   grinding moves green waste / wood debris onto Ground Debris, and removals
+   (scheduled or logged) take debris away. Mirrors trg_debris_event() in schema.sql. */
+const DEBRIS_HINT={dump:'Tip fees and intake add · hauled away',grind:'Tip fees and intake add · ground into Ground Debris · hauled away',ground:'Only grinding adds · hauled away'};
+const DEBRIS_KIND={intake:['Debris in','c-ok'],grind:['Grind','c-acc'],removal:['Removal','c-warn'],shopify:['Tip fee','c-info']};
+const debrisKindFilter={intake:b=>b.debris_role!=='ground',grind:b=>b.debris_role==='grind',removal:()=>true};
+// Shopify timestamps → the local calendar day (a UTC slice would show evening orders as "tomorrow").
+const tsDay=t=>{ const d=new Date(t); return isNaN(d)?String(t||'').slice(0,10):d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const haulerName=h=>/^\d+$/.test(h||'')?'Truck '+h:(h||'');
+function debrisBinOpts(filter,sel){
+  return D.debrisBins.filter(filter).map(b=>`<option value="${b.id}" ${b.id===sel?'selected':''}>${esc(prodName(b.product_id))} (${fmtN(D.stats[b.id].onHand)} yd³)</option>`).join('');
+}
+function debrisFields(kind,bin){
+  // bin given → the pop-up for that pile: the pile is fixed.
+  const pick=(label)=>{ const opts=D.debrisBins.filter(debrisKindFilter[kind]);
+    return bin ? `<input type="hidden" name="bin_id" value="${esc(bin.id)}">`
+      : `<label class="field"><span>${label}</span><select name="bin_id" required>${opts.length>1?'<option value="">Choose…</option>':''}${debrisBinOpts(debrisKindFilter[kind])}</select></label>`; };
+  const num=(name,label)=>`<label class="field"><span>${label}</span><input name="${name}" type="number" step="0.25" min="0.25" required inputmode="decimal"></label>`;
+  const date=`<label class="field"><span>Date</span><input name="happened_on" type="date" value="${isoDay()}"></label>`;
+  const notes=`<label class="field full"><span>Notes</span><input name="notes" maxlength="500"></label>`;
+  if(kind==='intake') return pick('Pile')+num('qty','Volume yd³')+
+    `<label class="field"><span>From</span><input name="source" maxlength="120" placeholder="Customer, crew or job"></label>`+date+notes;
+  if(kind==='grind'){
+    const grounds=D.debrisBins.filter(b=>b.debris_role==='ground');
+    const to=grounds.length===1?`<input type="hidden" name="to_bin_id" value="${esc(grounds[0].id)}">`
+      :`<label class="field"><span>Ground onto</span><select name="to_bin_id" required>${debrisBinOpts(b=>b.debris_role==='ground')}</select></label>`;
+    return pick('Ground from')+to+num('qty','Amount ground (yd³)')+num('to_qty','Ground made (yd³)')+date+notes;
+  }
+  return pick('Pile')+
+    `<label class="field"><span>Truck</span><select name="truck_sel" data-act-change="debrisTruck">${trucks().map(t=>`<option value="${esc(t.no)}">Truck ${esc(t.no)}</option>`).join('')}<option value="other">Outside hauler</option></select></label>
+    <label class="field" data-other-truck hidden><span>Hauler name</span><input name="truck_other" maxlength="40"></label>
+    <label class="field"><span>Loads</span><input name="loads" type="number" min="1" max="50" step="1" value="1"></label>`+num('qty','Volume yd³')+date+
+    `<label class="field"><span>Status</span><select name="status"><option value="done">Hauled already (take out now)</option><option value="scheduled">Schedule (confirm when hauled)</option></select></label>`+notes;
+}
+const DEBRIS_FORMS={intake:['Add debris','order','Add to pile'],grind:['Record grind','primary','Save grind'],removal:['Haul away','take','Save removal']};
+function debrisCard(b){
+  const s=D.stats[b.id];
+  return `<article class="bin st-${s.st}">
+    <div class="bin-h"><span class="prod">${esc(prodName(b.product_id))}</span></div>
+    <div class="code">Pile ${esc(b.code)}</div>
+    ${gauge(b,s)}
+    <div class="level"><b class="num">${fmtN(s.onHand)}</b><span class="of">of ${fmtN(b.capacity_yd)} yd³</span></div>
+    <div class="muted" style="font-size:.8rem">${esc(DEBRIS_HINT[b.debris_role]||'')}</div>
+  </article>`;
+}
+const debrisDue=()=>S.debris.filter(e=>e.kind==='removal'&&e.status==='scheduled'&&dayDiff(e.happened_on)<=0).length;
+function debrisRemovalRow(e){
+  const late=dayDiff(e.happened_on)<0;
+  return `<div class="row">
+    <span class="chip c-warn">Removal</span>
+    <div class="main"><span class="t">${esc(prodName(D.bin[e.bin_id]?.product_id))}</span><span class="m">${esc(haulerName(e.hauler))}${e.loads>1?' × '+e.loads+' loads':''}${e.notes?' · '+esc(e.notes):''} · Scheduled by ${esc(e.created_by_name||'—')}</span></div>
+    <span class="vol">${fmtN(e.qty_yd)} yd³</span>
+    <span class="date">${esc(fmtDate(e.happened_on))}${late?' <span class="chip c-bad">Late</span>':''}</span>
+    <span class="act">${can.debris()?`<button class="btn sm order" data-act="debrisDone" data-id="${e.id}">Confirm removed</button>${confirmBtn('debrisCancel','Cancel',`data-id="${e.id}"`,'cancel')}`:''}</span></div>`;
+}
+VIEWS.debris={
+  shell:()=>{
+    const f=UI.debrisForm&&can.debris()?UI.debrisForm:null; const [title,cls,btn]=f?DEBRIS_FORMS[f]:[];
+    return `<section class="view">
+    <div class="summary" data-dyn="dSummary"></div>
+    <div class="split">
+      <div class="sec">
+        <div class="sec-head"><h2>Yard Debris</h2>
+          ${can.debris()?`<button class="btn sm order" data-act="debrisForm" data-v="intake">Add debris</button>
+          <button class="btn sm" data-act="debrisForm" data-v="grind">Record grind</button>
+          <button class="btn sm take" data-act="debrisForm" data-v="removal">Haul away</button>`:''}</div>
+        ${f?`<div class="panel panel-pad"><div class="sec-head"><h3 style="margin:0">${esc(title)}</h3><button class="btn sm ghost" data-act="debrisForm" data-v="">Close</button></div>
+          <form class="form" data-form="debris" data-kind="${f}" autocomplete="off">${debrisFields(f,null)}
+          <div class="form-actions full"><button class="btn ${cls}">${esc(btn)}</button></div></form></div>`:''}
+        <p class="muted" style="margin:0;font-size:.85rem">Tip fees and intake add to the piles. Grinding moves green waste and wood debris onto Ground Debris. Removals take debris away. Tap a pile for its details.</p>
+        <div data-dyn="dMap"></div>
+      </div>
+      <aside class="sec">
+        <h2>Scheduled removals</h2><div class="rows" data-dyn="dSched"></div>
+        <h2>Recent activity</h2><div class="rows" data-dyn="dRecent"></div>
+      </aside>
+    </div></section>`;
+  },
+  dyn:{
+    dSummary(){
+      const bins=D.debrisBins, total=bins.reduce((s,b)=>s+D.stats[b.id].onHand,0);
+      const wk=e=>e.status==='done'&&dayDiff(e.happened_on)>=-6&&dayDiff(e.happened_on)<=0;
+      const tips=S.shopifyLines.filter(l=>l.status==='pulled'&&D.bin[D.lineBin(l)]?.site==='debris'&&dayDiff(tsDay(l.ordered_at||l.created_at))>=-6);
+      const inn=S.debris.filter(e=>e.kind==='intake'&&wk(e)).reduce((s,e)=>s+Number(e.qty_yd),0)+tips.reduce((s,l)=>s+Number(l.qty_yd||0),0);
+      const ground=S.debris.filter(e=>e.kind==='grind'&&wk(e)).reduce((s,e)=>s+Number(e.to_qty_yd),0);
+      const out=S.debris.filter(e=>e.kind==='removal'&&wk(e)).reduce((s,e)=>s+Number(e.qty_yd),0);
+      const sched=S.debris.filter(e=>e.kind==='removal'&&e.status==='scheduled');
+      return `<div><span class="k">On the piles</span><span class="v num">${fmtN(total)}<small>yd³</small></span><span class="s">${bins.length} piles</span></div>
+        <div><span class="k">Came in · 7 days</span><span class="v num">${fmtN(inn)}<small>yd³</small></span><span class="s">${tips.length} tip fee${tips.length===1?'':'s'} plus intake</span></div>
+        <div><span class="k">Ground · 7 days</span><span class="v num">${fmtN(ground)}<small>yd³</small></span><span class="s">Ground material made</span></div>
+        <div><span class="k">Hauled away · 7 days</span><span class="v num">${fmtN(out)}<small>yd³</small></span><span class="s">${sched.length} removal${sched.length===1?'':'s'} scheduled</span></div>`;
+    },
+    dMap(){
+      if(!D.debrisBins.length) return `<div class="empty panel">No Yard Debris piles yet. Run schema.sql to add them.</div>`;
+      return yardMap(D.debrisBins,{landmarks:[],minCols:4,phone:()=>`<div class="ptiles">${D.debrisBins.map(mapTilePhone).join('')}</div>`});
+    },
+    dSched(){
+      const list=S.debris.filter(e=>e.kind==='removal'&&e.status==='scheduled').sort((a,b)=>a.happened_on.localeCompare(b.happened_on));
+      return list.map(debrisRemovalRow).join('')||`<div class="empty">No removals scheduled.</div>`;
+    },
+    dRecent(){
+      const ev=S.debris.filter(e=>e.status!=='scheduled'&&dayDiff(e.happened_on)>=-14).map(e=>{
+        const b=D.bin[e.bin_id], tb=D.bin[e.to_bin_id];
+        const title=e.kind==='grind'?`${prodName(b?.product_id)} → ${prodName(tb?.product_id)}`:prodName(b?.product_id);
+        const meta=[e.kind==='grind'?`${fmtN(e.qty_yd)} yd³ used, ${fmtN(e.to_qty_yd)} yd³ made`:'',e.source,e.hauler&&haulerName(e.hauler)+(e.loads>1?' × '+e.loads:''),e.notes,e.created_by_name&&'by '+e.created_by_name].filter(Boolean).join(' · ');
+        const sign=e.kind==='intake'?1:e.kind==='removal'?-1:0;
+        return {kind:e.kind,id:e.id,date:e.happened_on,at:e.created_at,title,meta,qty:e.kind==='grind'?e.to_qty_yd:e.qty_yd,sign,cancelled:e.status==='cancelled',undo:e.status==='done'&&can.debris()?confirmBtn('debrisUndo','Undo',`data-id="${e.id}"`,'ghost'):''};
+      });
+      const tips=S.shopifyLines.filter(l=>['pulled','ignored','cancelled'].includes(l.status)&&l.product_id&&D.bin[D.lineBin(l)]?.site==='debris'&&dayDiff(tsDay(l.ordered_at||l.created_at))>=-14).map(l=>({
+        kind:'shopify',id:l.id,date:tsDay(l.ordered_at||l.created_at),at:l.ordered_at||l.created_at,title:prodName(l.product_id),
+        meta:`${l.order_name||'Shopify'} · ${l.customer_name||''} · ${l.variant_title||''}${l.quantity>1?' × '+l.quantity:''}`,qty:l.qty_yd,sign:1,cancelled:l.status!=='pulled',
+        undo:l.status==='pulled'&&can.pull()?confirmBtn('reverseShop','Reverse',`data-id="${l.id}"`,'ghost'):''}));
+      const rows=[...ev,...tips].sort((a,b)=>b.date.localeCompare(a.date)||String(b.at).localeCompare(String(a.at))).slice(0,60);
+      if(!rows.length) return `<div class="empty">Nothing in the last 14 days.</div>`;
+      return rows.map(r=>{ const [l,c]=DEBRIS_KIND[r.kind];
+        return `<div class="row ${r.cancelled?'dim':''}"><span class="chip ${r.cancelled?'c-mute':c}">${r.cancelled?'Undone':l}</span>
+          <div class="main"><span class="t">${esc(r.title)}</span><span class="m">${esc(r.meta)}</span></div>
+          <span class="vol" style="color:var(--${r.sign<0?'bad':r.sign>0?'ok':'ink'})">${r.sign<0?'−':r.sign>0?'+':''}${fmtN(r.qty)} yd³</span>
+          <span class="date">${esc(fmtDate(r.date))}</span><span class="act">${r.undo}</span></div>`; }).join('');
+    },
+  },
+};
 
 /* ---------- Orders ---------- */
 function drawFormFields(bin){
@@ -760,7 +950,7 @@ VIEWS.pulls={
       const f=UI.pullFilter;
       const io=f==='shopify'?[]:S.internalOrders.filter(o=>['pulled','cancelled'].includes(o.status))
         .map(o=>({src:'internal',id:o.id,date:o.pull_on||o.created_at.slice(0,10),at:o.pulled_at||o.created_at,title:o.customer,meta:[o.reference,o.notes,o.created_by_name&&'Entered by '+o.created_by_name].filter(Boolean).join(' · '),product_id:o.product_id,qty:o.qty_yd,status:o.status}));
-      const sl=f==='internal'?[]:S.shopifyLines.filter(l=>['pulled','cancelled'].includes(l.status)||(l.status==='ignored'&&l.product_id))
+      const sl=f==='internal'?[]:S.shopifyLines.filter(l=>D.bin[D.lineBin(l)]?.site!=='debris'&&(['pulled','cancelled'].includes(l.status)||(l.status==='ignored'&&l.product_id)))
         .map(l=>({src:'shopify',id:l.id,date:(l.ordered_at||l.created_at).slice(0,10),at:l.ordered_at||l.created_at,title:`${l.order_name||'Shopify order'} · ${l.customer_name||''}`,meta:`${l.title} · ${l.variant_title||''}${l.quantity>1?' × '+l.quantity:''}`,product_id:l.product_id,qty:l.qty_yd,status:l.status==='ignored'?'cancelled':l.status}));
       const rows=[...io,...sl].sort((a,b)=>(b.date.localeCompare(a.date))||String(b.at).localeCompare(String(a.at))).slice(0,200);
       if(!rows.length) return `<div class="empty">No orders yet.</div>`;
@@ -882,7 +1072,7 @@ VIEWS.ledger={
   shell:()=>`<section class="view">
     ${can.adjust()?`<div class="panel panel-pad sec"><h2>Count or adjust a bin</h2>
       <form class="form" data-form="adjust" autocomplete="off">
-        <label class="field"><span>Bin</span><select id="ad-bin" name="bin_id" required data-hint="ad-hint">${binOptions()}</select></label>
+        <label class="field"><span>Bin</span><select id="ad-bin" name="bin_id" required data-hint="ad-hint">${binOptions(null,{bins:D.allBins})}</select></label>
         <div class="field"><span>Type</span><div class="seg">
           <label><input type="radio" name="mode" value="count" checked> Physical count</label>
           <label><input type="radio" name="mode" value="adjust"> Adjust ±</label></div></div>
@@ -891,14 +1081,14 @@ VIEWS.ledger={
         <div class="form-actions full"><button class="btn primary">Save to ledger</button><span class="hint" id="ad-hint">A count sets the bin to the number you enter. An adjustment adds or subtracts it (use a minus sign to subtract).</span></div>
       </form></div>`:''}
     <div class="sec"><div class="sec-head"><h2>Ledger</h2>
-      <label class="field" style="min-width:220px"><select id="lg-filter" data-act-change="ledgerBin"><option value="">All bins</option>${D.activeBins.map(b=>`<option value="${b.id}" ${UI.ledgerBin===b.id?'selected':''}>${esc(b.code)} · ${esc(prodName(b.product_id))}</option>`).join('')}</select></label></div>
+      <label class="field" style="min-width:220px"><select id="lg-filter" data-act-change="ledgerBin"><option value="">All bins</option>${D.allBins.map(b=>`<option value="${b.id}" ${UI.ledgerBin===b.id?'selected':''}>${esc(b.code)} · ${esc(prodName(b.product_id))}</option>`).join('')}</select></label></div>
       <div class="rows" data-dyn="lList"></div></div>
   </section>`,
   dyn:{
     lList(){
       const list=S.movements.filter(m=>!UI.ledgerBin||m.bin_id===UI.ledgerBin).slice(0,250);
       if(!list.length) return `<div class="empty">No movements yet.</div>`;
-      const K={shopify:['Shopify','c-info'],internal:['Internal','c-acc'],backfill:['Backfill','c-ok'],adjustment:['Adjust','c-warn'],count:['Count','c-mute']};
+      const K={shopify:['Shopify','c-info'],internal:['Internal','c-acc'],backfill:['Backfill','c-ok'],adjustment:['Adjust','c-warn'],count:['Count','c-mute'],intake:['Debris in','c-ok'],grind:['Grind','c-acc'],removal:['Removal','c-warn']};
       return list.map(m=>{ const [l,c]=K[m.kind]||[m.kind,'c-mute'];
         return `<div class="row"><span class="chip ${c}">${l}</span>
           <div class="main"><span class="t">${esc(binLabel(m.bin_id))} · ${esc(prodName(m.product_id))}</span><span class="m">${esc(m.note||'')}${m.created_by_name?' · '+esc(m.created_by_name):''}</span></div>
@@ -983,12 +1173,13 @@ function header(){
   const confirmBadge=S.hauls.filter(h=>['scheduled','en_route'].includes(h.status)&&(h.status==='en_route'||dayDiff(h.haul_on)<=0)).length;
   const badge=t=> t==='pulls'&&pullBadge&&can.pull()?`<span class="badge">${pullBadge}</span>`
     : t==='backfill'&&has('hauling')&&kevinBadge?`<span class="badge">${kevinBadge}</span>`
-    : t==='backfill'&&can.confirmDelivery()&&confirmBadge?`<span class="badge" title="Deliveries to confirm">${confirmBadge}</span>`:'';
+    : t==='backfill'&&can.confirmDelivery()&&confirmBadge?`<span class="badge" title="Deliveries to confirm">${confirmBadge}</span>`
+    : t==='debris'&&can.debris()&&debrisDue()?`<span class="badge" title="Removals due">${debrisDue()}</span>`:'';
   const who = A.mode==='demo'
     ? `<label class="who"><span>Viewing as</span><select id="demo-user" data-act-change="demoUser">${DEMO_USERS.map(u=>`<option value="${u.id}" ${u.name===S.me.name?'selected':''}>${esc(u.name)} · ${ROLES[u.role].label}</option>`).join('')}</select></label>`
     : `<span class="who">${esc(S.me.name)} · ${esc((ROLES[role()]||ROLES.viewer).label)} <button class="btn sm ghost" style="color:inherit" data-act="changePw">Change password</button><button class="btn sm ghost" style="color:inherit" data-act="signOut">Sign out</button></span>`;
   return `<header class="top"><div class="wrap">
-      <div class="brand"><h1>Retail Yard</h1><span>Rexius · inventory · pulls · hauling</span></div>
+      <div class="brand"><h1>Retail Yard</h1><span>Rexius · retail bins · yard debris · hauling</span></div>
       <span class="mode">${A.mode==='demo'?'Demo':'Live'}</span>${who}
     </div><div class="wrap"><nav class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" aria-selected="${UI.tab===t}" data-act="tab" data-tab="${t}">${TAB_LABELS[t]}${badge(t)}</button>`).join('')}</nav></div></header>
     ${A.mode==='demo'?`<div class="demo-note"><div class="wrap"><b>Demo mode.</b>${window.__offlineNote?'<span>Couldn\'t reach the live Supabase database from here, so this is showing example data.</span>':''}<span>Bins, products and orders here are examples, not live yard figures. Switch people in the top bar to see each role.</span></div></div>`:''}`;
@@ -1009,7 +1200,7 @@ function renderDyn(force){
   document.querySelectorAll('[data-hint]').forEach(updateHint);
 }
 document.addEventListener('click',e=>{ if(e.target&&e.target.id==='bin-modal') closeBinModal(); });   // click outside the pop-up closes it
-(()=>{ try{ const mq=window.matchMedia('(max-width: 720px)'); const h=()=>{ if(S&&UI.tab==='yard') renderDyn(true); }; mq.addEventListener?mq.addEventListener('change',h):mq.addListener(h); }catch{} })();
+(()=>{ try{ const mq=window.matchMedia('(max-width: 720px)'); const h=()=>{ if(S&&(UI.tab==='yard'||UI.tab==='debris')) renderDyn(true); }; mq.addEventListener?mq.addEventListener('change',h):mq.addListener(h); }catch{} })();
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&UI.selBin) closeBinModal(); });
 document.addEventListener('focusout',()=>setTimeout(()=>{ if(dynPending) renderDyn(); },50));
 
@@ -1023,6 +1214,7 @@ function binModalHTML(){
   const head=(title,sub)=>`<div class="bm-head"><div><div class="bm-title">${esc(title)}</div><div class="bm-sub">${esc(sub)}</div></div>
     <button class="btn sm ghost bm-close" data-act="selBin" data-id="" aria-label="Close">✕</button></div>`;
   const name=prodName(b.product_id);
+  if(b.site==='debris'&&UI.binMode!=='count') return debrisModalHTML(b,head,name);
   if(UI.binMode==='draw') return head('Take out product', `${name} · Bin ${b.code}`)+`
     <button class="btn sm ghost bm-back" data-act="binMode" data-v="view">← Back to bin</button>
     <form class="form" data-form="internal" data-modal="1" autocomplete="off">${drawFormFields(b)}
@@ -1062,17 +1254,41 @@ function binModalHTML(){
       <button class="btn sm">Save capacity</button></form>`:''}
 `;
 }
+function debrisModalHTML(b,head,name){
+  const back=`<button class="btn sm ghost bm-back" data-act="binMode" data-v="view">← Back to pile</button>`;
+  if(DEBRIS_FORMS[UI.binMode]&&can.debris()){
+    const [title,cls,btn]=DEBRIS_FORMS[UI.binMode];
+    return head(title,`${name} · Pile ${b.code}`)+back+`<form class="form" data-form="debris" data-kind="${UI.binMode}" data-modal="1" autocomplete="off">${debrisFields(UI.binMode,b)}
+      <div class="form-actions full"><button class="btn ${cls}">${esc(btn)}</button></div></form>`;
+  }
+  const sched=S.debris.filter(e=>e.bin_id===b.id&&e.kind==='removal'&&e.status==='scheduled').sort((x,y)=>x.happened_on.localeCompare(y.happened_on));
+  const recent=S.movements.filter(m=>m.bin_id===b.id).slice(0,5);
+  const label=t=>`<div class="muted" style="font:500 .7rem var(--f-mono);text-transform:uppercase;letter-spacing:.08em">${t}</div>`;
+  return head(name,`Yard Debris · Pile ${b.code}`)+`
+    ${debrisCard(b)}
+    ${can.debris()||can.adjust()?`<div class="bm-actions">
+      ${can.debris()&&b.debris_role!=='ground'?'<button class="btn order" data-act="binMode" data-v="intake">Add debris</button>':''}
+      ${can.debris()&&b.debris_role==='grind'?'<button class="btn" data-act="binMode" data-v="grind">Record grind</button>':''}
+      ${can.debris()?'<button class="btn take" data-act="binMode" data-v="removal">Haul away</button>':''}
+      ${can.adjust()?'<button class="btn" data-act="binMode" data-v="count">Count pile</button>':''}</div>`:''}
+    ${sched.length?label('Scheduled removals')+`<div class="rows">${sched.map(debrisRemovalRow).join('')}</div>`:''}
+    ${recent.length?label('Recent activity')+`<div class="timeline">${recent.map(m=>`<div class="tl"><span class="d">${esc(fmtDate(m.occurred_on||m.created_at.slice(0,10)))}</span><span>${esc(m.note||m.kind)}</span><span class="q num ${m.qty_yd<0?'neg':'pos'}">${signed(Number(m.qty_yd))}</span></div>`).join('')}</div>`:''}
+    ${can.binCapacity()?`<form class="cap-form" data-form="binCap" data-id="${b.id}" autocomplete="off">
+      <label class="field"><span>Pile capacity</span><div class="qty"><input id="cap-${b.id}" name="capacity" type="number" min="1" step="0.5" inputmode="decimal" value="${esc(b.capacity_yd)}" required><span class="cap-unit">yd³</span></div></label>
+      <button class="btn sm">Save capacity</button></form>`:''}`;
+}
 function renderBinModal(){
   let m=$('#bin-modal');
   if(!m){ m=document.createElement('div'); m.id='bin-modal'; m.hidden=true; document.body.appendChild(m); }
-  const open=!!(UI.selBin&&D&&D.bin[UI.selBin]&&UI.tab==='yard');
+  const open=!!(UI.selBin&&D&&D.bin[UI.selBin]&&(UI.tab==='yard'||UI.tab==='debris'));
   if(!open&&UI.selBin){ UI.selBin=null; }
   m.hidden=!open; document.body.classList.toggle('modal-open',open);
   if(!open){ m.innerHTML=''; return; }
   m.innerHTML=`<div class="bm-panel" role="dialog" aria-modal="true" aria-label="Bin ${esc(D.bin[UI.selBin].code)}">${binModalHTML()}</div>`;
   m.querySelectorAll('[data-hint]').forEach(updateHint);
   if(UI.binMode==='draw') $('#io-cust')?.focus();
-  else if(UI.binMode==='order'||UI.binMode==='count') $('#qty-yard')?.focus();
+  else if(UI.binMode==='order'||UI.binMode==='count') $('#qty-'+UI.tab)?.focus();
+  else if(DEBRIS_FORMS[UI.binMode]) $('#bin-modal [name=qty]')?.focus();
 }
 function closeBinModal(){ UI.selBin=null; UI.binMode='view'; renderBinModal(); renderDyn(true); }
 
@@ -1137,6 +1353,10 @@ const ACT={
   cancelReq(d){ run(()=>A.update('backfill_requests',d.id,{status:'cancelled'}),'Request cancelled.'); },
   haulStatus(d){ run(()=>A.update('hauls',d.id,{status:d.v}), d.v==='delivered'?'Delivery confirmed. Volume added to the bin.':'Marked en route.'); },
   haulCancel(d){ run(()=>A.update('hauls',d.id,{status:'cancelled'}),'Haul cancelled.'); },
+  debrisForm(d){ UI.debrisForm=d.v||null; render(); if(UI.debrisForm) $('[data-form="debris"] select, [data-form="debris"] [name=qty]')?.focus(); },
+  debrisDone(d){ run(()=>A.update('debris_events',d.id,{status:'done'}),'Removal confirmed. Volume taken off the pile.'); },
+  debrisCancel(d){ run(()=>A.update('debris_events',d.id,{status:'cancelled'}),'Removal cancelled.'); },
+  debrisUndo(d){ run(()=>A.update('debris_events',d.id,{status:'cancelled'}),'Undone. The piles are back to where they were.'); },
   haulUndo(d){ run(()=>A.update('hauls',d.id,{status:'scheduled'}),'Delivery undone. Volume taken back out of the bin.'); },
   mapOpen(d){ UI.mapLine=d.id; renderDyn(true); },
   mapClose(){ UI.mapLine=null; renderDyn(true); },
@@ -1192,6 +1412,7 @@ const CHANGE={
   custSel(el){ const w=$('#io-other-wrap'); if(w){ w.hidden=el.value!=='Other'; $('#io-other').required=el.value==='Other'; if(el.value==='Other') $('#io-other').focus(); } },
   demoUser(el){ A.setUser(el.value); reload({shell:true}); },
   ledgerBin(el){ UI.ledgerBin=el.value; renderDyn(true); },
+  debrisTruck(el){ const f=el.closest('form'); const o=f?.querySelector('[data-other-truck]'); if(!o) return; o.hidden=el.value!=='other'; const i=f.querySelector('[name=truck_other]'); i.required=el.value==='other'; if(el.value==='other') i.focus(); },
 };
 document.addEventListener('click',e=>{
   const a=e.target.closest('[data-act]'); if(!a) return;
@@ -1253,6 +1474,28 @@ const FORM={
       await A.insert('hauls',{request_id:req.id,method,truck_no:tr,loads:Math.max(1,parseInt(fd.get('loads'),10)||1),conditions:fd.get('conditions'),bin_id:bin.id,product_id:bin.product_id,volume_yd:vol,haul_on:day,status});
     }, status==='delivered'?'Delivery logged. Volume added to the bin.':'Delivery scheduled. Confirm it when it arrives.');
     if(ok){ f.reset(); if($('#hf-date')) $('#hf-date').value=isoDay(); }
+  },
+  async debris(fd,f){
+    const kind=f.dataset.kind, inModal=!!f.dataset.modal;
+    const qty=r1(fd.get('qty')); if(!(qty>0)){ toast('Enter the volume.',true); return; }
+    const b=D.bin[fd.get('bin_id')]; if(!b){ toast('Choose a pile.',true); return; }
+    const row={kind,bin_id:b.id,qty_yd:qty,happened_on:fd.get('happened_on')||isoDay(),status:'done',notes:String(fd.get('notes')||'').trim()||null};
+    const pn=prodName(b.product_id); let msg;
+    if(kind==='intake'){ row.source=String(fd.get('source')||'').trim()||null; msg=`Added ${fmtYd(qty)} to ${pn}.`; }
+    else if(kind==='grind'){
+      const tq=r1(fd.get('to_qty')); if(!(tq>0)){ toast('Enter how much ground material was made.',true); return; }
+      row.to_bin_id=fd.get('to_bin_id'); row.to_qty_yd=tq;
+      msg=`Ground ${fmtYd(qty)} of ${pn} into ${fmtYd(tq)} of ${prodName(D.bin[row.to_bin_id]?.product_id)}.`;
+    } else {
+      const h=truckOf(fd); if(!h){ toast('Enter the hauler.',true); return; }
+      row.hauler=h; row.loads=Math.max(1,parseInt(fd.get('loads'),10)||1);
+      row.status=fd.get('status')==='scheduled'?'scheduled':'done';
+      msg=row.status==='done'?`Hauled away ${fmtYd(qty)} of ${pn}.`:`Removal scheduled: ${fmtYd(qty)} of ${pn}, ${whenDate(row.happened_on)}.`;
+    }
+    if(row.status==='done'&&dayDiff(row.happened_on)>0){ toast(kind==='removal'?'A haul that already happened can’t be dated in the future. Choose “Schedule” instead.':'The date can’t be in the future.',true); return; }
+    const ok=await run(()=>A.insert('debris_events',row),msg);
+    if(!ok) return;
+    if(inModal){ UI.binMode='view'; renderBinModal(); } else { UI.debrisForm=null; render(); }
   },
   async binCount(fd,f){
     const b=D.bin[f.dataset.id]; if(!b) return;
