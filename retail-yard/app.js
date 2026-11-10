@@ -249,11 +249,11 @@ function friendlyError(e){
 
 const ROLES = {
   // Ordering, scheduled deliveries and confirming deliveries all live on the Order Product tab.
-  inventory:{label:'Inventory', tabs:['yard','debris','pulls','backfill','ledger','setup']},
-  hauling:{label:'Bulk hauling', tabs:['yard','debris','backfill']},
-  debris:{label:'Yard debris', tabs:['yard','debris','backfill']},   // Mike: debris side; retail read-only
-  admin:{label:'Admin', tabs:['yard','debris','pulls','backfill','ledger','setup']},
-  viewer:{label:'View only', tabs:['yard','debris','backfill']},
+  inventory:{label:'Inventory', tabs:['debris','yard','pulls','backfill','ledger','setup']},
+  hauling:{label:'Bulk hauling', tabs:['debris','yard','backfill']},
+  debris:{label:'Yard debris', tabs:['debris','yard','backfill']},   // Mike: debris side; retail read-only
+  admin:{label:'Admin', tabs:['debris','yard','pulls','backfill','ledger','setup']},
+  viewer:{label:'View only', tabs:['debris','yard','backfill']},
 };
 const TAB_LABELS = {yard:'Retail Bins', debris:'Yard Debris', pulls:'Draw', backfill:'Order Product', hauls:'Hauls', ledger:'Ledger', setup:'Setup'};
 const DEMO_USERS = [
@@ -520,7 +520,7 @@ function LiveAdapter(cfg){
    State + derived figures
    ============================================================= */
 let A=null, S=null, D=null;
-const UI=Object.assign({yardView:'map',selBin:null,binMode:'view',tab:'yard',pullFilter:'all',bfFilter:'all',haulFilter:'upcoming',ledgerBin:'',openHaulFor:null,editBin:null,editProduct:null,mapLine:null},
+const UI=Object.assign({yardView:'map',selBin:null,binMode:'view',tab:'debris',pullFilter:'all',bfFilter:'all',haulFilter:'upcoming',ledgerBin:'',openHaulFor:null,editBin:null,editProduct:null,mapLine:null},
   {tab:store.get('ryt-tab','yard'),yardView:store.get('ryt-yardview','map')});
 
 const role=()=>S.me.role;
