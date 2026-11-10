@@ -307,16 +307,17 @@ const PRODUCT_HAUL_GROUP={"Econobark": "bark", "Beautibark": "bark", "Hemlock": 
 const SHOPIFY_IGNORE=["Grass Seed", "Coir Fibre", "Chicken Compost", "Perlite", "3.8Ft Peat Moss", "Christmas Tree Fees", "Dump Card", "Bio-Bags", "Sand Bags", "Tip Fees-Curbside NEW", "Tip Fees-Food Waste NEW", "Bags", "Sanipac", "Chip Truck", "Opus Grows Mix #2", "Opus Grows Mix Zero", "Worm Castings", "Filled Tote"];
 const YARD_LANDMARKS=[{"label": "Scale booth", "x": 3, "y": 29, "w": 1, "h": 3, "kind": "booth"}, {"label": "Bagged goods", "x": 6, "y": 43, "w": 1, "h": 4, "kind": "bags"}];
 /* Yard Debris piles: [code, product, role, map column, Shopify "Tip Fees" variant] */
-const DEBRIS_BINS=[["EXC","Excavation","dump",1,"Dirt and Rock"],["GREEN","Green Waste","grind",2,"Yard Debris"],["WOOD","Wood Debris","grind",3,"Wood Waste"],["GROUND","Ground Debris","ground",4,null]];
+/* Layout (10-column grid): Wood Debris over Ground Debris at the top; Green Waste and Excavation side by side below. */
+const DEBRIS_BINS=[["WOOD","Wood Debris","grind",[3,1,4,5],"Wood Waste"],["GROUND","Ground Debris","ground",[3,7,4,5],null],["GREEN","Green Waste","grind",[2,15,4,5],"Yard Debris"],["EXC","Excavation","dump",[7,15,4,5],"Dirt and Rock"]];
 function seedDemo(){
   const names=[...new Set(YARD_BINS.map(b=>b[1]).filter(Boolean))];
   const prods=names.map(n=>({id:uid(),name:n,sku:null,shopify_product_id:null,shopify_titles:SHOPIFY_TITLES[n]?[SHOPIFY_TITLES[n]]:[],shopify_variant_match:SHOPIFY_VARIANT[n]||null,haul_group:PRODUCT_HAUL_GROUP[n]||null,active:true,created_at:nowISO()}));
   const pid=n=>prods.find(p=>p.name===n)?.id||null;
   const bins=YARD_BINS.map(([code,name,cap,x,y,w,h],i)=>({id:uid(),code,product_id:pid(name),capacity_yd:cap,reorder_yd:r1(cap*.25),sort:i,active:true,notes:'',map_x:x,map_y:y,map_w:w,map_h:h,site:'retail',debris_role:null,created_at:nowISO()}));
-  DEBRIS_BINS.forEach(([code,name,role,x,variant],i)=>{
+  DEBRIS_BINS.forEach(([code,name,role,[x,y,w,h],variant],i)=>{
     const p={id:uid(),name,sku:null,shopify_product_id:null,shopify_titles:variant?['Tip Fees']:[],shopify_variant_match:variant,haul_group:null,active:true,created_at:nowISO()};
     prods.push(p);
-    bins.push({id:uid(),code,product_id:p.id,capacity_yd:100,reorder_yd:0,sort:101+i,active:true,notes:'',map_x:x,map_y:1,map_w:1,map_h:6,site:'debris',debris_role:role,created_at:nowISO()});
+    bins.push({id:uid(),code,product_id:p.id,capacity_yd:100,reorder_yd:0,sort:101+i,active:true,notes:'',map_x:x,map_y:y,map_w:w,map_h:h,site:'debris',debris_role:role,created_at:nowISO()});
   });
   const B=c=>bins.find(b=>b.code===c);
   const mv=[]; const M=(bin,qty,kind,note,day,by='Jeff Davis')=>mv.push({id:uid(),created_at:new Date(Date.now()+day*864e5).toISOString(),occurred_on:isoDay(day),bin_id:bin.id,product_id:bin.product_id,qty_yd:qty,kind,note,created_by_name:by});
@@ -368,12 +369,12 @@ function seedDemo(){
   const H=(r,truck,vol,day,status)=>({id:uid(),created_at:nowISO(),request_id:r.id,method:r.method,truck_no:truck,loads:1,conditions:'dry',bin_id:r.bin_id,product_id:r.product_id,volume_yd:vol,haul_on:isoDay(day),status,delivered_at:status==='delivered'?nowISO():null,created_by_name:'Kevin Roemer'});
   const hauls=[H(rq[2],'98',60,-1,'delivered'),H(rq[2],'85',15,-1,'delivered'),H(rq[0],'85',30,1,'scheduled')];
 
-  return {v:15,debris_events:debris,userId:'u-jeff',settings:{yd_per_unit:7.5,tote_sizes:[1,1.5],trucks:DEFAULT_TRUCKS,yard_landmarks:YARD_LANDMARKS,shopify_ignore_titles:SHOPIFY_IGNORE},products:prods,bins,movements:mv,internal_orders:io,shopify_order_lines:lines,backfill_requests:rq,hauls};
+  return {v:16,debris_events:debris,userId:'u-jeff',settings:{yd_per_unit:7.5,tote_sizes:[1,1.5],trucks:DEFAULT_TRUCKS,yard_landmarks:YARD_LANDMARKS,shopify_ignore_titles:SHOPIFY_IGNORE},products:prods,bins,movements:mv,internal_orders:io,shopify_order_lines:lines,backfill_requests:rq,hauls};
 }
 
 function DemoAdapter(){
-  const KEY='ryt-demo-v15';
-  let db=store.get(KEY,null); if(!db||db.v!==15){ db=seedDemo(); }
+  const KEY='ryt-demo-v16';
+  let db=store.get(KEY,null); if(!db||db.v!==16){ db=seedDemo(); }
   const save=()=>store.set(KEY,db);
   const me=()=>DEMO_USERS.find(u=>u.id===db.userId)||DEMO_USERS[0];
   const defaultBin=pid=>db.bins.filter(b=>b.active!==false&&b.product_id===pid).sort((a,b)=>(a.sort-b.sort)||a.code.localeCompare(b.code))[0]?.id||null;
@@ -728,7 +729,7 @@ function yardMapPhone(){
   return order.map(z=>`<section class="zone"><h3>${esc(ZONES[z]||z)}</h3><div class="ptiles">${groups[z].map(mapTilePhone).join('')}</div></section>`).join('');
 }
 // Retail Bins by default; the Yard Debris tab passes its own piles, no landmarks and 4 columns.
-function yardMap(bins=D.activeBins,{landmarks=S.settings.yard_landmarks||[],minCols=8,phone=yardMapPhone}={}){
+function yardMap(bins=D.activeBins,{landmarks=S.settings.yard_landmarks||[],minCols=8,colMin='96px',phone=yardMapPhone}={}){
   if(isPhone()) return phone();
   const placed=bins.filter(b=>b.map_x&&b.map_y);
   const lms=(landmarks||[]).filter(l=>l&&l.x&&l.y);
@@ -752,7 +753,7 @@ function yardMap(bins=D.activeBins,{landmarks=S.settings.yard_landmarks||[],minC
   }).join('');
   const marks=lms.map(l=>`<div class="mark mk-${esc(l.kind||'x')}" style="${pos(l.x,l.y,l.w,l.h)}">${esc(l.label)}</div>`).join('');
   const off=bins.filter(b=>!(b.map_x&&b.map_y));
-  return `<div class="map-wrap"><div class="map" style="grid-template-columns:repeat(${maxX},minmax(96px,1fr));grid-template-rows:repeat(${maxY-minY+1},var(--rowh))">${tiles}${marks}</div></div>
+  return `<div class="map-wrap"><div class="map" style="grid-template-columns:repeat(${maxX},minmax(${colMin},1fr));grid-template-rows:repeat(${maxY-minY+1},var(--rowh))">${tiles}${marks}</div></div>
     ${off.length?`<div class="muted" style="font-size:.82rem">Not on the map: ${off.map(b=>esc(b.code)).join(', ')}</div>`:''}`;
 }
 
@@ -851,7 +852,7 @@ VIEWS.debris={
     },
     dMap(){
       if(!D.debrisBins.length) return `<div class="empty panel">No Yard Debris piles yet. Run schema.sql to add them.</div>`;
-      return yardMap(D.debrisBins,{landmarks:[],minCols:4,phone:()=>`<div class="ptiles">${D.debrisBins.map(mapTilePhone).join('')}</div>`});
+      return yardMap(D.debrisBins,{landmarks:[],minCols:10,colMin:'0',phone:()=>`<div class="ptiles">${D.debrisBins.map(mapTilePhone).join('')}</div>`});
     },
     dSched(){
       const list=S.debris.filter(e=>e.kind==='removal'&&e.status==='scheduled').sort((a,b)=>a.happened_on.localeCompare(b.happened_on));
