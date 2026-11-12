@@ -512,7 +512,12 @@ function LiveAdapter(cfg){
     async setSetting(k,v){ return q(sb.from('settings').upsert({key:k,value:v})); },
     async updateMany(t,ids,patch){ return q(sb.from(t).update(patch).in('id',ids)); },
     async linkTitle(pid,title){ return q(sb.rpc('link_shopify_title',{p_product_id:pid,p_title:title})); },
-    subscribe(cb){ sb.channel('yard').on('postgres_changes',{event:'*',schema:DB_SCHEMA},cb).subscribe(); },
+    // Live updates. onStatus is told when the channel connects or drops, so the app can reconnect.
+    subscribe(cb,onStatus){
+      const ch=sb.channel('yard-'+Date.now()).on('postgres_changes',{event:'*',schema:DB_SCHEMA},cb)
+        .subscribe(st=>onStatus&&onStatus(st));
+      return ()=>{ try{ sb.removeChannel(ch); }catch{} };
+    },
   };
 }
 
@@ -1293,7 +1298,14 @@ function renderBinModal(){
 }
 function closeBinModal(){ UI.selBin=null; UI.binMode='view'; renderBinModal(); renderDyn(true); }
 
-async function reload({shell=false}={}){
+let reloading=null, reloadAgain=false;
+async function reload(opts={}){
+  // One load at a time; if another change arrives mid-load, load once more after.
+  if(reloading){ reloadAgain=true; return reloading; }
+  reloading=doReload(opts).finally(()=>{ reloading=null; if(reloadAgain){ reloadAgain=false; reload(); } });
+  return reloading;
+}
+async function doReload({shell=false}={}){
   S=await A.load(); derive();
   if(shell) render(); else { const nav=$('.top'); if(nav) nav.outerHTML=header().split('</header>')[0]+'</header>'; renderDyn(); }
   if(UI.selBin&&UI.binMode==='view') renderBinModal();   // forms in the pop-up are left alone
@@ -1655,14 +1667,35 @@ function noAccessScreen(){
     <p class="muted">Ask an admin to add your email to the Retail Yard user list (Supabase → Table Editor → schema "yard" → user_invites), then reload.</p>
     <div class="form-actions"><button class="btn primary" data-act="reload">Reload</button><button class="btn ghost" data-act="signOut">Sign out</button></div></div>`;
 }
+/* Auto-refresh: everyone sees changes without reloading the page.
+   1. Live: Supabase pushes each change (Shopify orders, other people's entries) → refresh in under a second.
+   2. Backup: every 30 s while the page is on screen, in case the live connection dropped
+      (phones sleeping, Wi-Fi changes). Paused while the tab is hidden.
+   3. Coming back to the tab, or back online → refresh right away and reconnect.
+   Forms being filled in are never wiped: open pop-up forms and focused fields are left alone. */
+const POLL_MS=30000;
+function autoRefresh(){
+  let t, unsub=null, retry=null, gen=0;
+  const soon=()=>{ clearTimeout(t); t=setTimeout(()=>reload().catch(console.error),400); };
+  const connect=()=>{
+    clearTimeout(retry); const my=++gen; if(unsub) unsub();
+    unsub=A.subscribe(soon,st=>{
+      if(my!==gen||st==='SUBSCRIBED') return;   // ignore the old channel closing
+      if(st==='CHANNEL_ERROR'||st==='TIMED_OUT'||st==='CLOSED'){ clearTimeout(retry); retry=setTimeout(connect,10000); }
+    });
+  };
+  connect();
+  setInterval(()=>{ if(document.visibilityState==='visible') reload().catch(console.error); },POLL_MS);
+  const wake=()=>{ if(document.visibilityState==='visible'){ reload().catch(console.error); connect(); } };
+  document.addEventListener('visibilitychange',wake);
+  window.addEventListener('online',wake);
+}
 async function start(){
   try{
     if(A.mode==='live' && !(await A.session())) return signInScreen();
     if(A.mode==='live' && !(await A.ensureProfile())) return noAccessScreen();
     S=await A.load(); derive(); render();
-    if(A.mode==='live'){
-      let t; A.subscribe(()=>{ clearTimeout(t); t=setTimeout(()=>reload().catch(console.error),400); });
-    }
+    if(A.mode==='live') autoRefresh();
   }catch(e){
     console.error(e);
     const m=String(e?.message||e);
