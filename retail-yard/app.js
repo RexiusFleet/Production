@@ -593,10 +593,13 @@ function productOptions(sel){
   return `<option value="">Choose a product</option>`+S.products.filter(p=>p.active!==false&&D.defaultBin(p.id)).sort((x,y)=>x.name.localeCompare(y.name))
     .map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(p.name)}</option>`).join('');
 }
-function binOptions(sel, {blank='Choose a bin', withLevel=true, bins=D.activeBins}={}){
+function binOptions(sel, {blank='Choose a bin', withLevel=true, bins=D.activeBins, codes=true}={}){
+  // codes:false → product names only; the bin code is kept just for a product stocked in two bins.
+  const shared=new Set(bins.filter((b,i)=>b.product_id&&bins.findIndex(x=>x.product_id===b.product_id)!==i).map(b=>b.product_id));
   return `<option value="">${esc(blank)}</option>`+bins.filter(b=>b.product_id).map(b=>{
     const s=D.stats[b.id];
-    return `<option value="${b.id}" ${b.id===sel?'selected':''}>${esc(prodName(b.product_id))} — ${esc(b.code)}${withLevel?` (${fmtN(s.onHand)} yd³)`:''}</option>`;
+    const code=codes||shared.has(b.product_id)?` — ${esc(b.code)}`:'';
+    return `<option value="${b.id}" ${b.id===sel?'selected':''}>${esc(prodName(b.product_id))}${code}${withLevel?` (${fmtN(s.onHand)} yd³)`:''}</option>`;
   }).join('');
 }
 function qtyField(name='qty', label='Volume', val=''){
@@ -1076,9 +1079,9 @@ function reqCard(r){
 /* ---------- Ledger ---------- */
 VIEWS.ledger={
   shell:()=>`<section class="view">
-    ${can.adjust()?`<div class="panel panel-pad sec"><h2>Count or adjust a bin</h2>
+    ${can.adjust()?`<div class="panel panel-pad sec"><h2>Count or adjust a product</h2>
       <form class="form" data-form="adjust" autocomplete="off">
-        <label class="field"><span>Bin</span><select id="ad-bin" name="bin_id" required data-hint="ad-hint">${binOptions(null,{bins:D.allBins})}</select></label>
+        <label class="field"><span>Product</span><select id="ad-bin" name="bin_id" required data-hint="ad-hint">${binOptions(null,{bins:D.allBins,blank:'Choose a product',codes:false})}</select></label>
         <div class="field"><span>Type</span><div class="seg">
           <label><input type="radio" name="mode" value="count" checked> Physical count</label>
           <label><input type="radio" name="mode" value="adjust"> Adjust ±</label></div></div>
@@ -1087,17 +1090,18 @@ VIEWS.ledger={
         <div class="form-actions full"><button class="btn primary">Save to ledger</button><span class="hint" id="ad-hint">A count sets the bin to the number you enter. An adjustment adds or subtracts it (use a minus sign to subtract).</span></div>
       </form></div>`:''}
     <div class="sec"><div class="sec-head"><h2>Ledger</h2>
-      <label class="field" style="min-width:220px"><select id="lg-filter" data-act-change="ledgerBin"><option value="">All bins</option>${D.allBins.map(b=>`<option value="${b.id}" ${UI.ledgerBin===b.id?'selected':''}>${esc(b.code)} · ${esc(prodName(b.product_id))}</option>`).join('')}</select></label></div>
+      <label class="field" style="min-width:220px"><select id="lg-filter" data-act-change="ledgerBin"><option value="">All products</option>${[...new Set(D.allBins.filter(b=>b.product_id).map(b=>b.product_id))].map(id=>`<option value="${id}" ${UI.ledgerBin===id?'selected':''}>${esc(prodName(id))}</option>`).join('')}</select></label></div>
       <div class="rows" data-dyn="lList"></div></div>
   </section>`,
   dyn:{
     lList(){
-      const list=S.movements.filter(m=>!UI.ledgerBin||m.bin_id===UI.ledgerBin).slice(0,250);
+      const pid=m=>m.product_id||D.bin[m.bin_id]?.product_id;
+      const list=S.movements.filter(m=>!UI.ledgerBin||pid(m)===UI.ledgerBin).slice(0,250);   // filter is by product
       if(!list.length) return `<div class="empty">No movements yet.</div>`;
       const K={shopify:['Shopify','c-info'],internal:['Internal','c-acc'],backfill:['Backfill','c-ok'],adjustment:['Adjust','c-warn'],count:['Count','c-mute'],intake:['Debris in','c-ok'],grind:['Grind','c-acc'],removal:['Removal','c-warn']};
       return list.map(m=>{ const [l,c]=K[m.kind]||[m.kind,'c-mute'];
         return `<div class="row"><span class="chip ${c}">${l}</span>
-          <div class="main"><span class="t">${esc(binLabel(m.bin_id))} · ${esc(prodName(m.product_id))}</span><span class="m">${esc(m.note||'')}${m.created_by_name?' · '+esc(m.created_by_name):''}</span></div>
+          <div class="main"><span class="t">${esc(prodName(pid(m)))}</span><span class="m">${esc(m.note||'')}${m.created_by_name?' · '+esc(m.created_by_name):''}</span></div>
           <span class="vol" style="color:var(--${m.qty_yd<0?'bad':'ok'})">${signed(Number(m.qty_yd))} yd³</span>
           <span class="date">${esc(fmtDate(m.occurred_on||m.created_at.slice(0,10)))}</span></div>`; }).join('');
     },
