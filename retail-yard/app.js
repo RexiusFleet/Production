@@ -1166,7 +1166,7 @@ VIEWS.setup={
              variables). There is deliberately no in-app field to change them, so a page visitor
              cannot point the app at a different backend. -->
         <div class="form-actions">
-            ${A.mode==='demo'?confirmBtn('resetDemo','Reset demo data','','')+(store.get('ryt-force-demo',false)&&CONFIG.url?'<button type="button" class="btn" data-act="goLive">Use live data</button>':''):confirmBtn('disconnect','Use demo data','','ghost')}</div>
+            ${A.mode==='demo'?confirmBtn('resetDemo','Reset demo data','',''):''}</div>
       </div>
     </div></section>`;
   },
@@ -1390,8 +1390,6 @@ const ACT={
   editBin(d){ UI.editBin=d.id||null; render(); },
   editProduct(d){ UI.editProduct=d.id||null; render(); },
   resetDemo(){ A.reset(); reload({shell:true}).then(()=>toast('Demo data reset.')); },
-  disconnect(){ store.set('ryt-force-demo',true); location.reload(); },
-  goLive(){ store.del('ryt-force-demo'); location.reload(); },
   reload(){ location.reload(); },
   async signOut(){ await A.signOut(); location.reload(); },
   changePw(){ changePasswordScreen(); },
@@ -1610,8 +1608,7 @@ function signInScreen(){
       <div class="form-actions"><button class="btn primary" id="si-btn">Sign in</button>
         <span class="hint" id="si-hint" aria-live="polite"></span></div>
     </form>
-    <p class="muted" style="margin:0;font-size:.85rem">Forgot your password or don't have one? Ask an admin to set one for you.</p>
-    <button class="btn sm ghost" style="justify-self:start" data-act="disconnect">Use demo data instead</button></div>`;
+    <p class="muted" style="margin:0;font-size:.85rem">Forgot your password or don't have one? Ask an admin to set one for you.</p></div>`;
   /* Sign-in throttling (OWASP A07). Supabase Auth limits password attempts server-side
      (Authentication → Rate Limits). This client-side lockout just stops accidental hammering
      and explains what's happening instead of showing raw errors. */
@@ -1708,7 +1705,7 @@ async function start(){
       : 'Check that schema.sql has been run in Supabase, then reload.';
     $('#app').innerHTML=`<div class="signin panel sec"><h2>Couldn't load the yard</h2><p>${esc(m)}</p>
       <p class="muted">${esc(hint)}</p>
-      <button class="btn" data-act="disconnect">Switch to demo data</button></div>`;
+      <button class="btn" data-act="reload">Reload</button></div>`;
   }
 }
 async function reachable(url,key){
@@ -1721,7 +1718,10 @@ async function reachable(url,key){
 (async function boot(){
   try{ store.del('ryt-config'); }catch{}   // purge credentials an older version may have kept in localStorage
   const {url,key,problem}=CONFIG;
-  const forceDemo=store.get('ryt-force-demo',false);
+  // A deployed site (with a Supabase URL + key) always uses live data; there's no switch to demo.
+  // Clear the old "use demo data" choice so anyone who picked it before is back on live data.
+  try{ store.del('ryt-force-demo'); }catch{}
+  const forceDemo=false;
   if(problem){
     // Fail closed: never connect with a misconfigured or secret key.
     $('#app').innerHTML=`<div class="signin panel sec"><h2>Site configuration problem</h2><p>${esc(problem)}</p>
@@ -1733,11 +1733,15 @@ async function reachable(url,key){
       $('#app').innerHTML=`<div class="signin panel sec"><h2>Couldn't load the sign-in library</h2>
         <p>The page couldn't load vendor/supabase.js, so it can't connect to the yard database.</p>
         <p class="muted">Make sure the vendor folder was deployed with the site, then reload.</p>
-        <div class="form-actions"><button class="btn primary" data-act="reload">Reload</button><button class="btn ghost" data-act="disconnect">Use demo data</button></div></div>`;
+        <div class="form-actions"><button class="btn primary" data-act="reload">Reload</button></div></div>`;
       return;
     }
     if(await reachable(url,key)){ A=withValidation(LiveAdapter({url,key})); return start(); }
-    A=withValidation(DemoAdapter()); window.__offlineNote=true;
-  } else A=withValidation(DemoAdapter());
+    // Never fall back to example data on the real site: anything entered there wouldn't be saved.
+    $('#app').innerHTML=`<div class="signin panel sec"><h2>Can't reach the yard database</h2>
+      <p>Check the internet connection, then try again.</p>
+      <div class="form-actions"><button class="btn primary" data-act="reload">Try again</button></div></div>`;
+    return;
+  } else A=withValidation(DemoAdapter());   // no config (the Claude preview): example data
   start();
 })();
