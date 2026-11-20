@@ -12,14 +12,14 @@
   - The Supabase client library is self-hosted in vendor/ (no third-party script CDN).
   - No API keys in this file: config.js is generated from environment variables.
 -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://fxajnoeoclnbggbkkpxn.supabase.co wss://fxajnoeoclnbggbkkpxn.supabase.co; object-src 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://fxajnoeoclnbggbkkpxn.supabase.co; connect-src 'self' https://fxajnoeoclnbggbkkpxn.supabase.co wss://fxajnoeoclnbggbkkpxn.supabase.co; object-src 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <title>Retail Yard Tracker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<script src="config.js?v=be90c7603d"></script>
-<script src="vendor/supabase.js?v=be90c7603d"></script>
+<script src="config.js?v=960814925a"></script>
+<script src="vendor/supabase.js?v=960814925a"></script>
 <style>
 /* Layout: sticky yard header + tab rail; each view is a working surface — bins as walled bays, queues as dense rows. */
 :root{
@@ -153,6 +153,12 @@ main{padding-block:20px 60px}
 /* Yard Debris piles: no low/full status colours */
 .tile.st-debris,.ptile.st-debris{border-left-color:var(--wall)}
 .bin.st-debris{border-top-color:var(--wall)}
+.tile.st-alert,.ptile.st-alert{border-left-color:var(--bad)}
+.bin.st-alert{border-top-color:var(--bad)}
+.pile-photo{display:grid;gap:8px;justify-items:start}
+.pile-photo figure{margin:0;display:grid;gap:6px;width:100%}
+.pile-photo img{width:100%;max-height:320px;object-fit:cover;border-radius:8px;border:1px solid var(--line);background:var(--line)}
+.pile-photo figcaption{font-size:.82rem}
 .tile.st-debris .tt{font-size:.95rem}
 .mark{display:flex;align-items:center;justify-content:center;text-align:center;border-radius:4px;font:600 .7rem/1.2 var(--f-mono);text-transform:uppercase;letter-spacing:.08em;padding:4px}
 .mk-booth{background:var(--ink);color:var(--bg)}
@@ -336,6 +342,6 @@ td.n{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-num
 
 <div id="app"></div>
 <div id="toast" class="toast" hidden></div>
-<script src="app.js?v=be90c7603d"></script>
+<script src="app.js?v=960814925a"></script>
 
 </body></html>

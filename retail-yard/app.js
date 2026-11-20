@@ -88,7 +88,8 @@ const WRITE_SCHEMAS={
     capacity_yd:V.num(0,2000,{req:true,label:'Capacity'}), reorder_yd:V.num(0,2000,{req:true,label:'Reorder point'}),
     sort:V.int(-10000,10000,{label:'Sort order'}), active:V.bool(), notes:V.str(500,{null:true,label:'Notes'}),
     map_x:V.int(1,30,{null:true,label:'Map column'}), map_y:V.int(1,500,{null:true,label:'Map row'}),
-    map_w:V.int(1,10,{label:'Map width'}), map_h:V.int(1,50,{label:'Map height'}) },
+    map_w:V.int(1,10,{label:'Map width'}), map_h:V.int(1,50,{label:'Map height'}),
+    display_unit:V.oneOf(['yd3','units']), no_capacity:V.bool(), alert_over_yd:V.num(0.01,5000,{null:true,label:'Alert level'}) },
   'bins.update':null,
   'backfill_requests.insert':{
     product_id:V.id({req:true}), bin_id:V.id({req:true}), qty_yd:V.num(0.01,2000,{req:true,label:'Volume'}),
@@ -220,6 +221,12 @@ function withValidation(adapter){
       return adapter.update(t,id,validateWrite(t,'update',patch));
     },
     async setSetting(k,v){ return adapter.setSetting(k,validateSetting(k,v)); },
+    async uploadPhoto(binId,blob,takenAt){
+      if(!isId(binId)) throw new ValidationError('Invalid pile.');
+      if(!(blob instanceof Blob)||blob.type!=='image/jpeg'||blob.size>5*1024*1024) throw new ValidationError('The photo must be a JPEG under 5 MB.');
+      const t=Date.parse(takenAt); if(!(t<=Date.now()+864e5&&t>=Date.now()-366*864e5)) throw new ValidationError('The photo date is out of range.');
+      return adapter.uploadPhoto(binId,blob,new Date(t).toISOString());
+    },
     async updateMany(t,ids,patch){
       if(!Array.isArray(ids)||!ids.length||ids.length>500||!ids.every(isId)) throw new ValidationError('Invalid records.');
       return adapter.updateMany(t,ids,validateWrite(t,'update',patch));
@@ -275,6 +282,14 @@ const fmtN = n => r1(n).toLocaleString(undefined,{maximumFractionDigits:1});
 const ydu = ()=> Number(S?.settings?.yd_per_unit) || 7.5;
 const fmtYd = n => fmtN(n)+' yd³';
 const fmtUnits = n => fmtN((Number(n)||0)/ydu())+' units';
+// A pile can be shown in units (Setup → "Show amounts in"); everything is still stored in yd³.
+const inUnits = b => b?.display_unit==='units';
+const bQty = (b,yd) => inUnits(b) ? (Number(yd)||0)/ydu() : Number(yd)||0;
+const bUnit = b => inUnits(b) ? 'units' : 'yd³';
+const fmtB = (b,yd) => { const v=bQty(b,yd); return fmtN(v)+' '+(inUnits(b)?(r1(v)===1?'unit':'units'):'yd³'); };
+// A pile with no capacity (Green Waste): just the volume, no fill level or "of N".
+const hasCap = b => !b?.no_capacity;
+const overAlert = b => Number(b?.alert_over_yd)>0 && (Number(S?.onHand?.[b.id])||0) > Number(b.alert_over_yd);
 const signed = n => (n>0?'+':n<0?'−':'')+fmtN(Math.abs(n));
 function dayDiff(iso){ if(!iso) return null; const [y,m,d]=iso.slice(0,10).split('-').map(Number); const t=new Date(); return Math.round((new Date(y,m-1,d) - new Date(t.getFullYear(),t.getMonth(),t.getDate()))/864e5); }
 function fmtDate(iso){
@@ -308,16 +323,17 @@ const SHOPIFY_IGNORE=["Grass Seed", "Coir Fibre", "Chicken Compost", "Perlite", 
 const YARD_LANDMARKS=[{"label": "Scale booth", "x": 3, "y": 29, "w": 1, "h": 3, "kind": "booth"}, {"label": "Bagged goods", "x": 6, "y": 43, "w": 1, "h": 4, "kind": "bags"}];
 /* Yard Debris piles: [code, product, role, map column, Shopify "Tip Fees" variant] */
 /* Layout (10-column grid): Wood Debris over Ground Debris at the top; Green Waste and Excavation side by side below. */
-const DEBRIS_BINS=[["WOOD","Wood Debris","grind",[3,1,4,5],"Wood Waste"],["GROUND","Ground Debris","ground",[3,7,4,5],null],["GREEN","Green Waste","grind",[2,15,4,5],"Yard Debris"],["EXC","Excavation","dump",[7,15,4,5],"Dirt and Rock"]];
+/* [code, product, role, [x,y,w,h], Tip Fees variant, display unit, capacity in units, alert over N units] */
+const DEBRIS_BINS=[["WOOD","Wood Debris","grind",[1,1,4,5],"Wood Waste"],["GROUND","Ground Debris","ground",[1,7,4,5],null,"units",200,50],["GREEN","Green Waste","grind",[1,15,4,5],"Yard Debris","units"],["EXC","Excavation","dump",[7,15,4,5],"Dirt and Rock"]];
 function seedDemo(){
   const names=[...new Set(YARD_BINS.map(b=>b[1]).filter(Boolean))];
   const prods=names.map(n=>({id:uid(),name:n,sku:null,shopify_product_id:null,shopify_titles:SHOPIFY_TITLES[n]?[SHOPIFY_TITLES[n]]:[],shopify_variant_match:SHOPIFY_VARIANT[n]||null,haul_group:PRODUCT_HAUL_GROUP[n]||null,active:true,created_at:nowISO()}));
   const pid=n=>prods.find(p=>p.name===n)?.id||null;
   const bins=YARD_BINS.map(([code,name,cap,x,y,w,h],i)=>({id:uid(),code,product_id:pid(name),capacity_yd:cap,reorder_yd:r1(cap*.25),sort:i,active:true,notes:'',map_x:x,map_y:y,map_w:w,map_h:h,site:'retail',debris_role:null,created_at:nowISO()}));
-  DEBRIS_BINS.forEach(([code,name,role,[x,y,w,h],variant],i)=>{
+  DEBRIS_BINS.forEach(([code,name,role,[x,y,w,h],variant,unit,capU,alertU],i)=>{
     const p={id:uid(),name,sku:null,shopify_product_id:null,shopify_titles:variant?['Tip Fees']:[],shopify_variant_match:variant,haul_group:null,active:true,created_at:nowISO()};
     prods.push(p);
-    bins.push({id:uid(),code,product_id:p.id,capacity_yd:100,reorder_yd:0,sort:101+i,active:true,notes:'',map_x:x,map_y:y,map_w:w,map_h:h,site:'debris',debris_role:role,created_at:nowISO()});
+    bins.push({id:uid(),code,product_id:p.id,capacity_yd:capU?capU*7.5:100,reorder_yd:0,sort:101+i,active:true,notes:'',map_x:x,map_y:y,map_w:w,map_h:h,site:'debris',debris_role:role,display_unit:unit||'yd3',no_capacity:code==='GREEN',photo_until_grind:code==='GREEN',alert_over_yd:alertU?alertU*7.5:null,created_at:nowISO()});
   });
   const B=c=>bins.find(b=>b.code===c);
   const mv=[]; const M=(bin,qty,kind,note,day,by='Jeff Davis')=>mv.push({id:uid(),created_at:new Date(Date.now()+day*864e5).toISOString(),occurred_on:isoDay(day),bin_id:bin.id,product_id:bin.product_id,qty_yd:qty,kind,note,created_by_name:by});
@@ -329,7 +345,7 @@ function seedDemo(){
   M(B('T1'),60,'backfill','Truck 98',-1,'Kevin Roemer'); M(B('T1'),15,'backfill','Truck 85',-1,'Kevin Roemer');
   M(B('M2'),-7.5,'internal','Internal order — CAS · WO-2287',0);
   // Yard Debris: opening counts, then example intake / grind / removal / tip fee
-  [['EXC',42],['GREEN',63],['WOOD',28],['GROUND',55]].forEach(([c,q])=>M(B(c),q,'count','Opening count (example)',-6));
+  [['EXC',42],['GREEN',63],['WOOD',28],['GROUND',420]].forEach(([c,q])=>M(B(c),q,'count','Opening count (example)',-6));
   const DE=(kind,code,qty,day,status,x={})=>({id:uid(),created_at:new Date(Date.now()+Math.min(day,0)*864e5).toISOString(),kind,bin_id:B(code).id,qty_yd:qty,to_bin_id:null,to_qty_yd:null,source:null,hauler:null,loads:null,happened_on:isoDay(day),status,done_at:status==='done'?nowISO():null,notes:null,created_by_name:'Mike',...x});
   const debris=[
     DE('removal','GROUND',30,1,'scheduled',{hauler:'98',loads:1,created_by_name:'Kevin Roemer'}),
@@ -369,12 +385,12 @@ function seedDemo(){
   const H=(r,truck,vol,day,status)=>({id:uid(),created_at:nowISO(),request_id:r.id,method:r.method,truck_no:truck,loads:1,conditions:'dry',bin_id:r.bin_id,product_id:r.product_id,volume_yd:vol,haul_on:isoDay(day),status,delivered_at:status==='delivered'?nowISO():null,created_by_name:'Kevin Roemer'});
   const hauls=[H(rq[2],'98',60,-1,'delivered'),H(rq[2],'85',15,-1,'delivered'),H(rq[0],'85',30,1,'scheduled')];
 
-  return {v:16,debris_events:debris,userId:'u-jeff',settings:{yd_per_unit:7.5,tote_sizes:[1,1.5],trucks:DEFAULT_TRUCKS,yard_landmarks:YARD_LANDMARKS,shopify_ignore_titles:SHOPIFY_IGNORE},products:prods,bins,movements:mv,internal_orders:io,shopify_order_lines:lines,backfill_requests:rq,hauls};
+  return {v:19,debris_events:debris,userId:'u-jeff',settings:{yd_per_unit:7.5,tote_sizes:[1,1.5],trucks:DEFAULT_TRUCKS,yard_landmarks:YARD_LANDMARKS,shopify_ignore_titles:SHOPIFY_IGNORE},products:prods,bins,movements:mv,internal_orders:io,shopify_order_lines:lines,backfill_requests:rq,hauls};
 }
 
 function DemoAdapter(){
-  const KEY='ryt-demo-v16';
-  let db=store.get(KEY,null); if(!db||db.v!==16){ db=seedDemo(); }
+  const KEY='ryt-demo-v19';
+  let db=store.get(KEY,null); if(!db||db.v!==19){ db=seedDemo(); }
   const save=()=>store.set(KEY,db);
   const me=()=>DEMO_USERS.find(u=>u.id===db.userId)||DEMO_USERS[0];
   const defaultBin=pid=>db.bins.filter(b=>b.active!==false&&b.product_id===pid).sort((a,b)=>(a.sort-b.sort)||a.code.localeCompare(b.code))[0]?.id||null;
@@ -414,11 +430,13 @@ function DemoAdapter(){
       if(row.status==='done'&&old.status!=='done'){
         row.done_at=nowISO(); const on={occurred_on:row.happened_on};
         if(row.kind==='intake') M(b,Number(row.qty_yd),'intake','Debris in'+(row.source?' — '+row.source:''),on);
-        else if(row.kind==='grind'){ M(b,-Number(row.qty_yd),'grind','Ground into '+tb.code,on); M(tb,Number(row.to_qty_yd),'grind','Ground from '+b.code,on); }
+        else if(row.kind==='grind'){ M(b,-Number(row.qty_yd),'grind','Ground into '+tb.code,on); M(tb,Number(row.to_qty_yd),'grind','Ground from '+b.code,on);
+          demoPhotos.forEach(p=>{ if(p.bin_id===b.id&&!p.cleared_at){ p.cleared_at=nowISO(); p.cleared_by_event=row.id; } }); }   // a grind clears the pile photo
         else M(b,-Number(row.qty_yd),'removal','Hauled away'+(who?' — '+who:''),on);
       } else if(old.status==='done'&&row.status!=='done'){
         row.done_at=null;
-        if(row.kind==='grind'){ M(b,Number(old.qty_yd),'adjustment','Grind undone'); M(tb,-Number(old.to_qty_yd),'adjustment','Grind undone'); }
+        if(row.kind==='grind'){ M(b,Number(old.qty_yd),'adjustment','Grind undone'); M(tb,-Number(old.to_qty_yd),'adjustment','Grind undone');
+          demoPhotos.forEach(p=>{ if(p.cleared_by_event===row.id){ p.cleared_at=null; p.cleared_by_event=null; } }); }   // undoing the grind brings it back
         else M(b,(row.kind==='intake'?-1:1)*Number(old.qty_yd),'adjustment',row.kind==='intake'?'Debris in undone':'Removal undone');
       }
     }
@@ -434,12 +452,17 @@ function DemoAdapter(){
       if(old.request_id&&old.request_id!==row.request_id) syncReq(old.request_id);
     }
   }
+  const demoPhotos=[];
   return {
     mode:'demo',
+    async uploadPhoto(binId,blob,takenAt){
+      const url=await new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(blob); });
+      demoPhotos.unshift({id:uid(),bin_id:binId,path:binId+'/'+uid()+'.jpg',taken_at:takenAt,uploaded_at:nowISO(),uploaded_by_name:me().name,cleared_at:null,url});
+    },
     async load(){
       const onHand={}; db.movements.forEach(m=>{onHand[m.bin_id]=(onHand[m.bin_id]||0)+Number(m.qty_yd);});
       return {products:db.products,bins:db.bins,onHand,movements:db.movements.slice(0,400),internalOrders:db.internal_orders,
-        shopifyLines:db.shopify_order_lines,backfills:db.backfill_requests,hauls:db.hauls,debris:db.debris_events,settings:db.settings,me:me()};
+        shopifyLines:db.shopify_order_lines,backfills:db.backfill_requests,hauls:db.hauls,debris:db.debris_events,photos:demoPhotos.filter(p=>!p.cleared_at),settings:db.settings,me:me()};
     },
     async insert(t,row){
       if(['internal_orders','backfill_requests','hauls'].includes(t)&&db.bins.find(b=>b.id===row.bin_id)?.site==='debris') throw new Error('Yard Debris bins are managed on the Yard Debris tab');
@@ -476,8 +499,29 @@ function LiveAdapter(cfg){
   // so it never collides with another app's tables in `public`.
   const sb=window.supabase.createClient(cfg.url,cfg.key,{db:{schema:DB_SCHEMA},auth:{persistSession:true,autoRefreshToken:true}});
   const q=p=>p.then(({data,error})=>{ if(error) throw error; return data; });
+  // Pile photos live in a private Storage bucket; the page shows them through short-lived signed
+  // links, reused until close to expiry so the 30-second refresh doesn't re-download them.
+  const BUCKET='yard-photos', urlCache=new Map();
+  async function loadPhotos(){
+    try{
+      const rows=await q(sb.from('pile_photos').select('*').is('cleared_at',null).order('uploaded_at',{ascending:false}).limit(20));
+      for(const r of rows){
+        const c=urlCache.get(r.path);
+        if(c&&c.exp>Date.now()+10*60e3){ r.url=c.url; continue; }
+        const {data}=await sb.storage.from(BUCKET).createSignedUrl(r.path,3600);
+        if(data?.signedUrl){ r.url=data.signedUrl; urlCache.set(r.path,{url:r.url,exp:Date.now()+3600e3}); }
+      }
+      return rows;
+    }catch(e){ console.warn('Pile photos unavailable (run debris_photos.sql?)',e); return []; }
+  }
   return {
     mode:'live', sb,
+    async uploadPhoto(binId,blob,takenAt){
+      const path=`${binId}/${uid()}.jpg`;
+      const {error}=await sb.storage.from(BUCKET).upload(path,blob,{contentType:'image/jpeg',upsert:false});
+      if(error) throw error;
+      return q(sb.from('pile_photos').insert({bin_id:binId,path,taken_at:takenAt}));
+    },
     async session(){ const {data}=await sb.auth.getSession(); return data.session; },
     // Email + password sign-in. No emails are sent. Accounts are created by an admin in
     // Supabase (the sign-in pool is shared with other production apps); access to the yard
@@ -504,7 +548,8 @@ function LiveAdapter(cfg){
       const onHand={}; levels.forEach(l=>onHand[l.bin_id]=Number(l.on_hand_yd));
       const shopifyLines=lines.map(l=>({...l,order_name:l.shopify_orders?.order_name,customer_name:l.shopify_orders?.customer_name,ordered_at:l.shopify_orders?.created_at_shopify||l.created_at}));
       const st={}; settings.forEach(s=>st[s.key]=s.value);
-      return {products,bins,onHand,movements,internalOrders,shopifyLines,backfills,hauls,debris,settings:st,
+      const photos=await loadPhotos();
+      return {products,bins,onHand,movements,internalOrders,shopifyLines,backfills,hauls,debris,photos,settings:st,
         me:{id:user.id,name:profile?.full_name||user.email,role:profile?.role||null}};
     },
     async insert(t,row){ const clean={...row}; delete clean.created_by_name; return q(sb.from(t).insert(clean).select().single()); },
@@ -541,6 +586,7 @@ const can={
   setup:()=>has('inventory','admin'),
   binCapacity:()=>has('hauling','inventory','admin'),
   debris:()=>has('admin','inventory','hauling','debris'),   // Yard Debris: Jeff, Kevin, Mike, admins
+  photo:()=>has('inventory','admin'),                        // pile photos: Jeff and admins
 };
 const tabsFor=()=> (ROLES[role()]||ROLES.viewer).tabs;
 
@@ -570,7 +616,7 @@ function derive(){
     const re=Number(b.reorder_yd)||0, cap=Number(b.capacity_yd)||0;
     let st='ok';
     if(!b.product_id) st='empty';
-    else if(b.site==='debris') st='debris';   // no low / full warnings on the debris piles (for now)
+    else if(b.site==='debris') st=overAlert(b)?'alert':'debris';   // debris: only the "over N" alert, no low/full
     else if(onHand<=0) st='out';
     else if(onHand<=re) st='low';
     else if(cap&&onHand>cap) st='over';
@@ -584,7 +630,7 @@ function derive(){
   d.shopToday=r1(todayMv.filter(m=>m.kind==='shopify'&&(m.occurred_on||m.created_at.slice(0,10))===isoDay()).reduce((s,m)=>s-Number(m.qty_yd),0));
   D=d;
 }
-const ST_CHIP={debris:['Yard debris','c-mute'],ok:['OK','c-ok'],low:['Low','c-warn'],watch:['Watch','c-warn'],out:['Out','c-bad'],over:['Over cap','c-info'],empty:['No product','c-mute']};
+const ST_CHIP={debris:['Yard debris','c-mute'],alert:['Over alert level','c-bad'],ok:['OK','c-ok'],low:['Low','c-warn'],watch:['Watch','c-warn'],out:['Out','c-bad'],over:['Over cap','c-info'],empty:['No product','c-mute']};
 const prodName=id=>D.product[id]?.name||'Unassigned';
 const binLabel=id=>{ const b=D.bin[id]; return b?b.code:'—'; };
 
@@ -611,7 +657,8 @@ function qtyField(name='qty', label='Volume', val=''){
 const toYd=(fd,name='qty')=> r1(Number(fd.get(name))*(fd.get(name+'_unit')==='unit'?ydu():1));
 function gauge(b,s){
   const cap=Math.max(Number(b.capacity_yd)||1,1), pct=Math.max(0,Math.min(1,s.onHand/cap));
-  const base=56, H=44, y=base-pct*H, ry=base-Math.min(1,(Number(b.reorder_yd)||0)/cap)*H;
+  const line=b.site==='debris'?Number(b.alert_over_yd)||0:Number(b.reorder_yd)||0;   // debris: the alert level
+  const base=56, H=44, y=base-pct*H, ry=base-Math.min(1,line/cap)*H;
   const id='g'+String(b.id).replace(/[^a-z0-9]/gi,'');
   return `<svg class="gauge" viewBox="0 0 140 62" role="img" aria-label="${esc(b.code)} is ${Math.round(pct*100)}% full">
     <defs><clipPath id="${id}"><polygon points="16,56 52,12 88,12 124,56"/></clipPath></defs>
@@ -628,6 +675,61 @@ function statusChip(s){
   const [t,c]=map[s]||[s,'c-mute']; return `<span class="chip ${c}">${esc(t)}</span>`;
 }
 const confirmBtn=(act,label,attrs,cls='')=>`<button class="btn sm ${cls}" data-act="${act}" data-confirm="${esc(label)}" ${attrs}>${esc(label)}</button>`;
+
+/* ---------- Pile photos ----------
+   Jeff can photograph a pile (Green Waste). The photo is shrunk, stamped with the date it was
+   taken (from the camera's EXIF data, else the file's date), and stays on the pile until the
+   next grind is recorded there; the database then clears it (trg_debris_photo_clear). */
+function exifDate(buf){   // DateTimeOriginal (or DateTime) from a JPEG, else null
+  try{
+    const v=new DataView(buf); if(v.getUint16(0)!==0xFFD8) return null; let o=2;
+    while(o+4<v.byteLength){
+      const m=v.getUint16(o), len=v.getUint16(o+2);
+      if(m===0xFFE1&&v.getUint32(o+4)===0x45786966){
+        const t=o+10, le=v.getUint16(t)===0x4949, u16=p=>v.getUint16(p,le), u32=p=>v.getUint32(p,le);
+        const str=(p,n)=>{ let r=''; for(let i=0;i<n;i++){ const c=v.getUint8(p+i); if(!c) break; r+=String.fromCharCode(c); } return r; };
+        const find=(p,tag)=>{ const n=u16(p); for(let i=0;i<n;i++){ const e=p+2+i*12; if(u16(e)===tag) return e; } return null; };
+        const ifd0=t+u32(t+4), subE=find(ifd0,0x8769), dE=(subE&&find(t+u32(subE+8),0x9003))||find(ifd0,0x0132);
+        const d=dE&&/^(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/.exec(str(t+u32(dE+8),19));
+        return d?new Date(+d[1],d[2]-1,+d[3],+d[4],+d[5],+d[6]):null;
+      }
+      if(m===0xFFDA) break; o+=2+len;
+    }
+  }catch{}
+  return null;
+}
+const photoWhen=d=>new Date(d).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+async function preparePhoto(file,label){
+  if(file.type&&!/^image\//.test(file.type)) throw new ValidationError('Choose a photo.');
+  if(file.size>30*1024*1024) throw new ValidationError('That photo is too large.');
+  const buf=await file.arrayBuffer(), now=Date.now(), ok=d=>d&&d<=now+864e5&&d>=now-365*864e5;
+  let taken=exifDate(buf);
+  if(!ok(taken)) taken=ok(file.lastModified)?new Date(file.lastModified):new Date();
+  let img; try{ img=await createImageBitmap(new Blob([buf],{type:file.type||'image/jpeg'})); }
+  catch{ throw new ValidationError('That photo format isn’t supported. Take a new photo or choose a JPEG.'); }
+  const sc=Math.min(1,1600/Math.max(img.width,img.height)), c=document.createElement('canvas');
+  c.width=Math.round(img.width*sc); c.height=Math.round(img.height*sc);
+  const x=c.getContext('2d'); x.drawImage(img,0,0,c.width,c.height);
+  // Stamp the date on the picture itself.
+  const txt=`${label} · ${photoWhen(taken)}`, fs=Math.max(16,Math.round(c.width/34)), pad=Math.round(fs*.6);
+  x.font=`600 ${fs}px system-ui, -apple-system, sans-serif`; const w=x.measureText(txt).width+pad*2, h=fs+pad*2;
+  x.fillStyle='rgba(0,0,0,.62)'; x.fillRect(0,c.height-h,Math.min(w,c.width),h);
+  x.fillStyle='#fff'; x.textBaseline='middle'; x.fillText(txt,pad,c.height-h/2);
+  // Re-encoding also drops the original's metadata (GPS location etc.).
+  const blob=await new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error('Couldn’t process the photo.')),'image/jpeg',.82));
+  return {blob,takenAt:taken};
+}
+const pilePhoto=b=>(S.photos||[]).filter(p=>p.bin_id===b.id&&!p.cleared_at).sort((a,c)=>String(c.uploaded_at).localeCompare(String(a.uploaded_at)))[0]||null;
+function photoSection(b){
+  if(!b.photo_until_grind) return '';
+  const p=pilePhoto(b);
+  const btn=can.photo()?`<label class="btn sm ${p?'':'primary'}" style="cursor:pointer">${p?'Replace photo':'📷 Add photo'}<input type="file" accept="image/*" data-act-change="pilePhoto" data-id="${b.id}" hidden></label>`:'';
+  return `<div class="pile-photo">
+    ${p?`<figure><img src="${esc(p.url||'')}" alt="${esc(prodName(b.product_id))} photo, ${esc(photoWhen(p.taken_at))}" loading="lazy">
+      <figcaption><b>Taken ${esc(photoWhen(p.taken_at))}</b>${p.uploaded_by_name?' · by '+esc(p.uploaded_by_name):''}<br><span class="muted">Stays until the next grind is recorded.</span></figcaption></figure>`
+      :`<p class="muted" style="margin:0">No photo since the last grind.</p>`}
+    ${btn}</div>`;
+}
 
 /* =============================================================
    Views
@@ -723,11 +825,11 @@ function binCard(b){
 const isPhone=()=>{ try{ return window.matchMedia('(max-width: 720px)').matches; }catch{ return false; } };
 const ZONES={T:'Top row · 150 yd bins',L:'Left side · aggregates',M:'Center row',R:'Right center row',E:'Other'};
 function mapTilePhone(b){
-  const s=D.stats[b.id]; const pct=Math.max(0,Math.min(100,s.onHand/Math.max(1,Number(b.capacity_yd)||1)*100));
-  return `<button class="ptile st-${s.st} ${UI.selBin===b.id?'sel':''}" data-act="selBin" data-id="${b.id}" aria-label="${esc(prodName(b.product_id))}, bin ${esc(b.code)}: ${fmtN(s.onHand)} of ${fmtN(b.capacity_yd)} cubic yards, ${ST_CHIP[s.st][0]}">
+  const s=D.stats[b.id]; const pct=hasCap(b)?Math.max(0,Math.min(100,s.onHand/Math.max(1,Number(b.capacity_yd)||1)*100)):0;
+  return `<button class="ptile st-${s.st} ${UI.selBin===b.id?'sel':''}" data-act="selBin" data-id="${b.id}" aria-label="${esc(prodName(b.product_id))}, bin ${esc(b.code)}: ${fmtN(bQty(b,s.onHand))} of ${fmtN(bQty(b,b.capacity_yd))} ${inUnits(b)?'units':'cubic yards'}, ${ST_CHIP[s.st][0]}">
       <span class="pt-top"><span class="pt-name">${esc(b.product_id?prodName(b.product_id):'Empty')}</span><span class="tcode">${esc(b.code)}</span></span>
-      <span class="pt-bar"><i style="width:${pct.toFixed(0)}%"></i></span>
-      <span class="pt-num num"><b>${fmtN(s.onHand)}</b> / ${fmtN(b.capacity_yd)} yd³${s.out?` <span class="f out">▼${fmtN(s.out)}</span>`:''}${s.inc?` <span class="f in">▲${fmtN(s.inc)}</span>`:''}</span>
+      ${hasCap(b)?`<span class="pt-bar"><i style="width:${pct.toFixed(0)}%"></i></span>`:''}
+      <span class="pt-num num">${hasCap(b)?`<b>${fmtN(bQty(b,s.onHand))}</b> / ${fmtB(b,b.capacity_yd)}`:`<b>${fmtB(b,s.onHand)}</b>`}${s.out?` <span class="f out">▼${fmtN(s.out)}</span>`:''}${s.inc?` <span class="f in">▲${fmtN(s.inc)}</span>`:''}</span>
     </button>`;
 }
 function yardMapPhone(){
@@ -749,14 +851,15 @@ function yardMap(bins=D.activeBins,{landmarks=S.settings.yard_landmarks||[],minC
   const n=v=>Math.max(1,Math.min(500,Math.trunc(Number(v))||1));
   const pos=(x,y,w,h)=>`grid-column:${n(x)} / span ${n(w)};grid-row:${n(y-minY+1)} / span ${n(h)}`;
   const tiles=placed.map(b=>{
-    const s=D.stats[b.id]; const pct=Math.max(0,Math.min(100,s.onHand/Math.max(1,Number(b.capacity_yd)||1)*100));
-    const flags=(s.out?`<span class="f out">▼${fmtN(s.out)}</span>`:'')+(s.inc?`<span class="f in">▲${fmtN(s.inc)}</span>`:'');
+    const s=D.stats[b.id]; const pct=hasCap(b)?Math.max(0,Math.min(100,s.onHand/Math.max(1,Number(b.capacity_yd)||1)*100)):0;
+    const ph=b.photo_until_grind&&pilePhoto(b);
+    const flags=(s.out?`<span class="f out">▼${fmtN(s.out)}</span>`:'')+(s.inc?`<span class="f in">▲${fmtN(s.inc)}</span>`:'')+(ph?`<span class="f" title="Photo ${esc(photoWhen(ph.taken_at))}">📷</span>`:'');
     return `<button class="tile st-${s.st} ${UI.selBin===b.id?'sel':''}" style="${pos(b.map_x,b.map_y,b.map_w,b.map_h)}" data-act="selBin" data-id="${b.id}"
-        aria-label="${esc(b.code)} ${esc(prodName(b.product_id))}: ${fmtN(s.onHand)} of ${fmtN(b.capacity_yd)} cubic yards, ${ST_CHIP[s.st][0]}">
+        aria-label="${esc(b.code)} ${esc(prodName(b.product_id))}: ${fmtN(bQty(b,s.onHand))} of ${fmtN(bQty(b,b.capacity_yd))} ${inUnits(b)?'units':'cubic yards'}, ${ST_CHIP[s.st][0]}">
       <i class="lvl" style="height:${pct.toFixed(0)}%"></i>
       <span class="tcode">${esc(b.code)}</span>
       <span class="tt">${esc(b.product_id?prodName(b.product_id):'Empty')}</span>
-      <span class="tv num">${fmtN(s.onHand)}<small>/${fmtN(b.capacity_yd)}</small>${flags}</span>
+      <span class="tv num">${fmtN(bQty(b,s.onHand))}<small>${hasCap(b)?'/'+fmtN(bQty(b,b.capacity_yd)):''}${inUnits(b)?' units':hasCap(b)?'':' yd³'}</small>${flags}</span>
     </button>`;
   }).join('');
   const marks=lms.map(l=>`<div class="mark mk-${esc(l.kind||'x')}" style="${pos(l.x,l.y,l.w,l.h)}">${esc(l.label)}</div>`).join('');
@@ -776,28 +879,32 @@ const debrisKindFilter={intake:b=>b.debris_role!=='ground',grind:b=>b.debris_rol
 const tsDay=t=>{ const d=new Date(t); return isNaN(d)?String(t||'').slice(0,10):d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
 const haulerName=h=>/^\d+$/.test(h||'')?'Truck '+h:(h||'');
 function debrisBinOpts(filter,sel){
-  return D.debrisBins.filter(filter).map(b=>`<option value="${b.id}" ${b.id===sel?'selected':''}>${esc(prodName(b.product_id))} (${fmtN(D.stats[b.id].onHand)} yd³)</option>`).join('');
+  return D.debrisBins.filter(filter).map(b=>`<option value="${b.id}" data-unit="${inUnits(b)?'unit':'yd'}" ${b.id===sel?'selected':''}>${esc(prodName(b.product_id))} (${fmtB(b,D.stats[b.id].onHand)})</option>`).join('');
 }
 function debrisFields(kind,bin){
   // bin given → the pop-up for that pile: the pile is fixed.
   const pick=(label)=>{ const opts=D.debrisBins.filter(debrisKindFilter[kind]);
     return bin ? `<input type="hidden" name="bin_id" value="${esc(bin.id)}">`
-      : `<label class="field"><span>${label}</span><select name="bin_id" required>${opts.length>1?'<option value="">Choose…</option>':''}${debrisBinOpts(debrisKindFilter[kind])}</select></label>`; };
-  const num=(name,label)=>`<label class="field"><span>${label}</span><input name="${name}" type="number" step="0.25" min="0.25" required inputmode="decimal"></label>`;
+      : `<label class="field"><span>${label}</span><select name="bin_id" required data-act-change="debrisBinUnit">${opts.length>1?'<option value="">Choose…</option>':''}${debrisBinOpts(debrisKindFilter[kind])}</select></label>`; };
+  // Amount + unit. Defaults to the pile's own unit (units for Green Waste / Ground Debris).
+  // units=true → always starts in units (Record grind).
+  const num=(name,label,ub,units=false)=>`<label class="field wide"><span>${label}</span><div class="qty">
+    <input name="${name}" type="number" step="0.25" min="0.25" required inputmode="decimal">
+    <select name="${name}_unit" aria-label="Unit"${name==='qty'&&!units?' data-follows-bin':''}><option value="yd">yd³</option><option value="unit" ${units||inUnits(ub)?'selected':''}>units (${fmtN(ydu())} yd³)</option></select></div></label>`;
   const date=`<label class="field"><span>Date</span><input name="happened_on" type="date" value="${isoDay()}"></label>`;
   const notes=`<label class="field full"><span>Notes</span><input name="notes" maxlength="500"></label>`;
-  if(kind==='intake') return pick('Pile')+num('qty','Volume yd³')+
+  if(kind==='intake') return pick('Pile')+num('qty','Volume',bin)+
     `<label class="field"><span>From</span><input name="source" maxlength="120" placeholder="Customer, crew or job"></label>`+date+notes;
   if(kind==='grind'){
     const grounds=D.debrisBins.filter(b=>b.debris_role==='ground');
     const to=grounds.length===1?`<input type="hidden" name="to_bin_id" value="${esc(grounds[0].id)}">`
       :`<label class="field"><span>Ground onto</span><select name="to_bin_id" required>${debrisBinOpts(b=>b.debris_role==='ground')}</select></label>`;
-    return pick('Ground from')+to+num('qty','Amount ground (yd³)')+num('to_qty','Ground made (yd³)')+date+notes;
+    return pick('Ground from')+to+num('qty','Amount ground',bin,true)+num('to_qty','Ground made',grounds[0],true)+date+notes;
   }
   return pick('Pile')+
     `<label class="field"><span>Truck</span><select name="truck_sel" data-act-change="debrisTruck">${trucks().map(t=>`<option value="${esc(t.no)}">Truck ${esc(t.no)}</option>`).join('')}<option value="other">Outside hauler</option></select></label>
     <label class="field" data-other-truck hidden><span>Hauler name</span><input name="truck_other" maxlength="40"></label>
-    <label class="field"><span>Loads</span><input name="loads" type="number" min="1" max="50" step="1" value="1"></label>`+num('qty','Volume yd³')+date+
+    <label class="field"><span>Loads</span><input name="loads" type="number" min="1" max="50" step="1" value="1"></label>`+num('qty','Volume',bin)+date+
     `<label class="field"><span>Status</span><select name="status"><option value="done">Hauled already (take out now)</option><option value="scheduled">Schedule (confirm when hauled)</option></select></label>`+notes;
 }
 const DEBRIS_FORMS={intake:['Add debris','order','Add to pile'],grind:['Record grind','primary','Save grind'],removal:['Haul away','take','Save removal']};
@@ -806,18 +913,21 @@ function debrisCard(b){
   return `<article class="bin st-${s.st}">
     <div class="bin-h"><span class="prod">${esc(prodName(b.product_id))}</span></div>
     <div class="code">Pile ${esc(b.code)}</div>
-    ${gauge(b,s)}
-    <div class="level"><b class="num">${fmtN(s.onHand)}</b><span class="of">of ${fmtN(b.capacity_yd)} yd³</span></div>
+    ${hasCap(b)?gauge(b,s):''}
+    <div class="level"><b class="num">${fmtN(bQty(b,s.onHand))}</b><span class="of">${hasCap(b)?'of '+fmtB(b,b.capacity_yd):bUnit(b)+' on the pile'}</span></div>
+    ${inUnits(b)?`<div class="muted" style="font-size:.8rem">${fmtYd(s.onHand)} · 1 unit = ${fmtN(ydu())} yd³</div>`:''}
+    ${Number(b.alert_over_yd)>0?`<div style="font-size:.8rem;color:var(--${s.st==='alert'?'bad':'muted'})">${s.st==='alert'?'⚠ Over':'Alert over'} ${fmtB(b,b.alert_over_yd)}</div>`:''}
     <div class="muted" style="font-size:.8rem">${esc(DEBRIS_HINT[b.debris_role]||'')}</div>
   </article>`;
 }
+const debrisAlerts=()=>(D?.debrisBins||[]).filter(overAlert);
 const debrisDue=()=>S.debris.filter(e=>e.kind==='removal'&&e.status==='scheduled'&&dayDiff(e.happened_on)<=0).length;
 function debrisRemovalRow(e){
   const late=dayDiff(e.happened_on)<0;
   return `<div class="row">
     <span class="chip c-warn">Removal</span>
     <div class="main"><span class="t">${esc(prodName(D.bin[e.bin_id]?.product_id))}</span><span class="m">${esc(haulerName(e.hauler))}${e.loads>1?' × '+e.loads+' loads':''}${e.notes?' · '+esc(e.notes):''} · Scheduled by ${esc(e.created_by_name||'—')}</span></div>
-    <span class="vol">${fmtN(e.qty_yd)} yd³</span>
+    <span class="vol">${fmtB(D.bin[e.bin_id],e.qty_yd)}</span>
     <span class="date">${esc(fmtDate(e.happened_on))}${late?' <span class="chip c-bad">Late</span>':''}</span>
     <span class="act">${can.debris()?`<button class="btn sm order" data-act="debrisDone" data-id="${e.id}">Confirm removed</button>${confirmBtn('debrisCancel','Cancel',`data-id="${e.id}"`,'cancel')}`:''}</span></div>`;
 }
@@ -836,6 +946,7 @@ VIEWS.debris={
           <form class="form" data-form="debris" data-kind="${f}" autocomplete="off">${debrisFields(f,null)}
           <div class="form-actions full"><button class="btn ${cls}">${esc(btn)}</button></div></form></div>`:''}
         <p class="muted" style="margin:0;font-size:.85rem">Tip fees and intake add to the piles. Grinding moves green waste and wood debris onto Ground Debris. Removals take debris away. Tap a pile for its details.</p>
+        <div class="alerts" data-dyn="dAlerts"></div>
         <div data-dyn="dMap"></div>
       </div>
       <aside class="sec">
@@ -862,6 +973,11 @@ VIEWS.debris={
       if(!D.debrisBins.length) return `<div class="empty panel">No Yard Debris piles yet. Run schema.sql to add them.</div>`;
       return yardMap(D.debrisBins,{landmarks:[],minCols:10,colMin:'0',phone:()=>`<div class="ptiles">${D.debrisBins.map(mapTilePhone).join('')}</div>`});
     },
+    dAlerts(){
+      return debrisAlerts().map(b=>{ const s=D.stats[b.id];
+        return `<div class="alert" style="--c:var(--bad)"><p><b>${esc(prodName(b.product_id))}</b> is over ${fmtB(b,b.alert_over_yd)}: ${fmtB(b,s.onHand)} on the pile. Time to haul some away.</p>
+          ${can.debris()?`<div class="btns"><button class="btn sm take" data-act="debrisHaul" data-id="${b.id}">Haul away</button></div>`:''}</div>`; }).join('');
+    },
     dSched(){
       const list=S.debris.filter(e=>e.kind==='removal'&&e.status==='scheduled').sort((a,b)=>a.happened_on.localeCompare(b.happened_on));
       return list.map(debrisRemovalRow).join('')||`<div class="empty">No removals scheduled.</div>`;
@@ -870,20 +986,20 @@ VIEWS.debris={
       const ev=S.debris.filter(e=>e.status!=='scheduled'&&dayDiff(e.happened_on)>=-14).map(e=>{
         const b=D.bin[e.bin_id], tb=D.bin[e.to_bin_id];
         const title=e.kind==='grind'?`${prodName(b?.product_id)} → ${prodName(tb?.product_id)}`:prodName(b?.product_id);
-        const meta=[e.kind==='grind'?`${fmtN(e.qty_yd)} yd³ used, ${fmtN(e.to_qty_yd)} yd³ made`:'',e.source,e.hauler&&haulerName(e.hauler)+(e.loads>1?' × '+e.loads:''),e.notes,e.created_by_name&&'by '+e.created_by_name].filter(Boolean).join(' · ');
+        const meta=[e.kind==='grind'?`${fmtB(b,e.qty_yd)} used, ${fmtB(tb,e.to_qty_yd)} made`:'',e.source,e.hauler&&haulerName(e.hauler)+(e.loads>1?' × '+e.loads:''),e.notes,e.created_by_name&&'by '+e.created_by_name].filter(Boolean).join(' · ');
         const sign=e.kind==='intake'?1:e.kind==='removal'?-1:0;
-        return {kind:e.kind,id:e.id,date:e.happened_on,at:e.created_at,title,meta,qty:e.kind==='grind'?e.to_qty_yd:e.qty_yd,sign,cancelled:e.status==='cancelled',undo:e.status==='done'&&can.debris()?confirmBtn('debrisUndo','Undo',`data-id="${e.id}"`,'ghost'):''};
+        return {kind:e.kind,id:e.id,date:e.happened_on,at:e.created_at,title,meta,qty:e.kind==='grind'?e.to_qty_yd:e.qty_yd,qb:e.kind==='grind'?tb:b,sign,cancelled:e.status==='cancelled',undo:e.status==='done'&&can.debris()?confirmBtn('debrisUndo','Undo',`data-id="${e.id}"`,'ghost'):''};
       });
       const tips=S.shopifyLines.filter(l=>['pulled','ignored','cancelled'].includes(l.status)&&l.product_id&&D.bin[D.lineBin(l)]?.site==='debris'&&dayDiff(tsDay(l.ordered_at||l.created_at))>=-14).map(l=>({
         kind:'shopify',id:l.id,date:tsDay(l.ordered_at||l.created_at),at:l.ordered_at||l.created_at,title:prodName(l.product_id),
-        meta:`${l.order_name||'Shopify'} · ${l.customer_name||''} · ${l.variant_title||''}${l.quantity>1?' × '+l.quantity:''}`,qty:l.qty_yd,sign:1,cancelled:l.status!=='pulled',
+        meta:`${l.order_name||'Shopify'} · ${l.customer_name||''} · ${l.variant_title||''}${l.quantity>1?' × '+l.quantity:''}`,qty:l.qty_yd,qb:D.bin[D.lineBin(l)],sign:1,cancelled:l.status!=='pulled',
         undo:l.status==='pulled'&&can.pull()?confirmBtn('reverseShop','Reverse',`data-id="${l.id}"`,'ghost'):''}));
       const rows=[...ev,...tips].sort((a,b)=>b.date.localeCompare(a.date)||String(b.at).localeCompare(String(a.at))).slice(0,60);
       if(!rows.length) return `<div class="empty">Nothing in the last 14 days.</div>`;
       return rows.map(r=>{ const [l,c]=DEBRIS_KIND[r.kind];
         return `<div class="row ${r.cancelled?'dim':''}"><span class="chip ${r.cancelled?'c-mute':c}">${r.cancelled?'Undone':l}</span>
           <div class="main"><span class="t">${esc(r.title)}</span><span class="m">${esc(r.meta)}</span></div>
-          <span class="vol" style="color:var(--${r.sign<0?'bad':r.sign>0?'ok':'ink'})">${r.sign<0?'−':r.sign>0?'+':''}${fmtN(r.qty)} yd³</span>
+          <span class="vol" style="color:var(--${r.sign<0?'bad':r.sign>0?'ok':'ink'})">${r.sign<0?'−':r.sign>0?'+':''}${fmtB(r.qb,r.qty)}</span>
           <span class="date">${esc(fmtDate(r.date))}</span><span class="act">${r.undo}</span></div>`; }).join('');
     },
   },
@@ -1125,6 +1241,9 @@ VIEWS.setup={
           <label class="field"><span>Map column (1–8)</span><input id="bn-mx" name="map_x" type="number" min="1" max="12" step="1" value="${esc(eb?.map_x??'')}"></label>
           <label class="field"><span>Map row</span><input id="bn-my" name="map_y" type="number" min="1" step="1" value="${esc(eb?.map_y??'')}"></label>
           <label class="field"><span>Map height (rows)</span><input id="bn-mh" name="map_h" type="number" min="1" step="1" value="${esc(eb?.map_h??3)}"></label>
+          ${eb?.site==='debris'?`<label class="field"><span>Show amounts in</span><select name="display_unit"><option value="yd3">yd³</option><option value="units" ${inUnits(eb)?'selected':''}>units (${fmtN(ydu())} yd³)</option></select></label>
+          <label class="field"><span><input type="checkbox" name="no_capacity" ${eb.no_capacity?'checked':''}> No capacity (just track the volume)</span></label>
+          <label class="field"><span>Alert when over (in that unit; blank = off)</span><input name="alert_over" type="number" min="0" step="0.5" value="${Number(eb.alert_over_yd)>0?esc(r1(bQty(eb,eb.alert_over_yd))):''}"></label>`:''}
           <label class="field"><span><input type="checkbox" name="active" ${eb?.active===false?'':'checked'}> Active</span></label>
           <div class="form-actions full"><button class="btn primary">${eb?'Save bin':'Add bin'}</button>${eb?'<button type="button" class="btn ghost" data-act="editBin" data-id="">Cancel</button>':''}</div>
         </form></div>
@@ -1184,7 +1303,7 @@ function header(){
   const badge=t=> t==='pulls'&&pullBadge&&can.pull()?`<span class="badge">${pullBadge}</span>`
     : t==='backfill'&&has('hauling')&&kevinBadge?`<span class="badge">${kevinBadge}</span>`
     : t==='backfill'&&can.confirmDelivery()&&confirmBadge?`<span class="badge" title="Deliveries to confirm">${confirmBadge}</span>`
-    : t==='debris'&&can.debris()&&debrisDue()?`<span class="badge" title="Removals due">${debrisDue()}</span>`:'';
+    : t==='debris'&&(debrisAlerts().length||(can.debris()&&debrisDue()))?`<span class="badge" title="Piles over their alert level, removals due">${debrisAlerts().length+(can.debris()?debrisDue():0)}</span>`:'';
   const who = A.mode==='demo'
     ? `<label class="who"><span>Viewing as</span><select id="demo-user" data-act-change="demoUser">${DEMO_USERS.map(u=>`<option value="${u.id}" ${u.name===S.me.name?'selected':''}>${esc(u.name)} · ${ROLES[u.role].label}</option>`).join('')}</select></label>`
     : `<span class="who">${esc(S.me.name)} · ${esc((ROLES[role()]||ROLES.viewer).label)} <button class="btn sm ghost" style="color:inherit" data-act="changePw">Change password</button><button class="btn sm ghost" style="color:inherit" data-act="signOut">Sign out</button></span>`;
@@ -1276,15 +1395,16 @@ function debrisModalHTML(b,head,name){
   const label=t=>`<div class="muted" style="font:500 .7rem var(--f-mono);text-transform:uppercase;letter-spacing:.08em">${t}</div>`;
   return head(name,`Yard Debris · Pile ${b.code}`)+`
     ${debrisCard(b)}
+    ${photoSection(b)}
     ${can.debris()||can.adjust()?`<div class="bm-actions">
       ${can.debris()&&b.debris_role!=='ground'?'<button class="btn order" data-act="binMode" data-v="intake">Add debris</button>':''}
       ${can.debris()&&b.debris_role==='grind'?'<button class="btn" data-act="binMode" data-v="grind">Record grind</button>':''}
       ${can.debris()?'<button class="btn take" data-act="binMode" data-v="removal">Haul away</button>':''}
       ${can.adjust()?'<button class="btn" data-act="binMode" data-v="count">Count pile</button>':''}</div>`:''}
     ${sched.length?label('Scheduled removals')+`<div class="rows">${sched.map(debrisRemovalRow).join('')}</div>`:''}
-    ${recent.length?label('Recent activity')+`<div class="timeline">${recent.map(m=>`<div class="tl"><span class="d">${esc(fmtDate(m.occurred_on||m.created_at.slice(0,10)))}</span><span>${esc(m.note||m.kind)}</span><span class="q num ${m.qty_yd<0?'neg':'pos'}">${signed(Number(m.qty_yd))}</span></div>`).join('')}</div>`:''}
-    ${can.binCapacity()?`<form class="cap-form" data-form="binCap" data-id="${b.id}" autocomplete="off">
-      <label class="field"><span>Pile capacity</span><div class="qty"><input id="cap-${b.id}" name="capacity" type="number" min="1" step="0.5" inputmode="decimal" value="${esc(b.capacity_yd)}" required><span class="cap-unit">yd³</span></div></label>
+    ${recent.length?label('Recent activity')+`<div class="timeline">${recent.map(m=>`<div class="tl"><span class="d">${esc(fmtDate(m.occurred_on||m.created_at.slice(0,10)))}</span><span>${esc(m.note||m.kind)}</span><span class="q num ${m.qty_yd<0?'neg':'pos'}">${signed(bQty(b,m.qty_yd))}</span></div>`).join('')}</div>`:''}
+    ${can.binCapacity()&&hasCap(b)?`<form class="cap-form" data-form="binCap" data-id="${b.id}" data-unit="${inUnits(b)?'unit':'yd'}" autocomplete="off">
+      <label class="field"><span>Pile capacity</span><div class="qty"><input id="cap-${b.id}" name="capacity" type="number" min="1" step="0.5" inputmode="decimal" value="${esc(r1(bQty(b,b.capacity_yd)))}" required><span class="cap-unit">${bUnit(b)}</span></div></label>
       <button class="btn sm">Save capacity</button></form>`:''}`;
 }
 function renderBinModal(){
@@ -1370,6 +1490,7 @@ const ACT={
   cancelReq(d){ run(()=>A.update('backfill_requests',d.id,{status:'cancelled'}),'Request cancelled.'); },
   haulStatus(d){ run(()=>A.update('hauls',d.id,{status:d.v}), d.v==='delivered'?'Delivery confirmed. Volume added to the bin.':'Marked en route.'); },
   haulCancel(d){ run(()=>A.update('hauls',d.id,{status:'cancelled'}),'Haul cancelled.'); },
+  debrisHaul(d){ UI.selBin=d.id; UI.binMode='removal'; renderBinModal(); },
   debrisForm(d){ UI.debrisForm=d.v||null; render(); if(UI.debrisForm) $('[data-form="debris"] select, [data-form="debris"] [name=qty]')?.focus(); },
   debrisDone(d){ run(()=>A.update('debris_events',d.id,{status:'done'}),'Removal confirmed. Volume taken off the pile.'); },
   debrisCancel(d){ run(()=>A.update('debris_events',d.id,{status:'cancelled'}),'Removal cancelled.'); },
@@ -1427,6 +1548,15 @@ const CHANGE={
   custSel(el){ const w=$('#io-other-wrap'); if(w){ w.hidden=el.value!=='Other'; $('#io-other').required=el.value==='Other'; if(el.value==='Other') $('#io-other').focus(); } },
   demoUser(el){ A.setUser(el.value); reload({shell:true}); },
   ledgerBin(el){ UI.ledgerBin=el.value; renderDyn(true); },
+  async pilePhoto(el){
+    const file=el.files?.[0]; const b=D.bin[el.dataset.id]; el.value=''; if(!file||!b) return;
+    toast('Saving photo…');
+    let when;
+    await run(async()=>{ const {blob,takenAt}=await preparePhoto(file,prodName(b.product_id)); when=takenAt;
+      await A.uploadPhoto(b.id,blob,takenAt.toISOString()); });
+    if(when) toast(`Photo saved, dated ${photoWhen(when)}. It stays until the next grind.`);
+  },
+  debrisBinUnit(el){ const o=el.selectedOptions[0]; const u=el.closest('form')?.querySelector('[data-follows-bin]'); if(u&&o?.dataset.unit) u.value=o.dataset.unit; },
   debrisTruck(el){ const f=el.closest('form'); const o=f?.querySelector('[data-other-truck]'); if(!o) return; o.hidden=el.value!=='other'; const i=f.querySelector('[name=truck_other]'); i.required=el.value==='other'; if(el.value==='other') i.focus(); },
 };
 document.addEventListener('click',e=>{
@@ -1492,20 +1622,20 @@ const FORM={
   },
   async debris(fd,f){
     const kind=f.dataset.kind, inModal=!!f.dataset.modal;
-    const qty=r1(fd.get('qty')); if(!(qty>0)){ toast('Enter the volume.',true); return; }
+    const qty=toYd(fd,'qty'); if(!(qty>0)){ toast('Enter the volume.',true); return; }
     const b=D.bin[fd.get('bin_id')]; if(!b){ toast('Choose a pile.',true); return; }
     const row={kind,bin_id:b.id,qty_yd:qty,happened_on:fd.get('happened_on')||isoDay(),status:'done',notes:String(fd.get('notes')||'').trim()||null};
     const pn=prodName(b.product_id); let msg;
-    if(kind==='intake'){ row.source=String(fd.get('source')||'').trim()||null; msg=`Added ${fmtYd(qty)} to ${pn}.`; }
+    if(kind==='intake'){ row.source=String(fd.get('source')||'').trim()||null; msg=`Added ${fmtB(b,qty)} to ${pn}.`; }
     else if(kind==='grind'){
-      const tq=r1(fd.get('to_qty')); if(!(tq>0)){ toast('Enter how much ground material was made.',true); return; }
+      const tq=toYd(fd,'to_qty'); if(!(tq>0)){ toast('Enter how much ground material was made.',true); return; }
       row.to_bin_id=fd.get('to_bin_id'); row.to_qty_yd=tq;
-      msg=`Ground ${fmtYd(qty)} of ${pn} into ${fmtYd(tq)} of ${prodName(D.bin[row.to_bin_id]?.product_id)}.`;
+      msg=`Ground ${fmtB(b,qty)} of ${pn} into ${fmtB(D.bin[row.to_bin_id],tq)} of ${prodName(D.bin[row.to_bin_id]?.product_id)}.`;
     } else {
       const h=truckOf(fd); if(!h){ toast('Enter the hauler.',true); return; }
       row.hauler=h; row.loads=Math.max(1,parseInt(fd.get('loads'),10)||1);
       row.status=fd.get('status')==='scheduled'?'scheduled':'done';
-      msg=row.status==='done'?`Hauled away ${fmtYd(qty)} of ${pn}.`:`Removal scheduled: ${fmtYd(qty)} of ${pn}, ${whenDate(row.happened_on)}.`;
+      msg=row.status==='done'?`Hauled away ${fmtB(b,qty)} of ${pn}.`:`Removal scheduled: ${fmtB(b,qty)} of ${pn}, ${whenDate(row.happened_on)}.`;
     }
     if(row.status==='done'&&dayDiff(row.happened_on)>0){ toast(kind==='removal'?'A haul that already happened can’t be dated in the future. Choose “Schedule” instead.':'The date can’t be in the future.',true); return; }
     const ok=await run(()=>A.insert('debris_events',row),msg);
@@ -1525,10 +1655,10 @@ const FORM={
     if(ok){ UI.binMode='view'; renderBinModal(); }
   },
   async binCap(fd,f){
-    const b=D.bin[f.dataset.id]; const cap=r1(fd.get('capacity'));
+    const b=D.bin[f.dataset.id]; const cap=r1(Number(fd.get('capacity'))*(f.dataset.unit==='unit'?ydu():1));
     if(!(cap>0)){ toast('Enter a capacity above 0.',true); return; }
     if(cap===Number(b.capacity_yd)){ toast('Capacity unchanged.'); return; }
-    await run(()=>A.update('bins',b.id,{capacity_yd:cap}),`${prodName(b.product_id)} (${b.code}) capacity set to ${fmtYd(cap)}.`);
+    await run(()=>A.update('bins',b.id,{capacity_yd:cap}),`${prodName(b.product_id)} (${b.code}) capacity set to ${fmtB(b,cap)}.`);
   },
   async trucks(fd,f){
     const old=trucks(); const list=old.map(t=>({no:t.no,cap:{}}));
@@ -1569,8 +1699,13 @@ const FORM={
   },
   async bin(fd,f){
     const n=k=>{ const v=fd.get(k); return v===''||v==null?null:Number(v); };
-    const row={code:fd.get('code').trim(),product_id:fd.get('product_id')||null,capacity_yd:r1(fd.get('capacity_yd')),reorder_yd:r1(fd.get('reorder_yd')),sort:Number(fd.get('sort'))||0,active:!!fd.get('active'),map_x:n('map_x'),map_y:n('map_y'),map_w:1,map_h:n('map_h')||3};
-    const id=f.dataset.id;
+    const id=f.dataset.id, old=id?D.bin[id]:null;
+    const row={code:fd.get('code').trim(),product_id:fd.get('product_id')||null,capacity_yd:r1(fd.get('capacity_yd')),reorder_yd:r1(fd.get('reorder_yd')),sort:Number(fd.get('sort'))||0,active:!!fd.get('active'),map_x:n('map_x'),map_y:n('map_y'),map_w:old?.map_w||1,map_h:n('map_h')||3};
+    if(old?.site==='debris'){
+      row.display_unit=fd.get('display_unit')==='units'?'units':'yd3';
+      row.no_capacity=!!fd.get('no_capacity');
+      const a=n('alert_over'); row.alert_over_yd=a>0?r1(a*(row.display_unit==='units'?ydu():1)):null;
+    }
     UI.editBin=null;
     await run(()=>id?A.update('bins',id,row):A.insert('bins',row), id?'Bin saved.':'Bin added.');
     render();
