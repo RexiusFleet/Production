@@ -738,21 +738,16 @@ function photoTag(b,p){
   const g=photoBeforeGrind(b,p);
   return g?`<span class="ph-tag" title="This photo was taken before the last grind (${esc(fmtDate(g.happened_on))}), so the pile may look different now.">Before last grind · ${esc(fmtDate(g.happened_on))}</span>`:'';
 }
-function photoThumb(b,p,style){
-  return `<button class="map-photo" ${style?`style="${style}"`:''} data-act="selBin" data-id="${b.id}" aria-label="${esc(prodName(b.product_id))} photo, taken ${esc(photoWhen(p.taken_at))}">
-    <img src="${esc(p.url||'')}" alt="" loading="lazy">${photoTag(b,p)}
-    <span class="ph-date">📷 ${esc(photoShort(p.taken_at))}</span></button>`;
+// The photo inside its pile's tile (a <span>: the tile itself is the button).
+function photoInTile(b,p){
+  return `<span class="tphoto"><img src="${esc(p.url||'')}" alt="${esc(prodName(b.product_id))} photo, taken ${esc(photoWhen(p.taken_at))}" loading="lazy">${photoTag(b,p)}
+    <span class="ph-date">📷 ${esc(photoShort(p.taken_at))}</span></span>`;
 }
-// Place each pile's photo in the free space to the right of the pile on the map (up to 3 columns).
-function photoExtras({maxX,placed}){
-  return D.debrisBins.filter(b=>b.photo_until_grind&&b.map_x&&b.map_y).map(b=>{
-    const p=pilePhoto(b); if(!p) return null;
-    const x=b.map_x+(b.map_w||1), y0=b.map_y, y1=b.map_y+(b.map_h||1)-1;
-    const blockers=placed.filter(o=>o!==b&&o.map_x>=x&&o.map_y<=y1&&o.map_y+(o.map_h||1)-1>=y0).map(o=>o.map_x);
-    const w=Math.min(3,(blockers.length?Math.min(...blockers):maxX+1)-x);
-    if(w<1) return null;
-    return {x,y:y0,w,h:b.map_h||1,html:st=>photoThumb(b,p,st)};
-  }).filter(Boolean);
+// How many free map columns to the right of a pile its photo can use (up to 3).
+function photoCols(b,maxX,placed){
+  const x=b.map_x+(b.map_w||1), y0=b.map_y, y1=b.map_y+(b.map_h||1)-1;
+  const blockers=placed.filter(o=>o!==b&&o.map_x>=x&&o.map_y<=y1&&o.map_y+(o.map_h||1)-1>=y0).map(o=>o.map_x);
+  return Math.max(0,Math.min(3,(blockers.length?Math.min(...blockers):maxX+1)-x));
 }
 function photoSection(b){
   if(!b.photo_until_grind) return '';
@@ -858,12 +853,13 @@ function binCard(b){
 }
 const isPhone=()=>{ try{ return window.matchMedia('(max-width: 720px)').matches; }catch{ return false; } };
 const ZONES={T:'Top row · 150 yd bins',L:'Left side · aggregates',M:'Center row',R:'Right center row',E:'Other'};
-function mapTilePhone(b){
+function mapTilePhone(b,photo=null){
   const s=D.stats[b.id]; const pct=hasCap(b)?Math.max(0,Math.min(100,s.onHand/Math.max(1,Number(b.capacity_yd)||1)*100)):0;
-  return `<button class="ptile st-${s.st} ${UI.selBin===b.id?'sel':''}" data-act="selBin" data-id="${b.id}" aria-label="${esc(prodName(b.product_id))}, bin ${esc(b.code)}: ${fmtN(bQty(b,s.onHand))} of ${fmtN(bQty(b,b.capacity_yd))} ${inUnits(b)?'units':'cubic yards'}, ${ST_CHIP[s.st][0]}">
+  return `<button class="ptile st-${s.st} ${photo?'has-photo':''} ${UI.selBin===b.id?'sel':''}" data-act="selBin" data-id="${b.id}" aria-label="${esc(prodName(b.product_id))}, bin ${esc(b.code)}: ${fmtN(bQty(b,s.onHand))} of ${fmtN(bQty(b,b.capacity_yd))} ${inUnits(b)?'units':'cubic yards'}, ${ST_CHIP[s.st][0]}">
       <span class="pt-top"><span class="pt-name">${esc(b.product_id?prodName(b.product_id):'Empty')}</span><span class="tcode">${esc(b.code)}</span></span>
       ${hasCap(b)?`<span class="pt-bar"><i style="width:${pct.toFixed(0)}%"></i></span>`:''}
       <span class="pt-num num">${hasCap(b)?`<b>${fmtN(bQty(b,s.onHand))}</b> / ${fmtB(b,b.capacity_yd)}`:`<b>${fmtB(b,s.onHand)}</b>`}${s.out?` <span class="f out">▼${fmtN(s.out)}</span>`:''}${s.inc?` <span class="f in">▲${fmtN(s.inc)}</span>`:''}</span>
+      ${photo?photoInTile(b,photo):''}
     </button>`;
 }
 function yardMapPhone(){
@@ -873,7 +869,7 @@ function yardMapPhone(){
   return order.map(z=>`<section class="zone"><h3>${esc(ZONES[z]||z)}</h3><div class="ptiles">${groups[z].map(mapTilePhone).join('')}</div></section>`).join('');
 }
 // Retail Bins by default; the Yard Debris tab passes its own piles, no landmarks and 4 columns.
-function yardMap(bins=D.activeBins,{landmarks=S.settings.yard_landmarks||[],minCols=8,colMin='96px',phone=yardMapPhone,extras=null}={}){
+function yardMap(bins=D.activeBins,{landmarks=S.settings.yard_landmarks||[],minCols=8,colMin='96px',phone=yardMapPhone,cls='',photos=false}={}){
   if(isPhone()) return phone();
   const placed=bins.filter(b=>b.map_x&&b.map_y);
   const lms=(landmarks||[]).filter(l=>l&&l.x&&l.y);
@@ -886,20 +882,22 @@ function yardMap(bins=D.activeBins,{landmarks=S.settings.yard_landmarks||[],minC
   const pos=(x,y,w,h)=>`grid-column:${n(x)} / span ${n(w)};grid-row:${n(y-minY+1)} / span ${n(h)}`;
   const tiles=placed.map(b=>{
     const s=D.stats[b.id]; const pct=hasCap(b)?Math.max(0,Math.min(100,s.onHand/Math.max(1,Number(b.capacity_yd)||1)*100)):0;
-    const ph=b.photo_until_grind&&pilePhoto(b);
-    const flags=(s.out?`<span class="f out">▼${fmtN(s.out)}</span>`:'')+(s.inc?`<span class="f in">▲${fmtN(s.inc)}</span>`:'')+(ph?`<span class="f" title="Photo ${esc(photoWhen(ph.taken_at))}">📷</span>`:'');
-    return `<button class="tile st-${s.st} ${UI.selBin===b.id?'sel':''}" style="${pos(b.map_x,b.map_y,b.map_w,b.map_h)}" data-act="selBin" data-id="${b.id}"
+    const flags=(s.out?`<span class="f out">▼${fmtN(s.out)}</span>`:'')+(s.inc?`<span class="f in">▲${fmtN(s.inc)}</span>`:'');
+    // A pile photo is part of the pile's tile: the tile widens into the free space on its right.
+    const ph=photos&&b.photo_until_grind&&pilePhoto(b), pw=ph?photoCols(b,maxX,placed):0, w=(b.map_w||1)+pw;
+    const style=pos(b.map_x,b.map_y,w,b.map_h)+(pw?`;--ph:${(pw/w*100).toFixed(2)}%`:'');
+    return `<button class="tile st-${s.st} ${pw?'has-photo':''} ${UI.selBin===b.id?'sel':''}" style="${style}" data-act="selBin" data-id="${b.id}"
         aria-label="${esc(b.code)} ${esc(prodName(b.product_id))}: ${fmtN(bQty(b,s.onHand))} of ${fmtN(bQty(b,b.capacity_yd))} ${inUnits(b)?'units':'cubic yards'}, ${ST_CHIP[s.st][0]}">
       <i class="lvl" style="height:${pct.toFixed(0)}%"></i>
       <span class="tcode">${esc(b.code)}</span>
       <span class="tt">${esc(b.product_id?prodName(b.product_id):'Empty')}</span>
-      <span class="tv num">${fmtN(bQty(b,s.onHand))}<small>${hasCap(b)?'/'+fmtN(bQty(b,b.capacity_yd)):''}${inUnits(b)?' units':hasCap(b)?'':' yd³'}</small>${flags}</span>
+      <span class="tv num">${fmtN(bQty(b,s.onHand))}<small>${hasCap(b)?'/'+fmtN(bQty(b,b.capacity_yd)):''}${inUnits(b)?' units':hasCap(b)&&b.site!=='debris'?'':' yd³'}</small>${flags}</span>
+      ${pw?photoInTile(b,ph):''}
     </button>`;
   }).join('');
-  const marks=lms.map(l=>`<div class="mark mk-${esc(l.kind||'x')}" style="${pos(l.x,l.y,l.w,l.h)}">${esc(l.label)}</div>`).join('')
-    +(extras?extras({maxX,placed}).map(e=>e.html(pos(e.x,e.y,e.w,e.h))).join(''):'');   // e.g. pile photos beside their pile
+  const marks=lms.map(l=>`<div class="mark mk-${esc(l.kind||'x')}" style="${pos(l.x,l.y,l.w,l.h)}">${esc(l.label)}</div>`).join('');
   const off=bins.filter(b=>!(b.map_x&&b.map_y));
-  return `<div class="map-wrap"><div class="map" style="grid-template-columns:repeat(${maxX},minmax(${colMin},1fr));grid-template-rows:repeat(${maxY-minY+1},var(--rowh))">${tiles}${marks}</div></div>
+  return `<div class="map-wrap"><div class="map ${cls}" style="grid-template-columns:repeat(${maxX},minmax(${colMin},1fr));grid-template-rows:repeat(${maxY-minY+1},var(--rowh))">${tiles}${marks}</div></div>
     ${off.length?`<div class="muted" style="font-size:.82rem">Not on the map: ${off.map(b=>esc(b.code)).join(', ')}</div>`:''}`;
 }
 
@@ -1006,9 +1004,8 @@ VIEWS.debris={
     },
     dMap(){
       if(!D.debrisBins.length) return `<div class="empty panel">No Yard Debris piles yet. Run schema.sql to add them.</div>`;
-      return yardMap(D.debrisBins,{landmarks:[],minCols:10,colMin:'0',extras:photoExtras,
-        phone:()=>`<div class="ptiles">${D.debrisBins.map(b=>{ const p=b.photo_until_grind&&pilePhoto(b);
-          return mapTilePhone(b)+(p?`<div class="ptile-photo">${photoThumb(b,p,'')}</div>`:''); }).join('')}</div>`});
+      return yardMap(D.debrisBins,{landmarks:[],minCols:10,colMin:'0',cls:'map-debris',photos:true,
+        phone:()=>`<div class="ptiles ptiles-debris">${D.debrisBins.map(b=>mapTilePhone(b,b.photo_until_grind&&pilePhoto(b))).join('')}</div>`});
     },
     dAlerts(){
       return debrisAlerts().map(b=>{ const s=D.stats[b.id];
