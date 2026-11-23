@@ -725,6 +725,7 @@ code{font-family:var(--mono);font-size:12px;background:var(--surface-3);padding:
       </div>
     </div>
     <div class="tiles" id="reqTiles"></div>
+    <div id="reqWarn" style="margin-top:10px"></div>
     <div class="card" style="padding:0;overflow:hidden;margin-top:12px">
       <div style="max-height:62vh;overflow:auto">
         <table id="reqTable">
@@ -7394,14 +7395,35 @@ const Tracker = {
 
   async pull(){
     if(!this.configured) throw new Error('No tracker table configured');
-    const res = await fetch(this._url('?select=*&order=created_at.asc'), {headers:this._headers()});
-    if(!res.ok) throw new Error('tracker read '+res.status+' '+(await res.text()).slice(0,160));
+    let res;
+    try{
+      res = await fetch(this._url('?select=*&order=created_at.asc'), {headers:this._headers()});
+    }catch(e){
+      DB.trackerError = 'could not reach the tracker — ' + e.message;
+      Store.save();
+      throw new Error(DB.trackerError);
+    }
+    if(!res.ok){
+      const body = (await res.text()).slice(0,200);
+      // the three that actually happen, said in words rather than as a status code
+      DB.trackerError =
+        res.status === 404 ? `the table "${DB.settings.trackerTable}" is not there — check the name, and`
+                             + ` that its schema${DB.settings.trackerSchema? ' ('+DB.settings.trackerSchema+')' : ''}`
+                             + ` is in Supabase → Settings → API → Exposed schemas`
+      : res.status === 401 || res.status === 403
+                           ? 'the tracker refused the read — sign in again, or check that this account is'
+                             + ' allowed to read that table'
+      : `tracker read ${res.status} ${body}`;
+      Store.save();
+      throw new Error(DB.trackerError);
+    }
     const rows = await res.json();
     DB.requests = DB.requests || [];
-    let added = 0, updated = 0;
+    let added = 0, updated = 0, noId = 0;
     for(const row of rows){
       const inc = this.adopt(row);
-      if(!inc.extId) continue;
+      // a row whose id column we do not recognise would vanish without trace
+      if(!inc.extId){ noId++; continue; }
       // the tracker closing a request closes it here too
       const closed = ['cancelled','canceled','closed','void'].includes(String(inc.trackerStatus).toLowerCase());
       const mine = DB.requests.find(r=>r.src==='tracker' && r.extId===inc.extId);
@@ -7419,8 +7441,14 @@ const Tracker = {
       }
     }
     DB.trackerPulledAt = new Date().toISOString();
+    DB.trackerError = noId
+      ? `${noId} tracker row${noId>1?'s were':' was'} skipped — no id column this app recognises`
+        + ` (id, request_id or uuid)`
+      : null;
+    DB.trackerSeen = rows.length;
+    DB.trackerNoId = noId;
     Store.save();
-    return {added, updated, seen: rows.length};
+    return {added, updated, seen: rows.length, noId};
   },
 
   /** Tell the tracker what Kevin did. Never fatal — a failed write is retried next time. */
@@ -7474,10 +7502,14 @@ function startTrackerPolling(){
       const r = await Tracker.pull();
       await Tracker.flush();
       // bin levels move on their own, so refresh them on the same beat
-      if(Bins.configured) try{ await Bins.pull(); }catch(e){ console.warn('bins poll failed', e.message); }
-      if(r.added || r.updated){ renderRequests(); markTabCounts(); }
+      if(Bins.configured) try{ await Bins.pull(); }catch(e){ DB.binsError = e.message; }
+      renderRequests(); markTabCounts();
       if(r.added) toast(`${r.added} new yard request${r.added>1?'s':''} from the tracker`, 4000);
-    }catch(e){ console.warn('tracker poll failed', e.message); }
+    }catch(e){
+      // a poll that keeps failing has to be visible, not a line in the console
+      DB.trackerError = DB.trackerError || e.message;
+      renderRequests();
+    }
   }, mins*60000);
 }
 
@@ -7535,6 +7567,25 @@ function renderRequests(){
 
   const pend = Tracker.pending().length;
   $('#reqSync').textContent = pend ? `${pend} update${pend>1?'s':''} not sent back yet` : '';
+
+  const warn = $('#reqWarn');
+  if(warn){
+    const bits = [];
+    if(!Tracker.configured)
+      bits.push('The tracker is not linked yet — Settings → Retail yard tracker.');
+    else if(DB.trackerError) bits.push(DB.trackerError);
+    else if(DB.trackerPulledAt && DB.trackerSeen === 0)
+      bits.push(`The tracker answered with no rows at all. If Jeff has just submitted one, check that`
+        + ` "${DB.settings.trackerTable}" is the table it writes to`
+        + (DB.settings.trackerSchema ? ` in schema ${DB.settings.trackerSchema}` : ' in the public schema')
+        + ', and that this account is allowed to read it.');
+    if(DB.binsError) bits.push('Bins: ' + DB.binsError);
+    warn.innerHTML = bits.length
+      ? `<div class="warnbox"><div><b>The tracker link</b></div>${
+          bits.map(t=>`<div>${esc(t)}</div>`).join('')}
+         <div class="small muted">Last checked ${DB.trackerPulledAt? esc(shortTime(DB.trackerPulledAt)) : 'never'}.
+           Press “Check the tracker” to try again.</div></div>` : '';
+  }
 
   tb.innerHTML = rows.map(r=>{
     const u = reqUrgency(r), p = reqProduct(r), yd = reqYards(r);
@@ -7805,6 +7856,7 @@ async function pullTrackerNow(){
   if(!Tracker.configured){ toast('Add the tracker table in Settings first', 4000); return; }
   const btn = $('#btnReqPull'); if(btn){ btn.disabled = true; btn.textContent = 'Checking…'; }
   try{
+    DB.trackerError = null; DB.binsError = null;
     const r = await Tracker.pull();
     const sent = await Tracker.flush();
     let binNote = '';
@@ -7819,8 +7871,9 @@ async function pullTrackerNow(){
       }catch(e){ binNote = ' · bins: '+e.message.slice(0,60); }
     }
     renderRequests();
-    toast(`${r.added} new · ${r.updated} changed${sent? ` · ${sent} sent back` : ''}${binNote}`, 6000);
-  }catch(e){ toast('Tracker: '+e.message, 5000); }
+    toast(`${r.seen} row${r.seen===1?'':'s'} read · ${r.added} new · ${r.updated} changed${
+      r.noId? ` · ${r.noId} skipped (no id column)` : ''}${sent? ` · ${sent} sent back` : ''}${binNote}`, 6000);
+  }catch(e){ renderRequests(); toast('Tracker: '+e.message, 7000); }
   finally{ if(btn){ btn.disabled = false; btn.textContent = 'Check the tracker'; } }
 }
 
