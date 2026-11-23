@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script src="config.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Rexius Bulk Dispatch</title>
 <style>
@@ -943,9 +944,10 @@ code{font-family:var(--mono);font-size:12px;background:var(--surface-3);padding:
 
       <div class="card">
         <h3>Supabase</h3>
+        <div class="muted small" id="cfgInfo" style="margin-bottom:8px"></div>
         <div class="grid">
           <label class="field">Project URL <input type="text" id="set_sbUrl" placeholder="https://xxxx.supabase.co"></label>
-          <label class="field">Anon key <input type="password" id="set_sbKey"></label>
+          <label class="field">Publishable key <input type="password" id="set_sbKey"></label>
           <label class="field">Table <input type="text" id="set_sbTable"></label>
           <label class="field">Schema <input type="text" id="set_sbSchema" placeholder="public"></label>
         </div>
@@ -1056,8 +1058,8 @@ const DEFAULT_SETTINGS = {
   stopBuffer: 5,
   keepProjectOnTruck: true,
   mapsKey: '', mapsProxy: '',
-  sbUrl: '', sbKey: '', sbTable: 'bulk_dispatch', sbSchema: '', requireLogin: true,
-  yardsPerUnit: 7.5, yardTrucks: 't85,t98',
+  sbUrl: '', sbKey: '', sbTable: 'bulk_dispatch', sbSchema: 'dispatch', requireLogin: true,
+  yardsPerUnit: 7.5, yardTrucks: 't85,t98,t65',
   waveObjective: 'time', fillWeight: 4, pairBonus: 0,
   trackerUrl: '', trackerKey: '', trackerTable: 'backfill_requests', trackerSchema: '',
   trackerWriteBack: true, trackerPollMin: 10,
@@ -1086,7 +1088,11 @@ const DEFAULT_TRUCKS = [
   { id:'t98', name:'Truck 98', color:TRUCK_COLORS[5], slotMinutes:60,
     boxes:[ {id:'b1', label:'box', yards:10} ], weightCapacity:30000,
     shiftStart:'08:00', shiftEnd:'17:00', loadMinutes:20, unloadMinutes:20, unloadPerYard:1.0,
-    active:true, scheduleMode:'slot', notes:'PLACEHOLDER box size — single box, one stop per load. Retail yard hauls, debris returns and customer deliveries.' }
+    active:true, scheduleMode:'slot', notes:'PLACEHOLDER box size — single box, one stop per load. Retail yard hauls, debris returns and customer deliveries.' },
+  { id:'t65', name:'Truck 65', color:TRUCK_COLORS[6], slotMinutes:60,
+    boxes:[ {id:'b1', label:'box', yards:10} ], weightCapacity:30000,
+    shiftStart:'08:00', shiftEnd:'17:00', loadMinutes:20, unloadMinutes:20, unloadPerYard:1.0,
+    active:true, scheduleMode:'slot', notes:'PLACEHOLDER box size and weight — single box, one stop per load. Retail yard hauls, debris returns and customer deliveries.' }
 ];
 
 const DEFAULT_DRIVERS = [
@@ -1097,6 +1103,8 @@ const DEFAULT_DRIVERS = [
   { id:'d_85', name:'Driver TBD (85)', truckIds:['t85'],  days:'1,2,3,4,5,6',
     active:true, notes:'Rename on the Employees tab' },
   { id:'d_98', name:'Driver TBD (98)', truckIds:['t98'],  days:'1,2,3,4,5,6',
+    active:true, notes:'Rename on the Employees tab' },
+  { id:'d_65', name:'Driver TBD (65)', truckIds:['t65'],  days:'1,2,3,4,5,6',
     active:true, notes:'Rename on the Employees tab' }
 ];
 
@@ -1243,6 +1251,27 @@ function migrateDB(){
     }
   });
 
+  /* A truck added to the defaults after someone's snapshot was saved has to be
+   * introduced once. "Once" is the important word: seenTrucks remembers every id
+   * we have ever offered, so a truck the user deletes stays deleted. */
+  const known = new Set(Array.isArray(DB.seenTrucks) ? DB.seenTrucks : []);
+  const have  = new Set((DB.trucks||[]).map(t=>t.id));
+  // anything already in the fleet counts as seen, including from before this ran
+  (DB.trucks||[]).forEach(t=>known.add(t.id));
+  DEFAULT_TRUCKS.forEach(def=>{
+    if(have.has(def.id) || known.has(def.id)) return;
+    DB.trucks.push(deep(def));
+    known.add(def.id);
+    const drv = DEFAULT_DRIVERS.find(d=>(d.truckIds||[]).includes(def.id));
+    if(drv && !(DB.drivers||[]).some(x=>x.id === drv.id)) DB.drivers.push(deep(drv));
+    notes.push(`${def.name} added to the fleet`);
+  });
+  DB.seenTrucks = [...known];
+
+  // keep the yard-truck list in step when it is still the old default
+  if(DB.settings.yardTrucks === 't85,t98' && DB.trucks.some(t=>t.id === 't65'))
+    DB.settings.yardTrucks = 't85,t98,t65';
+
   // orders booked into a wave before commitment existed
   (DB.orders || []).forEach(o=>{
     if(o.waveDate && !o.commit) o.commit = o.window === 'firm' ? 'firm' : 'soft';
@@ -1251,6 +1280,26 @@ function migrateDB(){
   if(!DB.requests) DB.requests = [];
   return notes;
 }
+
+/* ============================================================
+   WHICH PROJECT THIS COPY TALKS TO
+   scripts/build.mjs writes config.js next to the page, the same
+   way it does for the other apps in the production repo. Both
+   values in it are public by design: the project URL, and the
+   publishable key, whose only power is what RLS grants the anon
+   role — which in the dispatch schema is nothing.
+
+   The Settings fields stay as an override for pointing a copy at
+   another project. Blank means "use what the build wrote", so a
+   rotated key in config.js takes effect on the next load instead
+   of being shadowed by a stale copy in someone's localStorage.
+   ============================================================ */
+const CFG = (typeof window !== 'undefined' && window.BDD_CONFIG) || {};
+function sbUrl(){ return String(DB.settings.sbUrl || CFG.supabaseUrl || '').replace(/\/+$/,''); }
+function sbKey(){ return DB.settings.sbKey || CFG.supabaseKey || ''; }
+/* Legacy anon keys are JWTs and double as a bearer token; sb_publishable_ keys
+ * are not, so they travel in apikey only and we send a bearer only for a person. */
+function keyIsJwt(k){ return /^ey[A-Za-z0-9_-]*\./.test(String(k||'')); }
 
 /* ============================================================
    SIGNING IN
@@ -1263,7 +1312,7 @@ const AUTH_KEY = 'rexius_bulk_dispatch_session';
 const Auth = {
   session: null,
 
-  get required(){ return !!DB.settings.sbUrl && DB.settings.requireLogin !== false; },
+  get required(){ return !!sbUrl() && DB.settings.requireLogin !== false; },
   get email(){ return this.session && this.session.user ? this.session.user.email : null; },
   get token(){ return this.session ? this.session.access_token : null; },
   get live(){
@@ -1272,8 +1321,8 @@ const Auth = {
     return !exp || exp > Date.now() + 5000;
   },
 
-  _base(){ return String(DB.settings.sbUrl||'').replace(/\/+$/,''); },
-  _anon(){ return DB.settings.sbKey || ''; },
+  _base(){ return sbUrl(); },
+  _anon(){ return sbKey(); },
 
   load(){
     try{
@@ -1425,21 +1474,21 @@ function showApp(){
 
 /* --------------------------------------------------------------- the store */
 const Store = {
-  get configured(){ return !!(DB.settings.sbUrl && DB.settings.sbKey); },
+  get configured(){ return !!(sbUrl() && sbKey()); },
   _headers(){
-    // the anon key identifies the project; the bearer token identifies the person,
+    // the key identifies the project; the bearer token identifies the person,
     // so the row-level policies see who is actually asking
-    const bearer = (Auth.required && Auth.token) ? Auth.token : DB.settings.sbKey;
-    const h = { apikey: DB.settings.sbKey, Authorization: 'Bearer '+bearer,
-                'Content-Type':'application/json', Prefer:'resolution=merge-duplicates' };
+    const key = sbKey();
+    const h = { apikey: key, 'Content-Type':'application/json', Prefer:'resolution=merge-duplicates' };
+    const bearer = (Auth.required && Auth.token) ? Auth.token : (keyIsJwt(key) ? key : '');
+    if(bearer) h.Authorization = 'Bearer '+bearer;
     // anything outside "public" has to be named on the request
     const sc = DB.settings.sbSchema;
     if(sc){ h['Accept-Profile'] = sc; h['Content-Profile'] = sc; }
     return h;
   },
   _url(q){
-    const base = DB.settings.sbUrl.replace(/\/+$/,'');
-    return `${base}/rest/v1/${DB.settings.sbTable||'bulk_dispatch'}${q||''}`;
+    return `${sbUrl()}/rest/v1/${DB.settings.sbTable||'bulk_dispatch'}${q||''}`;
   },
   saveLocal(){
     try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }
@@ -1457,6 +1506,8 @@ const Store = {
       DB.zones    = parsed.zones    || deep(DEFAULT_ZONES);
       DB.orders   = parsed.orders   || [];
       DB.requests = parsed.requests || [];
+      // which default trucks this browser has already been offered
+      DB.seenTrucks = Array.isArray(parsed.seenTrucks) ? parsed.seenTrucks : null;
       DB.plans    = parsed.plans    || {};
       DB.avail    = parsed.avail    || {};
       DB.driverAvail = parsed.driverAvail || {};
@@ -6667,6 +6718,15 @@ function settingsToForm(){
   }
   $('#proxyCode').textContent = PROXY_CODE;
   $('#sbSql').textContent = SB_SQL.replace('__TABLE__', DB.settings.sbTable || 'bulk_dispatch');
+  const ci = $('#cfgInfo');
+  if(ci){
+    if(!CFG.supabaseUrl)
+      ci.textContent = 'No config.js alongside this page — the project has to be typed in below.';
+    else if(DB.settings.sbUrl || DB.settings.sbKey)
+      ci.textContent = `Overriding config.js (${CFG.supabaseUrl}) — clear both fields to go back to it.`;
+    else
+      ci.textContent = `Using ${CFG.supabaseUrl} from config.js. Leave these blank unless you are pointing this copy at another project.`;
+  }
   const sel = $('#set_waveObjective');
   if(sel){
     const cur = DB.settings.waveObjective || 'time';
@@ -6928,13 +6988,17 @@ function restoreBackup(){
 const Tracker = {
   get configured(){
     const s = DB.settings;
-    return !!((s.trackerUrl || s.sbUrl) && (s.trackerKey || s.sbKey) && s.trackerTable);
+    return !!((s.trackerUrl || sbUrl()) && (s.trackerKey || sbKey()) && s.trackerTable);
   },
-  _base(){ return String(DB.settings.trackerUrl || DB.settings.sbUrl).replace(/\/+$/,''); },
-  _key(){ return DB.settings.trackerKey || DB.settings.sbKey; },
+  _base(){ return String(DB.settings.trackerUrl || sbUrl()).replace(/\/+$/,''); },
+  _key(){ return DB.settings.trackerKey || sbKey(); },
   _headers(extra){
     const k = this._key();
-    const h = { apikey:k, Authorization:'Bearer '+k, 'Content-Type':'application/json', ...(extra||{}) };
+    const h = { apikey:k, 'Content-Type':'application/json', ...(extra||{}) };
+    /* The tracker now lives in the same project, so its rows are behind the same
+     * login — send the person's token when we have one, not the publishable key. */
+    const bearer = (Auth.required && Auth.token) ? Auth.token : (keyIsJwt(k) ? k : '');
+    if(bearer) h.Authorization = 'Bearer '+bearer;
     const sc = DB.settings.trackerSchema;
     if(sc){ h['Accept-Profile'] = sc; h['Content-Profile'] = sc; }
     return h;
