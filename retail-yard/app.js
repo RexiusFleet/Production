@@ -102,7 +102,7 @@ const WRITE_SCHEMAS={
     product_id:V.id({req:true}), bin_id:V.id({req:true}), qty_yd:V.num(0.01,2000,{req:true,label:'Volume'}),
     needed_by:V.date(31,366,{null:true,label:'Needed by'}), method:V.oneOf(['bulk','slinger'],{req:true}),
     status:V.oneOf(['requested'],{req:true}), notes:V.str(500,{null:true,label:'Notes'}) },
-  'backfill_requests.update':{ status:V.oneOf(['cancelled']) },
+  'backfill_requests.update':{ status:V.oneOf(['cancelled']), priority:V.int(1,999,{null:true,label:'Priority'}) },
   'hauls.insert':{
     request_id:V.id({null:true}), method:V.oneOf(['bulk','slinger'],{req:true}),
     truck_no:V.str(20,{req:true,pattern:TRUCK_NO_RE,label:'Truck number'}), loads:V.int(1,50,{label:'Loads'}),
@@ -1243,6 +1243,9 @@ VIEWS.backfill={
         ${orderFormFields(null, UI.prefillQty||'')}
         <div class="form-actions full"><button class="btn primary">Send order</button><span class="hint" id="rq-hint"></span></div>
       </form></details>`:''}
+    <div class="sec"><div class="sec-head"><h2>Priority for Kevin</h2></div>
+      <p class="muted" style="margin:0;font-size:.85rem">${can.request()?'Rank the open orders. Kevin works from the top down. New orders start at the bottom.':'Open orders in the order Jeff wants them hauled.'}</p>
+      <div class="rows prio-list" data-dyn="bPriority"></div></div>
     <div class="sec"><div class="sec-head"><h2>Product orders</h2><div class="filters" data-dyn="bFilters"></div></div>
       <p class="muted" style="margin:0;font-size:.85rem">Only products Kevin hauls are ordered here. Order → Kevin schedules a truck → ${can.confirmDelivery()?'confirm the delivery here when it arrives':'the yard confirms the delivery when it arrives'}. Product is added to the bin only when a delivery is confirmed.</p>
       <div class="cols" data-dyn="bBoard"></div></div>
@@ -1256,6 +1259,21 @@ VIEWS.backfill={
   </section>`,
   dyn:{
     bFilters(){ return ''; },   // every order is a bulk order now
+    bPriority(){
+      const list=priorityList();
+      if(!list.length) return `<div class="empty">No open orders.</div>`;
+      const edit=can.request();
+      return list.map((r,i)=>{ const late=dayDiff(r.needed_by)<0;
+        return `<div class="row prio-row"><span class="prio-n big">#${i+1}</span>
+          <div class="main"><span class="t">${esc(prodName(r.product_id))}</span>
+            <span class="m">${fmtUnits(r.qty_yd)} (${fmtYd(r.qty_yd)}) · needed ${esc(whenDate(r.needed_by))}${r.notes?' · '+esc(r.notes):''}</span></div>
+          <span class="chip ${r.status==='requested'?'c-warn':'c-info'}">${r.status==='requested'?'Requested':'Scheduled'}</span>${late?'<span class="chip c-bad">Late</span>':''}
+          ${edit?`<span class="act">
+            <button class="btn sm" data-act="prioMove" data-id="${r.id}" data-v="top" ${i===0?'disabled':''} aria-label="Move to top">⤒ Top</button>
+            <button class="btn sm" data-act="prioMove" data-id="${r.id}" data-v="up" ${i===0?'disabled':''} aria-label="Move up">↑</button>
+            <button class="btn sm" data-act="prioMove" data-id="${r.id}" data-v="down" ${i===list.length-1?'disabled':''} aria-label="Move down">↓</button></span>`:''}
+        </div>`; }).join('');
+    },
     bRecv(){
       const list=(S.receipts||[]).filter(r=>dayDiff(r.received_on)>=-14).sort((a,b)=>b.received_on.localeCompare(a.received_on)||String(b.created_at).localeCompare(String(a.created_at)));
       if(!list.length) return `<div class="empty">No deliveries recorded in the last 14 days.</div>`;
@@ -1273,7 +1291,8 @@ VIEWS.backfill={
       return cols.map(([k,l])=>{
         let items=list.filter(r=>r.status===k||(k==='scheduled'&&r.status==='in_progress'));
         if(k==='delivered') items=items.filter(r=>dayDiff((r.needed_by||r.created_at).slice(0,10))>=-14);
-        items.sort((a,b)=>(a.needed_by||'').localeCompare(b.needed_by||''));
+        const rk=prioRank();
+        items.sort((a,b)=>(rk[a.id]??1e9)-(rk[b.id]??1e9)||(a.needed_by||'').localeCompare(b.needed_by||''));
         return `<div class="col"><div class="col-h"><h3>${l}</h3><span class="n">${items.length}</span></div>
           ${items.map(reqCard).join('')||'<div class="empty">None</div>'}</div>`;
       }).join('');
@@ -1293,6 +1312,16 @@ function haulLine(h){
   return `<div class="haul-line"><div class="hl-top"><span>Truck ${esc(h.truck_no)}${h.loads>1?' × '+h.loads:''} · ${esc(fmtDate(h.haul_on))}</span><span class="num">${fmtN(h.volume_yd)} yd³ ${statusChip(h.status==='delivered'?'confirmed':h.status)}</span></div>
     ${act?`<div class="hl-act">${act}</div>`:''}</div>`;
 }
+/* ---------- Priority list ----------
+   Jeff ranks the open orders for Kevin (1 = haul first). New orders join at the bottom
+   until Jeff moves them. Stored as backfill_requests.priority. */
+const OPEN_REQ=['requested','scheduled','in_progress'];
+function priorityList(){
+  return S.backfills.filter(r=>OPEN_REQ.includes(r.status)&&r.method==='bulk')
+    .sort((a,b)=>(a.priority??1e9)-(b.priority??1e9)||String(a.created_at).localeCompare(String(b.created_at)));
+}
+const prioRank=()=>{ const m={}; priorityList().forEach((r,i)=>m[r.id]=i+1); return m; };
+
 function reqCard(r){
   const hs=S.hauls.filter(h=>h.request_id===r.id&&h.status!=='cancelled');
   const del=hs.filter(h=>h.status==='delivered').reduce((s,h)=>s+Number(h.volume_yd),0);
@@ -1302,7 +1331,7 @@ function reqCard(r){
   const canD=can.dispatch(r.method)&&r.status!=='delivered';
   const open=UI.openHaulFor===r.id;
   return `<article class="card">
-    <div class="top-line"><span class="chip ${r.method==='bulk'?'c-info':'c-acc'}">${METHOD[r.method].label}</span>${late?'<span class="chip c-bad">Late</span>':''}</div>
+    <div class="top-line">${prioRank()[r.id]?`<span class="prio-n" title="Priority for Kevin">#${prioRank()[r.id]}</span>`:''}<span class="chip ${r.method==='bulk'?'c-info':'c-acc'}">${METHOD[r.method].label}</span>${late?'<span class="chip c-bad">Late</span>':''}</div>
     <div><div class="big num">${fmtYd(r.qty_yd)}</div><div style="font-weight:600">${esc(prodName(r.product_id))}</div></div>
     <div class="meta">Needed ${esc(whenDate(r.needed_by))} · ${esc(METHOD[r.method].who)} dispatches${r.notes?'<br>'+esc(r.notes):''}</div>
     ${r.method==='bulk'&&remaining>0&&!hs.length?(()=>{ const sug=trucks().map(t=>{ const c=truckCap(t.no,r.product_id,'dry'); return c?`${Math.ceil(remaining/c)} load${Math.ceil(remaining/c)>1?'s':''} on ${esc(t.no)}`:null; }).filter(Boolean);
@@ -1647,6 +1676,19 @@ const ACT={
     // Truck loads are counted in units, so the size goes in as units.
     const yd=Number(d.yd); q.step='any'; if(u){ u.value='unit'; q.value=Math.round(yd/ydu()*100)/100; } else q.value=yd;
     f.querySelectorAll('.size-btn').forEach(b=>b.classList.toggle('on',b===el));
+  },
+  async prioMove(d){
+    if(UI.prioBusy) return;
+    const list=priorityList(); const i=list.findIndex(r=>r.id===d.id); if(i<0) return;
+    const [r]=list.splice(i,1);
+    const j=d.v==='top'?0:d.v==='up'?Math.max(0,i-1):Math.min(list.length,i+1);
+    list.splice(j,0,r);
+    // Write 1..n, only where the number changed.
+    const changes=list.map((x,k)=>[x,k+1]).filter(([x,n])=>x.priority!==n);
+    UI.prioBusy=true;
+    await run(async()=>{ for(const [x,n] of changes) await A.update('backfill_requests',x.id,{priority:n}); },
+      `${prodName(r.product_id)} is now #${j+1}.`);
+    UI.prioBusy=false;
   },
   receiptUndo(d){ run(()=>A.update('receipts',d.id,{status:'cancelled'}),'Delivery undone. Volume taken back out of the bin.'); },
   haulUndo(d){ run(()=>A.update('hauls',d.id,{status:'scheduled'}),'Delivery undone. Volume taken back out of the bin.'); },
