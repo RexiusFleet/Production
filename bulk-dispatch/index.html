@@ -7863,76 +7863,154 @@ function openLogRequest(){
 }
 
 /**
- * Ask PostgREST what it can actually see. Its root is an OpenAPI document, so
- * the table names are in there — which turns "guess what Jeff's table is called"
- * into picking from a list. A schema that is not in Supabase's exposed list is
- * invisible here too, which is itself the answer.
+ * Find the tracker's table by asking for it, one name at a time.
+ *
+ * PostgREST's OpenAPI root would list them in one call, but Supabase refuses it
+ * to a publishable key ("Only secret API keys can be used for this endpoint"),
+ * and a secret key must never be in this app. A plain select against a name is
+ * the same request the app makes in normal use, so it works with the key we
+ * have — and the status tells us which of the three cases we are in.
  */
-async function discoverTables(schema){
+const SCHEMA_GUESSES = ['', 'retail', 'retail_yard', 'retailyard', 'yard', 'yard_tracker',
+  'tracker', 'inventory', 'ryt', 'rexius'];
+const TABLE_GUESSES = ['backfill_requests', 'product_requests', 'requests', 'internal_orders',
+  'internal_requests', 'orders', 'restock_requests', 'product_orders', 'yard_requests',
+  'backfill', 'restocks', 'bins'];
+
+async function probeTable(schema, table){
   const base = String(DB.settings.trackerUrl || sbUrl()).replace(/\/+$/,'');
   if(!base) throw new Error('No project URL yet');
   const h = {apikey: Tracker._key()};
   if(Auth.required && Auth.token) h.Authorization = 'Bearer '+Auth.token;
   if(schema) h['Accept-Profile'] = schema;
-  const res = await fetch(base + '/rest/v1/', {headers:h});
-  if(!res.ok){
-    const t = (await res.text()).slice(0,160);
-    throw new Error(res.status === 406 || res.status === 404
-      ? `the schema "${schema||'public'}" is not exposed — add it in Supabase → Settings → API → Exposed schemas`
-      : `${res.status} ${t}`);
+  let res;
+  try{
+    res = await fetch(`${base}/rest/v1/${encodeURIComponent(table)}?select=*&limit=1`, {headers:h});
+  }catch(e){ return {state:'unreachable', detail:e.message}; }
+  if(res.ok){
+    const rows = await res.json().catch(()=>[]);
+    return {state:'ok', rows: Array.isArray(rows)? rows.length : 0,
+            columns: Array.isArray(rows) && rows[0] ? Object.keys(rows[0]) : []};
   }
-  const spec = await res.json();
-  const fromPaths = Object.keys(spec.paths || {})
-    .map(k=>k.replace(/^\//,''))
-    .filter(k=>k && !k.startsWith('rpc/'));
-  const fromDefs = Object.keys(spec.definitions || (spec.components||{}).schemas || {});
-  return [...new Set([...fromPaths, ...fromDefs])].sort();
+  if(res.status === 404) return {state:'missing'};
+  if(res.status === 401 || res.status === 403) return {state:'denied'};
+  return {state:'error', detail: `${res.status} ${(await res.text()).slice(0,120)}`};
+}
+
+/** Walk the likely names. Stops early in a schema that clearly holds nothing. */
+async function scanForTables(extraSchemas, extraTables, onStep){
+  const schemas = [...new Set([...(extraSchemas||[]).filter(Boolean), ...SCHEMA_GUESSES,
+    DB.settings.trackerSchema||''])];
+  const tables  = [...new Set([...(extraTables||[]).filter(Boolean), ...TABLE_GUESSES])];
+  const found = [];
+  let calls = 0;
+  for(const sc of schemas){
+    let hitHere = false;
+    for(const tb of tables){
+      if(calls++ > 160) return {found, capped:true};
+      if(onStep) onStep(sc, tb, calls);
+      const r = await probeTable(sc, tb);
+      if(r.state === 'unreachable') return {found, unreachable:r.detail};
+      if(r.state === 'ok' || r.state === 'denied'){
+        hitHere = true;
+        found.push({schema:sc, table:tb, ...r});
+      }
+    }
+    // nothing at all under this name: almost certainly not an exposed schema
+    if(!hitHere && sc !== '') continue;
+  }
+  return {found};
 }
 
 function findTableDialog(){
-  const draw = async ()=>{
-    const schema = (($('#ftSchema')||{}).value || '').trim();
-    const box = $('#ftList');
-    if(box) box.innerHTML = '<div class="muted small">Asking…</div>';
-    try{
-      const tables = await discoverTables(schema);
-      if(!box) return;
-      box.innerHTML = tables.length
-        ? `<div class="small muted" style="margin-bottom:6px">${tables.length} table${
-             tables.length>1?'s':''} visible in <b>${esc(schema||'public')}</b> — click one to use it
-             for the requests.</div>
-           <div class="row" style="flex-wrap:wrap;gap:6px">${tables.map(t=>
-             `<button class="btn sm ghost" data-table="${esc(t)}">${esc(t)}</button>`).join('')}</div>`
-        : `<div class="warnbox">Nothing is exposed in <b>${esc(schema||'public')}</b>.</div>`;
-      $$('#ftList [data-table]').forEach(el=>{
-        el.onclick = ()=>{
-          DB.settings.trackerSchema = schema;
-          DB.settings.trackerTable = el.dataset.table;
-          DB.trackerError = null;
-          Store.save(); settingsToForm(); closeModal();
-          toast(`Requests now read from ${schema? schema+'.' : ''}${el.dataset.table}`, 4000);
-          pullTrackerNow();
-        };
-      });
-    }catch(e){
-      if(box) box.innerHTML = `<div class="warnbox">${esc(e.message)}</div>`;
-    }
+  const row = f=>{
+    const where = `${f.schema? f.schema+'.' : ''}${f.table}`;
+    const note = f.state === 'denied'
+      ? 'there, but this account cannot read it'
+      : f.rows ? `readable · columns: ${f.columns.slice(0,6).join(', ')}${f.columns.length>6?'…':''}`
+               : 'readable · no rows in it yet';
+    return `<button class="btn sm ghost" data-pair="${esc(f.schema)}|${esc(f.table)}"
+        style="display:block;text-align:left;width:100%;margin-bottom:5px">
+      <b>${esc(where)}</b> <span class="muted">— ${esc(note)}</span></button>`;
   };
-  openModal('What can the tracker connection see?', `
-    <div class="small muted">The dispatch app asks PostgREST for its own table list. A schema has to
-      be in <b>Settings → API → Exposed schemas</b> in Supabase before anything in it is visible —
-      including to this check.</div>
-    <label class="field" style="margin-top:9px">Schema
-      <input type="text" id="ftSchema" value="${esc(DB.settings.trackerSchema||'')}"
-        placeholder="blank = public"></label>
-    <div class="row" style="margin-top:8px"><button class="btn sm" id="ftGo">Look</button></div>
+
+  const show = (found, extra)=>{
+    const box = $('#ftList'); if(!box) return;
+    box.innerHTML = (found.length
+      ? `<div class="small muted" style="margin-bottom:6px">Click the one Jeff's requests go into.</div>`
+        + found.map(row).join('')
+      : `<div class="warnbox">Nothing answered to any of the names tried. Either the schema is not in
+          <b>Supabase → Settings → API → Exposed schemas</b>, or the table is called something else —
+          put its name in the boxes above and look again.</div>`) + (extra||'');
+    $$('#ftList [data-pair]').forEach(el=>{
+      const [sc, tb] = el.dataset.pair.split('|');
+      el.onclick = ()=>pick(sc, tb);
+    });
+  };
+
+  /* One exact pair, when both names are known. */
+  const look = async ()=>{
+    const schema = (($('#ftSchema')||{}).value || '').trim();
+    const table  = (($('#ftTable')||{}).value || '').trim();
+    const box = $('#ftList');
+    if(!table){ if(box) box.innerHTML = '<div class="warnbox">Put a table name in, or press Scan.</div>'; return; }
+    if(box) box.innerHTML = '<div class="muted small">Asking…</div>';
+    const r = await probeTable(schema, table);
+    if(r.state === 'ok' || r.state === 'denied') show([{schema, table, ...r}]);
+    else if(box) box.innerHTML = `<div class="warnbox">${
+      r.state === 'missing'
+        ? `No <b>${esc(table)}</b> in <b>${esc(schema||'public')}</b>. If the schema is right, the table
+           is called something else; if the table is right, the schema may not be exposed.`
+        : esc(r.detail || 'that did not work')}</div>`;
+  };
+
+  const scan = async ()=>{
+    const box = $('#ftList');
+    const extraS = (($('#ftSchema')||{}).value || '').trim();
+    const extraT = (($('#ftTable')||{}).value || '').trim();
+    const res = await scanForTables([extraS], [extraT], (sc, tb, n)=>{
+      if(box) box.innerHTML = `<div class="muted small">Trying ${esc(sc||'public')}.${esc(tb)} … (${n})</div>`;
+    });
+    if(res.unreachable){
+      if(box) box.innerHTML = `<div class="warnbox">Could not reach the project — ${esc(res.unreachable)}</div>`;
+      return;
+    }
+    show(res.found, res.capped ? '<div class="small muted">Stopped after 160 tries.</div>' : '');
+  };
+
+  openModal('Find the tracker table', `
+    <div class="small muted">The app asks for each likely name in turn — the same kind of request it
+      makes in normal use. A schema has to be in <b>Settings → API → Exposed schemas</b> in Supabase
+      before anything in it answers.</div>
+    <div class="two" style="margin-top:9px">
+      <label class="field">Schema
+        <input type="text" id="ftSchema" value="${esc(DB.settings.trackerSchema||'')}"
+          placeholder="blank = public"></label>
+      <label class="field">Table
+        <input type="text" id="ftTable" value="${esc(DB.settings.trackerTable||'')}"
+          placeholder="if you know it"></label>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn sm" id="ftGo">Try that one</button>
+      <button class="btn sm ghost" id="ftScan">Scan the likely names</button></div>
     <div id="ftList" style="margin-top:10px"></div>`, [
     {label:'Close', cls:'ghost', onClick:closeModal}
   ]);
-  const go = $('#ftGo'); if(go) go.onclick = draw;
-  const inp = $('#ftSchema');
-  if(inp) inp.onkeydown = e=>{ if(e.key==='Enter') draw(); };
-  draw();
+
+  const pick = (schema, table)=>{
+    DB.settings.trackerSchema = schema;
+    DB.settings.trackerTable = table;
+    DB.trackerError = null;
+    Store.save(); settingsToForm(); closeModal();
+    toast(`Requests now read from ${schema? schema+'.' : ''}${table}`, 4000);
+    pullTrackerNow();
+  };
+
+  const go = $('#ftGo'); if(go) go.onclick = look;
+  const sc = $('#ftScan'); if(sc) sc.onclick = scan;
+  ['#ftSchema','#ftTable'].forEach(id=>{
+    const el = $(id); if(el) el.onkeydown = e=>{ if(e.key==='Enter') look(); };
+  });
 }
 
 async function pullTrackerNow(){
