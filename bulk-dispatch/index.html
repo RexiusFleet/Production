@@ -444,6 +444,22 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .signbox h1{margin:0;font-size:17px;text-transform:uppercase;letter-spacing:.04em}
 .signbox p{margin:2px 0 16px}
 #signEmail,#signPass,#newPass,#newPass2{font-size:14px;padding:9px 10px}
+/* Jeff's queue above the board */
+.reqqueue{margin-bottom:12px;border:1px solid var(--rule);border-radius:var(--r);
+  background:var(--surface);overflow:hidden}
+.reqqueue .qhead{display:flex;align-items:center;gap:8px;padding:8px 11px;
+  border-bottom:1px solid var(--rule);background:var(--surface-2);font-size:12px}
+.reqqueue .qrow{display:flex;gap:8px;padding:9px 11px;overflow-x:auto}
+.qcard{flex:0 0 auto;min-width:148px;max-width:210px;text-align:left;display:grid;gap:2px;
+  padding:7px 9px;border:1px solid var(--rule);border-left:3px solid var(--brand);
+  border-radius:var(--r-sm);background:var(--surface);cursor:pointer;font:inherit;color:inherit}
+.qcard:hover{background:var(--surface-2)}
+.qcard.stuck{border-left-color:var(--crit);background:var(--crit-bg)}
+.qcard .qtop{display:flex;align-items:center;gap:5px}
+.qcard .qname{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qcard .qmid{font-size:15px;font-weight:650;letter-spacing:-.01em}
+.qcard .qsub{font-size:10.5px;color:var(--ink-muted)}
+.qcard .qlate{color:var(--crit)}
 .rankchip{display:inline-block;min-width:20px;text-align:center;padding:1px 4px;
   border-radius:var(--r-sm);background:var(--bar);color:#fff;font-size:10px;font-weight:650}
 .bingauge{position:relative;height:6px;margin:3px 0 2px;border-radius:3px;
@@ -624,8 +640,8 @@ code{font-family:var(--mono);font-size:12px;background:var(--surface-3);padding:
         <button class="btn primary" id="sCheck">Check the day</button>
       </div>
     </div>
+    <div id="sQueue" class="reqqueue" hidden></div>
     <div id="sIssues" class="grid" style="margin-bottom:12px"></div>
-    <div class="tiles" id="sTiles" style="margin-bottom:12px"></div>
     <div class="sgrid" id="sGrid"></div>
     <details class="help" id="activityPanel" style="margin-top:12px">
       <summary><b>Activity</b> <span class="tag" id="actNew">0 new</span>
@@ -3823,10 +3839,10 @@ function renderSchedule(){
   $('#sLabel').textContent = periodLabel();
   if(UI.view === 'week'){
     $('#sGrid').classList.toggle('editing', UI.gridMode==='avail');
-    renderWeekView(); renderScheduleTiles(DB.plans[iso], iso); renderScheduleIssues(null, iso); return;
+    renderWeekView(); renderReqQueue(); renderScheduleIssues(null, iso); return;
   }
   if(UI.view === 'month'){
-    renderMonthView(); renderScheduleTiles(DB.plans[iso], iso); renderScheduleIssues(null, iso); return;
+    renderMonthView(); renderReqQueue(); renderScheduleIssues(null, iso); return;
   }
   const plan = DB.plans[iso];
   const trucks = activeTrucks();
@@ -3944,7 +3960,7 @@ function renderSchedule(){
 
   grid.innerHTML = html;
   wireGrid();
-  renderScheduleTiles(plan, iso);
+  renderReqQueue();
   renderScheduleIssues(plan, iso);
   if(typeof renderActivity === 'function') renderActivity();
 }
@@ -4261,64 +4277,43 @@ function waveOf(tr, wid){
   return wid === 'am' ? tr.startMin < b.start : tr.startMin >= b.start;
 }
 
-function renderScheduleTiles(plan, iso){
-  const days = (typeof periodDays === 'function') ? periodDays() : [iso];
-  const multi = days.length > 1;
-
-  if(!multi){
-    const slotT = activeTrucks().filter(t=>!isWindowTruck(t));
-    const slots = slotT.reduce((a,t)=>a+truckSlotTimes(t).length,0);
-    const blocked = slotT.reduce((a,t)=>a+blockedSlots(iso,t.id).length,0);
-    const onSlots = slotBookings(iso).length;
-    const inWaves = waveBookings(iso).length;
-    const booked = onSlots + inWaves;
-    const open = Math.max(0, slots - blocked - onSlots);
-    const stuck = plan ? plan.unplaced.length : 0;
-    const waiting = unslottedOn(iso).length + stuck;
-    const late = plan ? plan.kpis.late : null;
-    const running = runningTrucks(iso);
-    $('#sTiles').innerHTML = [
-      ['Booked', booked, inWaves ? `${inWaves} in waves · ${onSlots} on the hour` : `${open} slots still open`],
-      ['Fleet today', r1(running.reduce((a,t)=>a+truckTotalYards(t),0)) + ' yd',
-        running.map(t=>t.name).join(', ') || 'no trucks running'],
-      ['Blocked', blocked, slots? `of ${slots} hourly slots` : 'no hourly slots today'],
-      ['Yards out', plan? plan.kpis.yards : '—', plan? `${plan.kpis.loads} loads` : 'run "Check the day"'],
-      ['Drive time', plan? dur(plan.kpis.driveMin) : '—', plan? `${plan.kpis.driveMi} mi` : ''],
-      ['Running late', late==null? '—' : late, late? 'see the notes above' : 'nothing flagged'],
-      ['Waiting time', plan? dur(plan.kpis.idleMin||0) : '—', 'trucks idle before a slot'],
-      ['Unplaced', waiting, !waiting ? 'everything has a truck'
-        : stuck ? `${stuck} wouldn't fit the wave` : 'on this day, not yet placed']
-    ].map(([k,v,s])=>`<div class="tile"><div class="k">${esc(k)}</div>
-        <div class="v">${esc(String(v))}</div><div class="sub">${esc(s)}</div></div>`).join('');
-    return;
-  }
-
-  let booked=0, open=0, yards=0, drive=0, late=0, truckDays=0, darkDays=0, loads=0, worked=0;
-  for(const d of days){
-    const sum = daySummary(d);
-    if(!sum.closed) worked++;
-    booked += sum.books.length; open += sum.open; yards += sum.yards;
-    drive += sum.driveMin; late += sum.late;
-    truckDays += sum.trucks.length;
-    if(sum.closed) darkDays++;
-    if(sum.books.length){
-      const pl = DB.plans[d];
-      if(pl) loads += pl.kpis.loads;
-    }
-  }
-  const unit = UI.view === 'week' ? 'week' : 'month';
-  $('#sTiles').innerHTML = [
-    ['Booked', booked, `${open} hourly slots still open this ${unit}`],
-    ['Truck-days', truckDays, `over ${days.length} days`],
-    ['Days dark', darkDays, darkDays? 'closed or nobody driving' : 'every day covered'],
-    ['Yards out', r1(yards), loads? `${loads} loads` : 'run "Check the ' + unit + '"'],
-    ['Drive time', drive? dur(drive) : '—', 'across the ' + unit],
-    ['Running late', late, late? 'open a day to see them' : 'nothing flagged'],
-    ['Avg per day', worked? r1(yards/worked) + ' yd' : '—',
-      `${(booked/Math.max(1,worked)).toFixed(1)} stops on ${worked} working days`],
-    ['Stops per load', loads? (booked/loads).toFixed(1) : '—', loads? `${loads} loads out` : 'nothing run yet']
-  ].map(([k,v,s])=>`<div class="tile"><div class="k">${esc(k)}</div>
-      <div class="v">${esc(String(v))}</div><div class="sub">${esc(s)}</div></div>`).join('');
+/**
+ * Jeff's queue, sitting above the board. Rank order, what is still to move, and
+ * how much room the bin has — so Kevin can see what is waiting without leaving
+ * the schedule. Clicking one opens the same sizing dialog as the requests tab.
+ */
+function renderReqQueue(){
+  const box = $('#sQueue');
+  if(!box) return;
+  const open = openRequests();
+  if(!open.length){ box.hidden = true; box.innerHTML = ''; return; }
+  box.hidden = false;
+  box.innerHTML = `<div class="qhead"><b>From the yard</b>
+      <span class="muted small">${open.length} waiting · ${r1(open.reduce((a,r)=>a+reqRemaining(r),0))} yd
+      · Jeff's order</span>
+      <button class="btn sm ghost" id="qAll" style="margin-left:auto">Open the queue</button></div>
+    <div class="qrow">${open.slice(0, 12).map(r=>{
+      const p = reqProduct(r), u = reqUrgency(r), st = binState(r);
+      const plan = reqLoadPlan(r, null);
+      const stuck = plan.take <= 0.01;
+      return `<button class="qcard${stuck?' stuck':''}" data-req="${esc(r.id)}"
+          title="${esc(p? p.name : (r.product||''))} — ${esc(loadSizeWhy(plan))}">
+        <span class="qtop">${num(r.rank,0)? `<span class="rankchip">#${num(r.rank)}</span>` : ''}
+          <span class="qname">${esc(p? p.name : (r.product||'product not set'))}</span></span>
+        <span class="qmid">${reqRemaining(r)} yd${
+          reqBooked(r)? ` <span class="muted">of ${reqYards(r)}</span>` : ''}</span>
+        <span class="qsub">${esc(r.bin || 'no bin')}${
+          st.known ? ` · ${stuck ? 'bin full' : st.room+' yd room'}` : ''}</span>
+        <span class="qsub ${u.chip==='late'?'qlate':'muted'}">${
+          stuck ? 'waiting on the bin' : 'next load ' + plan.take + ' yd'}${
+          r.needBy? ' · '+esc(u.label) : ''}</span>
+      </button>`;
+    }).join('')}</div>`;
+  $$('#sQueue [data-req]').forEach(el=>{
+    el.onclick = ()=>openRequestScheduler(el.dataset.req);
+  });
+  const all = $('#qAll');
+  if(all) all.onclick = ()=>showTab('requests');
 }
 
 function renderScheduleIssues(plan, iso){
@@ -7812,8 +7807,19 @@ async function pullTrackerNow(){
   try{
     const r = await Tracker.pull();
     const sent = await Tracker.flush();
+    let binNote = '';
+    if(Bins.configured){
+      try{
+        const b = await Bins.pull();
+        // reading rows but finding no capacity means the column names did not match
+        binNote = b.bins === 0 ? ` · bins table empty`
+                : b.withCapacity === 0
+                  ? ` · ${b.bins} bins read but no capacity column matched — check its column names`
+                  : ` · ${b.withCapacity} of ${b.bins} bins have a capacity`;
+      }catch(e){ binNote = ' · bins: '+e.message.slice(0,60); }
+    }
     renderRequests();
-    toast(`${r.added} new · ${r.updated} changed${sent? ` · ${sent} sent back` : ''}`, 4000);
+    toast(`${r.added} new · ${r.updated} changed${sent? ` · ${sent} sent back` : ''}${binNote}`, 6000);
   }catch(e){ toast('Tracker: '+e.message, 5000); }
   finally{ if(btn){ btn.disabled = false; btn.textContent = 'Check the tracker'; } }
 }
