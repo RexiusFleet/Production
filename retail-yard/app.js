@@ -824,7 +824,6 @@ const VIEWS={};
 /* ---------- Yard ---------- */
 VIEWS.yard={
   shell:()=>`<section class="view">
-    <div class="summary" data-dyn="ySummary"></div>
     <div class="split">
       <div class="sec">
         <div class="sec-head"><h2>Product Yard</h2>
@@ -1027,7 +1026,6 @@ VIEWS.debris={
   shell:()=>{
     const f=UI.debrisForm&&can.debris()?UI.debrisForm:null; const [title,cls,btn]=f?DEBRIS_FORMS[f]:[];
     return `<section class="view">
-    <div class="summary" data-dyn="dSummary"></div>
     <div>
       <div class="sec">
         <div class="sec-head"><h2>Yard Debris</h2>
@@ -1040,6 +1038,7 @@ VIEWS.debris={
         <div class="alerts" data-dyn="dAlerts"></div>
         <div data-dyn="dMap"></div>
       </div>
+      <div class="sec"><div class="sec-head"><h2>Grind history</h2></div><div data-dyn="dGrinds"></div></div>
     </div></section>`;   // Scheduled removals and activity are in each pile's pop-up
   },
   dyn:{
@@ -1058,6 +1057,26 @@ VIEWS.debris={
       if(!D.debrisBins.length) return `<div class="empty panel">No Yard Debris piles yet. Run schema.sql to add them.</div>`;
       return yardMap(D.debrisBins,{landmarks:[],minCols:10,colMin:'0',cls:'map-debris',photos:true,
         phone:()=>`<div class="ptiles ptiles-debris">${D.debrisBins.map(b=>mapTilePhone(b,b.photo_until_grind&&pilePhoto(b))).join('')}</div>`});
+    },
+    // Every grind as one line: what went in (from which pile) and what came out onto Ground Debris.
+    dGrinds(){
+      const all=S.debris.filter(e=>e.kind==='grind'&&e.status!=='scheduled')
+        .sort((a,b)=>b.happened_on.localeCompare(a.happened_on)||String(b.created_at).localeCompare(String(a.created_at)));
+      if(!all.length) return `<div class="empty panel">No grinds recorded yet.</div>`;
+      const done=all.filter(e=>e.status==='done'&&dayDiff(e.happened_on)>=-29);
+      const tin=done.reduce((s,e)=>s+Number(e.qty_yd),0), tout=done.reduce((s,e)=>s+Number(e.to_qty_yd),0);
+      const pct=(i,o)=>i>0?Math.round(o/i*100)+'%':'—';
+      const u=yd=>`${fmtN(Number(yd)/ydu())} <small>units</small>`;
+      return `<p class="muted" style="margin:0 0 8px;font-size:.85rem">Last 30 days: <b>${fmtN(tin/ydu())} units</b> ground → <b>${fmtN(tout/ydu())} units</b> made (${pct(tin,tout)}), ${done.length} grind${done.length===1?'':'s'}.</p>
+      <div class="tbl-wrap"><table class="grind-tbl"><thead><tr><th>Date</th><th>Input</th><th style="text-align:right">In</th><th>Output</th><th style="text-align:right">Out</th><th style="text-align:right">Yield</th><th>By</th><th>Notes</th><th></th></tr></thead><tbody>
+      ${all.slice(0,100).map(e=>{ const off=e.status==='cancelled';
+        return `<tr class="${off?'dim':''}"><td>${esc(fmtDate(e.happened_on))}</td>
+          <td><b>${esc(prodName(D.bin[e.bin_id]?.product_id))}</b></td><td class="num" style="text-align:right">${u(e.qty_yd)}</td>
+          <td>${esc(prodName(D.bin[e.to_bin_id]?.product_id))}</td><td class="num" style="text-align:right">${u(e.to_qty_yd)}</td>
+          <td class="num" style="text-align:right">${pct(Number(e.qty_yd),Number(e.to_qty_yd))}</td>
+          <td>${esc(e.created_by_name||'—')}</td><td class="muted">${esc(e.notes||'')}</td>
+          <td>${off?'<span class="chip c-mute">Undone</span>':can.debris()?confirmBtn('debrisUndo','Undo',`data-id="${e.id}"`,'ghost'):''}</td></tr>`; }).join('')}
+      </tbody></table></div>`;
     },
     dAlerts(){
       return debrisAlerts().map(b=>{ const s=D.stats[b.id];
