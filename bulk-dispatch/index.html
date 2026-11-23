@@ -994,6 +994,8 @@ code{font-family:var(--mono);font-size:12px;background:var(--surface-3);padding:
           <label class="field">Requests table <input type="text" id="set_trackerTable"></label>
           <label class="field">Bins table <input type="text" id="set_trackerBinsTable"
             placeholder="bins — blank to size loads by truck only"></label>
+          <label class="field">Shared products table <input type="text" id="set_catalogTable"
+            placeholder="products — blank to match on names"></label>
         </div>
         <div class="row" style="margin-top:6px">
           <button class="btn sm ghost" id="btnFindTable">What tables can it see?</button>
@@ -1103,6 +1105,7 @@ const DEFAULT_SETTINGS = {
   waveObjective: 'time', fillWeight: 4, pairBonus: 0,
   trackerUrl: '', trackerKey: '', trackerTable: 'backfill_requests', trackerSchema: '',
   trackerBinsTable: 'bins',
+  catalogTable: '', catalogSchema: '',
   trackerWriteBack: true, trackerPollMin: 10,
   shopProxy: '', shopTag: 'bulk-delivery'
 };
@@ -2209,6 +2212,14 @@ function liveRequests(){
 /** Match the tracker's product wording to this catalogue. */
 function reqProduct(r){
   if(r.productId){ const p = byId(DB.products, r.productId); if(p) return p; }
+  /* A shared id is the whole point of linking the catalogues: when the tracker
+   * names the product by key, there is nothing to guess. */
+  if(r.productRef){
+    const byShared = (DB.products||[]).find(p=>p.sharedId && String(p.sharedId) === String(r.productRef));
+    if(byShared) return byShared;
+    const bySku = (DB.products||[]).find(p=>p.sku && String(p.sku) === String(r.productRef));
+    if(bySku) return bySku;
+  }
   const want = normAddrKey(r.product).replace(/[^a-z0-9 ]/g,'');
   if(!want) return null;
   const list = DB.products || [];
@@ -6617,7 +6628,10 @@ function renderProducts(){
   const dp = depotPoints();
   $('#productsTable tbody').innerHTML = DB.products.map(p=>`
     <tr data-id="${esc(p.id)}">
-      <td>${esc(p.name)}${p.needsReview? ' <span class="tag" style="color:#8a6100" title="Weight per yard is an estimate">est.</span>':''}</td>
+      <td>${esc(p.name)}${p.needsReview? ' <span class="tag" style="color:#8a6100" title="Weight per yard is an estimate">est.</span>':''}${
+        p.sharedId? ` <span class="tag" style="color:#0f7a2e" title="Linked to the shared product list as ${esc(p.sharedId)}">linked</span>`
+                  : (Catalog.configured? ' <span class="tag" style="color:#b3261e" title="Not in the shared product list — requests naming it have to be matched on text">unlinked</span>' : '')}${
+        p.needsSetup? ' <span class="tag" style="color:#b3261e" title="Came from the shared list — weight and limits still to fill in">needs setup</span>':''}</td>
       <td class="num">${num(p.lbsPerYard)}</td>
       <td class="num">${num(p.maxYardsPerLoad)
         ? `${num(p.maxYardsPerLoad)}${p.maxSource==='site'? ' <span class="tag" title="Confirmed from the storefront">site</span>'
@@ -7032,6 +7046,7 @@ const SETTING_FIELDS = [
   ['set_trackerSchema','trackerSchema','text'], ['set_trackerTable','trackerTable','text'],
   ['set_trackerPollMin','trackerPollMin','num'], ['set_yardTrucks','yardTrucks','text'],
   ['set_trackerBinsTable','trackerBinsTable','text'],
+  ['set_catalogTable','catalogTable','text'], ['set_catalogSchema','catalogSchema','text'],
   ['set_trackerWriteBack','trackerWriteBack','bool'],
   ['set_shopProxy','shopProxy','text'], ['set_shopTag','shopTag','text']
 ];
@@ -7311,6 +7326,84 @@ function restoreBackup(){
   inp.click();
 }
 
+/* ------------------------------------------ the shared product list
+ * One product list for the whole production project, so an id means the same
+ * thing in the tracker and here. Dispatch does NOT own it — it links to it and
+ * keeps its own delivery-only fields (lb/yd, per-load caps, which yard stocks
+ * it) against the shared id. Whichever app owns the list later, this only has
+ * to be pointed at it.
+ *
+ * Read-only on purpose: nothing here writes back, so there is no way for the
+ * dispatch board to corrupt a list another app depends on.
+ */
+const Catalog = {
+  get configured(){ return Tracker.configured && !!DB.settings.catalogTable; },
+  _schema(){ return DB.settings.catalogSchema || DB.settings.trackerSchema || ''; },
+  _url(q){ return `${Tracker._base()}/rest/v1/${DB.settings.catalogTable}${q||''}`; },
+  _headers(){
+    const h = {...Tracker._headers()};
+    const sc = this._schema();
+    if(sc){ h['Accept-Profile'] = sc; } else { delete h['Accept-Profile']; }
+    return h;
+  },
+
+  adopt(row){
+    const m = (wants, nots)=>Bins._match(row, wants, nots);
+    const nm = m(['productname','name','title','label','product','material','item'], ['id','category','type']);
+    const sk = m(['sku','code','itemcode','productcode'], []);
+    const ac = m(['active','enabled','isactive'], []);
+    return {
+      sharedId: String(row.id ?? row.product_id ?? row.uuid ?? (sk && sk.value) ?? ''),
+      name: String(nm ? nm.value : ''),
+      sku:  sk ? String(sk.value) : '',
+      active: ac ? !(ac.value === false || ac.value === 'false' || ac.value === 0) : true
+    };
+  },
+
+  /** Link by shared id, then sku, then an exact name. Never by a fuzzy name —
+   *  a wrong link here would put the wrong product on a truck. */
+  _findLocal(inc){
+    const list = DB.products || [];
+    const norm = t => normAddrKey(String(t||'')).replace(/[^a-z0-9]/g,'');
+    return list.find(p=>p.sharedId && p.sharedId === inc.sharedId)
+        || (inc.sku ? list.find(p=>String(p.sku||'') && String(p.sku) === inc.sku) : null)
+        || list.find(p=>norm(p.name) === norm(inc.name))
+        || null;
+  },
+
+  async pull(){
+    if(!this.configured) throw new Error('No shared product table configured');
+    const res = await fetch(this._url('?select=*'), {headers:this._headers()});
+    if(!res.ok) throw new Error('products read '+res.status+' '+(await res.text()).slice(0,140));
+    const rows = await res.json();
+    DB.catalogColumns = rows[0] ? Object.keys(rows[0]) : [];
+    let linked = 0, added = 0, renamed = 0, unnamed = 0;
+    for(const row of rows){
+      const inc = this.adopt(row);
+      if(!inc.name){ unnamed++; continue; }
+      const mine = this._findLocal(inc);
+      if(mine){
+        if(!mine.sharedId){ mine.sharedId = inc.sharedId; linked++; }
+        if(inc.sku && !mine.sku) mine.sku = inc.sku;
+        if(inc.name && mine.name !== inc.name){ mine.name = inc.name; renamed++; }
+      }else{
+        // a product the shared list has and dispatch does not: carry it over,
+        // flagged, because its weight and limits still have to be filled in
+        DB.products.push({id: uid('p'), sharedId: inc.sharedId, sku: inc.sku, name: inc.name,
+          lbsPerYard: 0, maxYardsPerLoad: 0, active: inc.active, needsSetup: true});
+        added++;
+      }
+    }
+    DB.catalogPulledAt = new Date().toISOString();
+    DB.catalogError = unnamed && !linked && !added
+      ? `${rows.length} rows read but no name column matched. Columns: ${(DB.catalogColumns||[]).join(', ')}`
+      : null;
+    Store.save();
+    return {seen: rows.length, linked, added, renamed, unnamed,
+            total: (DB.products||[]).filter(p=>p.sharedId).length};
+  }
+};
+
 /* ------------------------------------------- the Hwy 99 bins, from the tracker
  * Read-only. The tracker owns these numbers; the board only needs to know how
  * much room a bin has so a load can be sized to fit on arrival. Column names are
@@ -7378,7 +7471,8 @@ const Bins = {
       const b = this.adopt(row);
       if(!b.name && !b.extId) continue;
       // tie the bin to a product in this catalogue where the wording allows
-      const p = b.product ? reqProduct({product:b.product}) : null;
+      const ref = Bins._match(row, ['productid','productuuid','productkey','sku'], []);
+      const p = reqProduct({product: b.product, productRef: ref ? String(ref.value) : ''});
       b.productId = p ? p.id : null;
       seen.push(b);
     }
@@ -7420,6 +7514,8 @@ const Tracker = {
       src:'tracker',
       extId: String(pick('id','request_id','uuid') ?? ''),
       product:    String(pick('product','product_name','item','material') ?? ''),
+      // the shared product list's key, when the tracker stores one
+      productRef: String(pick('product_id','productId','product_uuid','product_key','sku','product_sku') ?? ''),
       yards:      num(pick('yards','cubic_yards','qty_yards'), 0),
       units:      num(pick('units','qty_units','quantity'), 0),
       bin:        String(pick('bin','bin_name','bin_id','location') ?? ''),
@@ -7543,6 +7639,7 @@ function startTrackerPolling(){
       await Tracker.flush();
       // bin levels move on their own, so refresh them on the same beat
       if(Bins.configured) try{ await Bins.pull(); }catch(e){ DB.binsError = e.message; }
+      if(Catalog.configured) try{ await Catalog.pull(); }catch(e){ DB.catalogError = e.message; }
       renderRequests(); markTabCounts();
       if(r.added) toast(`${r.added} new yard request${r.added>1?'s':''} from the tracker`, 4000);
     }catch(e){
@@ -7625,6 +7722,7 @@ function renderRequests(){
             ? ` The table's columns are: ${DB.trackerColumns.join(', ')} — tell me which one is the`
               + ` key and which holds the quantity if they are not being picked up.` : ''));
     if(DB.binsError) bits.push(DB.binsError);
+    if(DB.catalogError) bits.push('Shared products: ' + DB.catalogError);
     warn.innerHTML = bits.length
       ? `<div class="warnbox"><div><b>The tracker link</b></div>${
           bits.map(t=>`<div>${esc(t)}</div>`).join('')}
@@ -8063,7 +8161,7 @@ async function pullTrackerNow(){
   if(!Tracker.configured){ toast('Add the tracker table in Settings first', 4000); return; }
   const btn = $('#btnReqPull'); if(btn){ btn.disabled = true; btn.textContent = 'Checking…'; }
   try{
-    DB.trackerError = null; DB.binsError = null;
+    DB.trackerError = null; DB.binsError = null; DB.catalogError = null;
     const r = await Tracker.pull();
     const sent = await Tracker.flush();
     let binNote = '';
@@ -8083,9 +8181,18 @@ async function pullTrackerNow(){
             + ` what is in it from “${b.from.current||'?'}”.`;
       }catch(e){ binNote = ' · bins: '+e.message.slice(0,60); }
     }
+    let prodNote = '';
+    if(Catalog.configured){
+      try{
+        const c = await Catalog.pull();
+        prodNote = ` · products: ${c.total} linked${c.added? `, ${c.added} new` : ''}${
+          c.renamed? `, ${c.renamed} renamed` : ''}`;
+        renderProducts();
+      }catch(e){ DB.catalogError = e.message; prodNote = ' · products: '+e.message.slice(0,60); }
+    }
     renderRequests();
     toast(`${r.seen} row${r.seen===1?'':'s'} read · ${r.added} new · ${r.updated} changed${
-      r.noId? ` · ${r.noId} skipped (no id column)` : ''}${sent? ` · ${sent} sent back` : ''}${binNote}`, 6000);
+      r.noId? ` · ${r.noId} skipped (no id column)` : ''}${sent? ` · ${sent} sent back` : ''}${binNote}${prodNote}`, 6000);
   }catch(e){ renderRequests(); toast('Tracker: '+e.message, 7000); }
   finally{ if(btn){ btn.disabled = false; btn.textContent = 'Check the tracker'; } }
 }
