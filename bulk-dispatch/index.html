@@ -7321,21 +7321,49 @@ const Bins = {
   get configured(){ return Tracker.configured && !!DB.settings.trackerBinsTable; },
   _url(q){ return `${Tracker._base()}/rest/v1/${DB.settings.trackerBinsTable}${q||''}`; },
 
+  /* Match on what a column name MEANS, not on a list of exact spellings. A
+   * tracker that calls its columns bin_capacity_yards and bin_on_hand should
+   * just work, and the app reports which columns it chose so a wrong guess is
+   * visible rather than silent. */
+  _match(row, wants, nots){
+    const keys = Object.keys(row);
+    for(const want of wants){
+      for(const k of keys){
+        const n = String(k).toLowerCase().replace(/[^a-z0-9]/g,'');
+        if(!n.includes(want)) continue;
+        if((nots||[]).some(x=>n.includes(x))) continue;
+        if(row[k] == null || row[k] === '') continue;
+        return {key:k, value:row[k], units:/unit/.test(n)};
+      }
+    }
+    return null;
+  },
+
   adopt(row){
-    const pick = (...names)=>{ for(const n of names) if(row[n]!=null && row[n]!=='') return row[n]; return null; };
     const unit = num(DB.settings.yardsPerUnit, 7.5);
-    const asYards = (yards, units)=> num(yards,0) > 0 ? num(yards) : num(units,0) * unit;
+    const asYards = hit => hit ? r1(num(hit.value,0) * (hit.units ? unit : 1)) : 0;
+
+    // capacity: how much the bin holds
+    const cap = this._match(row, ['capacity','maxyards','maxunits','binsize','sizeyards','totalyards','max'], []);
+    // what is in it now — never the capacity column, and never a reorder point
+    const cur = this._match(row,
+      ['onhand','currentyards','currentunits','current','level','inbin','remaining','balance',
+       'qtyyards','qtyunits','quantity','volume','yards','units','qty'],
+      ['capacity','max','reorder','size','min','target']);
+    const nm  = this._match(row, ['binname','name','label','binlabel','bin','location'], ['id']);
+    const pr  = this._match(row, ['product','material','item'], ['id']);
+
     return {
-      extId:   String(pick('id','bin_id','uuid') ?? ''),
-      name:    String(pick('name','bin','bin_name','label','location') ?? ''),
-      product: String(pick('product','product_name','material','item') ?? ''),
-      capacity: r1(asYards(pick('capacity_yards','capacity','size_yards','max_yards','yards_capacity'),
-                           pick('capacity_units','max_units'))),
-      current:  r1(asYards(pick('current_yards','current','on_hand_yards','on_hand','level_yards','qty_yards','yards'),
-                           pick('current_units','on_hand_units','units'))),
-      reorderAt: (()=>{ const p = num(pick('reorder_pct','reorder_point_pct'), 0);
-                        return p > 1 ? p/100 : (p || 0.25); })(),
-      updatedAt: String(pick('updated_at','counted_at','as_of') ?? '') || null
+      extId:   String(row.id ?? row.bin_id ?? row.uuid ?? nm?.value ?? ''),
+      name:    String(nm ? nm.value : ''),
+      product: String(pr ? pr.value : ''),
+      capacity: asYards(cap),
+      current:  asYards(cur),
+      reorderAt: (()=>{ const h = this._match(row, ['reorder'], []);
+                        const v = num(h && h.value, 0);
+                        return v > 1 ? v/100 : (v || 0.25); })(),
+      updatedAt: String(row.updated_at ?? row.counted_at ?? row.as_of ?? '') || null,
+      _from: {capacity: cap && cap.key, current: cur && cur.key, name: nm && nm.key}
     };
   },
 
@@ -7344,6 +7372,7 @@ const Bins = {
     const res = await fetch(this._url('?select=*'), {headers:Tracker._headers()});
     if(!res.ok) throw new Error('bins read '+res.status+' '+(await res.text()).slice(0,160));
     const rows = await res.json();
+    DB.binsColumns = rows[0] ? Object.keys(rows[0]) : [];
     const seen = [];
     for(const row of rows){
       const b = this.adopt(row);
@@ -7355,8 +7384,11 @@ const Bins = {
     }
     DB.bins = seen;
     DB.binsPulledAt = new Date().toISOString();
+    const sample = seen.find(b=>b._from && b._from.capacity) || seen[0];
+    const from = sample && sample._from ? {...sample._from} : null;   // before it is stripped
+    seen.forEach(b=>{ delete b._from; });
     Store.save();
-    return {bins: seen.length, withCapacity: seen.filter(b=>num(b.capacity,0) > 0).length};
+    return {bins: seen.length, withCapacity: seen.filter(b=>num(b.capacity,0) > 0).length, from};
   }
 };
 
@@ -7425,8 +7457,9 @@ const Tracker = {
       throw new Error(DB.trackerError);
     }
     const rows = await res.json();
+    DB.trackerColumns = rows[0] ? Object.keys(rows[0]) : [];
     DB.requests = DB.requests || [];
-    let added = 0, updated = 0, noId = 0;
+    let added = 0, updated = 0, noId = 0, alreadyClosed = 0;
     for(const row of rows){
       const inc = this.adopt(row);
       // a row whose id column we do not recognise would vanish without trace
@@ -7441,7 +7474,7 @@ const Tracker = {
         Object.assign(mine, inc, {id:mine.id, status:mine.status, createdAt:mine.createdAt});
         if(JSON.stringify([mine.product,mine.yards,mine.units,mine.needBy,mine.bin,mine.note]) !== before) updated++;
       } else {
-        if(closed) continue;
+        if(closed){ alreadyClosed++; continue; }
         DB.requests.push({id:uid('req'), status:'open',
                           createdAt: row.created_at || new Date().toISOString(), ...inc});
         added++;
@@ -7455,7 +7488,7 @@ const Tracker = {
     DB.trackerSeen = rows.length;
     DB.trackerNoId = noId;
     Store.save();
-    return {added, updated, seen: rows.length, noId};
+    return {added, updated, seen: rows.length, noId, alreadyClosed};
   },
 
   /** Tell the tracker what Kevin did. Never fatal — a failed write is retried next time. */
@@ -7586,7 +7619,12 @@ function renderRequests(){
         + ` "${DB.settings.trackerTable}" is the table it writes to`
         + (DB.settings.trackerSchema ? ` in schema ${DB.settings.trackerSchema}` : ' in the public schema')
         + ', and that this account is allowed to read it.');
-    if(DB.binsError) bits.push('Bins: ' + DB.binsError);
+    else if(DB.trackerSeen > 0 && !openRequests().length && !(DB.requests||[]).length)
+      bits.push(`${DB.trackerSeen} rows were read but none became requests.`
+        + ((DB.trackerColumns||[]).length
+            ? ` The table's columns are: ${DB.trackerColumns.join(', ')} — tell me which one is the`
+              + ` key and which holds the quantity if they are not being picked up.` : ''));
+    if(DB.binsError) bits.push(DB.binsError);
     warn.innerHTML = bits.length
       ? `<div class="warnbox"><div><b>The tracker link</b></div>${
           bits.map(t=>`<div>${esc(t)}</div>`).join('')}
@@ -7969,7 +8007,8 @@ function findTableDialog(){
     const extraS = (($('#ftSchema')||{}).value || '').trim();
     const extraT = (($('#ftTable')||{}).value || '').trim();
     const res = await scanForTables([extraS], [extraT], (sc, tb, n)=>{
-      if(box) box.innerHTML = `<div class="muted small">Trying ${esc(sc||'public')}.${esc(tb)} … (${n})</div>`;
+      if(box) box.innerHTML = `<div class="muted small">Looking for the table —
+        trying <b>${esc(sc||'public')}.${esc(tb)}</b> … (${n} of about 130)</div>`;
     });
     if(res.unreachable){
       if(box) box.innerHTML = `<div class="warnbox">Could not reach the project — ${esc(res.unreachable)}</div>`;
@@ -7991,9 +8030,13 @@ function findTableDialog(){
           placeholder="if you know it"></label>
     </div>
     <div class="row" style="margin-top:8px">
-      <button class="btn sm" id="ftGo">Try that one</button>
-      <button class="btn sm ghost" id="ftScan">Scan the likely names</button></div>
-    <div id="ftList" style="margin-top:10px"></div>`, [
+      <button class="btn sm primary" id="ftScan">Scan again</button>
+      <button class="btn sm ghost" id="ftGo">Test just the pair above</button></div>
+    <div id="ftList" style="margin-top:10px"></div>
+    <div class="small muted" style="margin-top:10px">If this finds nothing: in Supabase open
+      <b>Table Editor</b> and switch the schema dropdown off <code>public</code> — the tracker's
+      tables are under one of the others. Its schema also has to be listed in
+      <b>Settings → API → Exposed schemas</b> or nothing in it answers.</div>`, [
     {label:'Close', cls:'ghost', onClick:closeModal}
   ]);
 
@@ -8011,6 +8054,9 @@ function findTableDialog(){
   ['#ftSchema','#ftTable'].forEach(id=>{
     const el = $(id); if(el) el.onkeydown = e=>{ if(e.key==='Enter') look(); };
   });
+  // the pair in Settings is the one that just failed, so there is nothing to
+  // gain by waiting for a button — go and look
+  scan();
 }
 
 async function pullTrackerNow(){
@@ -8027,8 +8073,14 @@ async function pullTrackerNow(){
         // reading rows but finding no capacity means the column names did not match
         binNote = b.bins === 0 ? ` · bins table empty`
                 : b.withCapacity === 0
-                  ? ` · ${b.bins} bins read but no capacity column matched — check its column names`
+                  ? ` · ${b.bins} bins read, no capacity column matched`
                   : ` · ${b.withCapacity} of ${b.bins} bins have a capacity`;
+        if(b.bins && !b.withCapacity)
+          DB.binsError = `The bins table has ${b.bins} rows but none of its columns look like a`
+            + ` capacity. Its columns are: ${(DB.binsColumns||[]).join(', ')}`;
+        else if(b.from)
+          DB.binsRead = `Bin levels: capacity from “${b.from.capacity||'?'}”,`
+            + ` what is in it from “${b.from.current||'?'}”.`;
       }catch(e){ binNote = ' · bins: '+e.message.slice(0,60); }
     }
     renderRequests();
