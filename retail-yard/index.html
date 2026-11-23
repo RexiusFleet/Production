@@ -18,8 +18,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<script src="config.js?v=1e4744f8e5"></script>
-<script src="vendor/supabase.js?v=1e4744f8e5"></script>
+<script src="config.js?v=547775d82c"></script>
+<script src="vendor/supabase.js?v=547775d82c"></script>
 <style>
 /* Layout: sticky yard header + tab rail; each view is a working surface — bins as walled bays, queues as dense rows. */
 :root{
@@ -189,6 +189,11 @@ main{padding-block:20px 60px}
 .ptiles-debris .pt-num{font:700 .95rem/1.2 var(--f-mono);color:var(--ink);opacity:.85}
 .ptiles-debris .pt-num b{font:800 1.6rem/1 var(--f-mono);opacity:1}
 .ptiles-debris .ptile.st-alert .pt-num b{color:var(--bad)}
+/* "Add photo" on the photo piles: big and obvious */
+.photo-btn{position:relative;z-index:1;align-self:flex-start;display:inline-flex;align-items:center;gap:6px;margin-top:6px;padding:8px 14px;border-radius:8px;background:var(--accent);color:var(--accent-ink);font:800 .9rem/1 var(--f-body);box-shadow:0 1px 3px rgba(0,0,0,.25);cursor:pointer;white-space:nowrap}
+.photo-btn:hover{filter:brightness(1.08)}
+.photo-btn:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.ptile .photo-btn{justify-self:start;margin-top:2px}
 .tile.st-debris .tt{font-size:.95rem}
 .mark{display:flex;align-items:center;justify-content:center;text-align:center;border-radius:4px;font:600 .7rem/1.2 var(--f-mono);text-transform:uppercase;letter-spacing:.08em;padding:4px}
 .mk-booth{background:var(--ink);color:var(--bg)}
@@ -372,6 +377,6 @@ td.n{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-num
 
 <div id="app"></div>
 <div id="toast" class="toast" hidden></div>
-<script src="app.js?v=1e4744f8e5"></script>
+<script src="app.js?v=547775d82c"></script>
 
 </body></html>

@@ -89,7 +89,7 @@ const WRITE_SCHEMAS={
     sort:V.int(-10000,10000,{label:'Sort order'}), active:V.bool(), notes:V.str(500,{null:true,label:'Notes'}),
     map_x:V.int(1,30,{null:true,label:'Map column'}), map_y:V.int(1,500,{null:true,label:'Map row'}),
     map_w:V.int(1,10,{label:'Map width'}), map_h:V.int(1,50,{label:'Map height'}),
-    display_unit:V.oneOf(['yd3','units']), no_capacity:V.bool(), alert_over_yd:V.num(0.01,5000,{null:true,label:'Alert level'}) },
+    display_unit:V.oneOf(['yd3','units']), no_capacity:V.bool(), hide_volume:V.bool(), alert_over_yd:V.num(0.01,5000,{null:true,label:'Alert level'}) },
   'bins.update':null,
   'backfill_requests.insert':{
     product_id:V.id({req:true}), bin_id:V.id({req:true}), qty_yd:V.num(0.01,2000,{req:true,label:'Volume'}),
@@ -289,6 +289,8 @@ const bUnit = b => inUnits(b) ? 'units' : 'yd³';
 const fmtB = (b,yd) => { const v=bQty(b,yd); return fmtN(v)+' '+(inUnits(b)?(r1(v)===1?'unit':'units'):'yd³'); };
 // A pile with no capacity (Green Waste): just the volume, no fill level or "of N".
 const hasCap = b => !b?.no_capacity;
+// Green Waste: the volume is tracked but not shown on the map or the pile card.
+const showVol = b => !b?.hide_volume;
 const overAlert = b => Number(b?.alert_over_yd)>0 && (Number(S?.onHand?.[b.id])||0) > Number(b.alert_over_yd);
 const signed = n => (n>0?'+':n<0?'−':'')+fmtN(Math.abs(n));
 function dayDiff(iso){ if(!iso) return null; const [y,m,d]=iso.slice(0,10).split('-').map(Number); const t=new Date(); return Math.round((new Date(y,m-1,d) - new Date(t.getFullYear(),t.getMonth(),t.getDate()))/864e5); }
@@ -333,7 +335,7 @@ function seedDemo(){
   DEBRIS_BINS.forEach(([code,name,role,[x,y,w,h],variant,unit,capU,alertU],i)=>{
     const p={id:uid(),name,sku:null,shopify_product_id:null,shopify_titles:variant?['Tip Fees']:[],shopify_variant_match:variant,haul_group:null,active:true,created_at:nowISO()};
     prods.push(p);
-    bins.push({id:uid(),code,product_id:p.id,capacity_yd:capU?capU*7.5:100,reorder_yd:0,sort:101+i,active:true,notes:'',map_x:x,map_y:y,map_w:w,map_h:h,site:'debris',debris_role:role,display_unit:unit||'yd3',no_capacity:code==='GREEN',photo_until_grind:code==='GREEN',alert_over_yd:alertU?alertU*7.5:null,created_at:nowISO()});
+    bins.push({id:uid(),code,product_id:p.id,capacity_yd:capU?capU*7.5:100,reorder_yd:0,sort:101+i,active:true,notes:'',map_x:x,map_y:y,map_w:w,map_h:h,site:'debris',debris_role:role,display_unit:unit||'yd3',no_capacity:code==='GREEN',photo_until_grind:code!=='EXC',hide_volume:code==='GREEN',alert_over_yd:alertU?alertU*7.5:null,created_at:nowISO()});
   });
   const B=c=>bins.find(b=>b.code===c);
   const mv=[]; const M=(bin,qty,kind,note,day,by='Jeff Davis')=>mv.push({id:uid(),created_at:new Date(Date.now()+day*864e5).toISOString(),occurred_on:isoDay(day),bin_id:bin.id,product_id:bin.product_id,qty_yd:qty,kind,note,created_by_name:by});
@@ -385,12 +387,12 @@ function seedDemo(){
   const H=(r,truck,vol,day,status)=>({id:uid(),created_at:nowISO(),request_id:r.id,method:r.method,truck_no:truck,loads:1,conditions:'dry',bin_id:r.bin_id,product_id:r.product_id,volume_yd:vol,haul_on:isoDay(day),status,delivered_at:status==='delivered'?nowISO():null,created_by_name:'Kevin Roemer'});
   const hauls=[H(rq[2],'98',60,-1,'delivered'),H(rq[2],'85',15,-1,'delivered'),H(rq[0],'85',30,1,'scheduled')];
 
-  return {v:19,debris_events:debris,userId:'u-jeff',settings:{yd_per_unit:7.5,tote_sizes:[1,1.5],trucks:DEFAULT_TRUCKS,yard_landmarks:YARD_LANDMARKS,shopify_ignore_titles:SHOPIFY_IGNORE},products:prods,bins,movements:mv,internal_orders:io,shopify_order_lines:lines,backfill_requests:rq,hauls};
+  return {v:20,debris_events:debris,userId:'u-jeff',settings:{yd_per_unit:7.5,tote_sizes:[1,1.5],trucks:DEFAULT_TRUCKS,yard_landmarks:YARD_LANDMARKS,shopify_ignore_titles:SHOPIFY_IGNORE},products:prods,bins,movements:mv,internal_orders:io,shopify_order_lines:lines,backfill_requests:rq,hauls};
 }
 
 function DemoAdapter(){
-  const KEY='ryt-demo-v19';
-  let db=store.get(KEY,null); if(!db||db.v!==19){ db=seedDemo(); }
+  const KEY='ryt-demo-v20';
+  let db=store.get(KEY,null); if(!db||db.v!==20){ db=seedDemo(); }
   const save=()=>store.set(KEY,db);
   const me=()=>DEMO_USERS.find(u=>u.id===db.userId)||DEMO_USERS[0];
   const defaultBin=pid=>db.bins.filter(b=>b.active!==false&&b.product_id===pid).sort((a,b)=>(a.sort-b.sort)||a.code.localeCompare(b.code))[0]?.id||null;
@@ -431,7 +433,7 @@ function DemoAdapter(){
         row.done_at=nowISO(); const on={occurred_on:row.happened_on};
         if(row.kind==='intake') M(b,Number(row.qty_yd),'intake','Debris in'+(row.source?' — '+row.source:''),on);
         else if(row.kind==='grind'){ M(b,-Number(row.qty_yd),'grind','Ground into '+tb.code,on); M(tb,Number(row.to_qty_yd),'grind','Ground from '+b.code,on);
-          demoPhotos.forEach(p=>{ if(p.bin_id===b.id&&!p.cleared_at){ p.cleared_at=nowISO(); p.cleared_by_event=row.id; } }); }   // a grind clears the pile photo
+          demoPhotos.forEach(p=>{ if((p.bin_id===b.id||p.bin_id===tb.id)&&!p.cleared_at){ p.cleared_at=nowISO(); p.cleared_by_event=row.id; } }); }   // a grind clears both piles' photos
         else M(b,-Number(row.qty_yd),'removal','Hauled away'+(who?' — '+who:''),on);
       } else if(old.status==='done'&&row.status!=='done'){
         row.done_at=null;
@@ -722,7 +724,7 @@ async function preparePhoto(file,label){
 const pilePhoto=b=>(S.photos||[]).filter(p=>p.bin_id===b.id&&!p.cleared_at).sort((a,c)=>String(c.uploaded_at).localeCompare(String(a.uploaded_at)))[0]||null;
 // The most recent grind recorded on a pile, and whether a photo was taken before it.
 function lastGrind(b){
-  return (S.debris||[]).filter(e=>e.kind==='grind'&&e.status==='done'&&e.bin_id===b.id)
+  return (S.debris||[]).filter(e=>e.kind==='grind'&&e.status==='done'&&(e.bin_id===b.id||e.to_bin_id===b.id))
     .sort((x,y)=>(y.happened_on+(y.done_at||'')).localeCompare(x.happened_on+(x.done_at||'')))[0]||null;
 }
 function photoBeforeGrind(b,p){
@@ -737,6 +739,18 @@ const photoShort=d=>new Date(d).toLocaleString(undefined,{month:'short',day:'num
 function photoTag(b,p){
   const g=photoBeforeGrind(b,p);
   return g?`<span class="ph-tag" title="This photo was taken before the last grind (${esc(fmtDate(g.happened_on))}), so the pile may look different now.">Before last grind · ${esc(fmtDate(g.happened_on))}</span>`:'';
+}
+// A clear "Add photo" button on each photo pile, for Jeff and admins. It's a <span>: the tile is the button.
+function photoBtn(b){
+  if(!b.photo_until_grind||!can.photo()) return '';
+  return `<span class="photo-btn" role="button" tabindex="0" data-act="photoPick" data-id="${b.id}">📷 ${pilePhoto(b)?'New photo':'Add photo'}</span>`;
+}
+async function uploadPilePhoto(file,b){
+  toast('Saving photo…');
+  let when;
+  await run(async()=>{ const {blob,takenAt}=await preparePhoto(file,prodName(b.product_id)); when=takenAt;
+    await A.uploadPhoto(b.id,blob,takenAt.toISOString()); });
+  if(when) toast(`Photo saved, dated ${photoWhen(when)}. It stays until the next grind.`);
 }
 // The photo inside its pile's tile (a <span>: the tile itself is the button).
 function photoInTile(b,p){
@@ -858,7 +872,8 @@ function mapTilePhone(b,photo=null){
   return `<button class="ptile st-${s.st} ${photo?'has-photo':''} ${UI.selBin===b.id?'sel':''}" data-act="selBin" data-id="${b.id}" aria-label="${esc(prodName(b.product_id))}, bin ${esc(b.code)}: ${fmtN(bQty(b,s.onHand))} of ${fmtN(bQty(b,b.capacity_yd))} ${inUnits(b)?'units':'cubic yards'}, ${ST_CHIP[s.st][0]}">
       <span class="pt-top"><span class="pt-name">${esc(b.product_id?prodName(b.product_id):'Empty')}</span><span class="tcode">${esc(b.code)}</span></span>
       ${hasCap(b)?`<span class="pt-bar"><i style="width:${pct.toFixed(0)}%"></i></span>`:''}
-      <span class="pt-num num">${hasCap(b)?`<b>${fmtN(bQty(b,s.onHand))}</b> / ${fmtB(b,b.capacity_yd)}`:`<b>${fmtB(b,s.onHand)}</b>`}${s.out?` <span class="f out">▼${fmtN(s.out)}</span>`:''}${s.inc?` <span class="f in">▲${fmtN(s.inc)}</span>`:''}</span>
+      ${!showVol(b)?'':`<span class="pt-num num">${hasCap(b)?`<b>${fmtN(bQty(b,s.onHand))}</b> / ${fmtB(b,b.capacity_yd)}`:`<b>${fmtB(b,s.onHand)}</b>`}${s.out?` <span class="f out">▼${fmtN(s.out)}</span>`:''}${s.inc?` <span class="f in">▲${fmtN(s.inc)}</span>`:''}</span>`}
+      ${b.site==='debris'?photoBtn(b):''}
       ${photo?photoInTile(b,photo):''}
     </button>`;
 }
@@ -891,7 +906,8 @@ function yardMap(bins=D.activeBins,{landmarks=S.settings.yard_landmarks||[],minC
       <i class="lvl" style="height:${pct.toFixed(0)}%"></i>
       <span class="tcode">${esc(b.code)}</span>
       <span class="tt">${esc(b.product_id?prodName(b.product_id):'Empty')}</span>
-      <span class="tv num">${fmtN(bQty(b,s.onHand))}<small>${hasCap(b)?'/'+fmtN(bQty(b,b.capacity_yd)):''}${inUnits(b)?' units':hasCap(b)&&b.site!=='debris'?'':' yd³'}</small>${flags}</span>
+      ${showVol(b)?`<span class="tv num">${fmtN(bQty(b,s.onHand))}<small>${hasCap(b)?'/'+fmtN(bQty(b,b.capacity_yd)):''}${inUnits(b)?' units':hasCap(b)&&b.site!=='debris'?'':' yd³'}</small>${flags}</span>`:''}
+      ${photos?photoBtn(b):''}
       ${pw?photoInTile(b,ph):''}
     </button>`;
   }).join('');
@@ -912,7 +928,7 @@ const debrisKindFilter={intake:b=>b.debris_role!=='ground',grind:b=>b.debris_rol
 const tsDay=t=>{ const d=new Date(t); return isNaN(d)?String(t||'').slice(0,10):d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
 const haulerName=h=>/^\d+$/.test(h||'')?'Truck '+h:(h||'');
 function debrisBinOpts(filter,sel){
-  return D.debrisBins.filter(filter).map(b=>`<option value="${b.id}" data-unit="${inUnits(b)?'unit':'yd'}" ${b.id===sel?'selected':''}>${esc(prodName(b.product_id))} (${fmtB(b,D.stats[b.id].onHand)})</option>`).join('');
+  return D.debrisBins.filter(filter).map(b=>`<option value="${b.id}" data-unit="${inUnits(b)?'unit':'yd'}" ${b.id===sel?'selected':''}>${esc(prodName(b.product_id))}${showVol(b)?` (${fmtB(b,D.stats[b.id].onHand)})`:''}</option>`).join('');
 }
 function debrisFields(kind,bin){
   // bin given → the pop-up for that pile: the pile is fixed.
@@ -947,8 +963,8 @@ function debrisCard(b){
     <div class="bin-h"><span class="prod">${esc(prodName(b.product_id))}</span></div>
     <div class="code">Pile ${esc(b.code)}</div>
     ${hasCap(b)?gauge(b,s):''}
-    <div class="level"><b class="num">${fmtN(bQty(b,s.onHand))}</b><span class="of">${hasCap(b)?'of '+fmtB(b,b.capacity_yd):bUnit(b)+' on the pile'}</span></div>
-    ${inUnits(b)?`<div class="muted" style="font-size:.8rem">${fmtYd(s.onHand)} · 1 unit = ${fmtN(ydu())} yd³</div>`:''}
+    ${showVol(b)?`<div class="level"><b class="num">${fmtN(bQty(b,s.onHand))}</b><span class="of">${hasCap(b)?'of '+fmtB(b,b.capacity_yd):bUnit(b)+' on the pile'}</span></div>`:''}
+    ${inUnits(b)&&showVol(b)?`<div class="muted" style="font-size:.8rem">${fmtYd(s.onHand)} · 1 unit = ${fmtN(ydu())} yd³</div>`:''}
     ${Number(b.alert_over_yd)>0?`<div style="font-size:.8rem;color:var(--${s.st==='alert'?'bad':'muted'})">${s.st==='alert'?'⚠ Over':'Alert over'} ${fmtB(b,b.alert_over_yd)}</div>`:''}
     <div class="muted" style="font-size:.8rem">${esc(DEBRIS_HINT[b.debris_role]||'')}</div>
   </article>`;
@@ -1277,6 +1293,7 @@ VIEWS.setup={
           <label class="field"><span>Map height (rows)</span><input id="bn-mh" name="map_h" type="number" min="1" step="1" value="${esc(eb?.map_h??3)}"></label>
           ${eb?.site==='debris'?`<label class="field"><span>Show amounts in</span><select name="display_unit"><option value="yd3">yd³</option><option value="units" ${inUnits(eb)?'selected':''}>units (${fmtN(ydu())} yd³)</option></select></label>
           <label class="field"><span><input type="checkbox" name="no_capacity" ${eb.no_capacity?'checked':''}> No capacity (just track the volume)</span></label>
+          <label class="field"><span><input type="checkbox" name="hide_volume" ${eb.hide_volume?'checked':''}> Don't show the volume on the map</span></label>
           <label class="field"><span>Alert when over (in that unit; blank = off)</span><input name="alert_over" type="number" min="0" step="0.5" value="${Number(eb.alert_over_yd)>0?esc(r1(bQty(eb,eb.alert_over_yd))):''}"></label>`:''}
           <label class="field"><span><input type="checkbox" name="active" ${eb?.active===false?'':'checked'}> Active</span></label>
           <div class="form-actions full"><button class="btn primary">${eb?'Save bin':'Add bin'}</button>${eb?'<button type="button" class="btn ghost" data-act="editBin" data-id="">Cancel</button>':''}</div>
@@ -1484,6 +1501,13 @@ async function run(fn, ok){
   catch(e){ console.error(e); toast(friendlyError(e), true); await reload().catch(()=>{}); return false; }
 }
 const ACT={
+  // Opens the camera / photo library straight from the map tile.
+  photoPick(d){
+    const b=D.bin[d.id]; if(!b) return;
+    const i=document.createElement('input'); i.type='file'; i.accept='image/*'; i.hidden=true;
+    i.onchange=()=>{ const f=i.files?.[0]; i.remove(); if(f) uploadPilePhoto(f,b); };
+    document.body.appendChild(i); i.click();
+  },
   tab(d){ UI.selBin=null; renderBinModal(); UI.tab=d.tab; store.set('ryt-tab',UI.tab); UI.prefillBin=null; UI.prefillQty=null; render(); try{ window.scrollTo({top:0}); }catch{} },
   pullFilter(d){ UI.pullFilter=d.v; renderDyn(true); },
   yardView(d){ UI.yardView=d.v; store.set('ryt-yardview',d.v); renderDyn(true); },
@@ -1584,15 +1608,13 @@ const CHANGE={
   ledgerBin(el){ UI.ledgerBin=el.value; renderDyn(true); },
   async pilePhoto(el){
     const file=el.files?.[0]; const b=D.bin[el.dataset.id]; el.value=''; if(!file||!b) return;
-    toast('Saving photo…');
-    let when;
-    await run(async()=>{ const {blob,takenAt}=await preparePhoto(file,prodName(b.product_id)); when=takenAt;
-      await A.uploadPhoto(b.id,blob,takenAt.toISOString()); });
-    if(when) toast(`Photo saved, dated ${photoWhen(when)}. It stays until the next grind.`);
+    await uploadPilePhoto(file,b);
   },
   debrisBinUnit(el){ const o=el.selectedOptions[0]; const u=el.closest('form')?.querySelector('[data-follows-bin]'); if(u&&o?.dataset.unit) u.value=o.dataset.unit; },
   debrisTruck(el){ const f=el.closest('form'); const o=f?.querySelector('[data-other-truck]'); if(!o) return; o.hidden=el.value!=='other'; const i=f.querySelector('[name=truck_other]'); i.required=el.value==='other'; if(el.value==='other') i.focus(); },
 };
+// Keyboard: Enter/Space on the "Add photo" button inside a map tile.
+document.addEventListener('keydown',e=>{ const b=e.target.closest?.('.photo-btn'); if(b&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); b.click(); } });
 document.addEventListener('click',e=>{
   const a=e.target.closest('[data-act]'); if(!a) return;
   if(a.tagName==='SUMMARY') return;
@@ -1737,7 +1759,7 @@ const FORM={
     const row={code:fd.get('code').trim(),product_id:fd.get('product_id')||null,capacity_yd:r1(fd.get('capacity_yd')),reorder_yd:r1(fd.get('reorder_yd')),sort:Number(fd.get('sort'))||0,active:!!fd.get('active'),map_x:n('map_x'),map_y:n('map_y'),map_w:old?.map_w||1,map_h:n('map_h')||3};
     if(old?.site==='debris'){
       row.display_unit=fd.get('display_unit')==='units'?'units':'yd3';
-      row.no_capacity=!!fd.get('no_capacity');
+      row.no_capacity=!!fd.get('no_capacity'); row.hide_volume=!!fd.get('hide_volume');
       const a=n('alert_over'); row.alert_over_yd=a>0?r1(a*(row.display_unit==='units'?ydu():1)):null;
     }
     UI.editBin=null;
