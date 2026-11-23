@@ -672,10 +672,24 @@ function orderSizes(pid){
   return [[t[0]?.no,p.order_size_1_yd],[t[1]?.no,p.order_size_2_yd]].filter(([no])=>no)
     .map(([no,own])=>({no,yd:Number(own)||truckCap(no,pid,'dry')})).filter(x=>x.yd>0);
 }
-function orderSizeBtns(pid){
+// Room left in a bin for a new order: capacity − on hand − trucks already on the way
+// − open orders that don't have a truck yet.
+function binRoom(binId){
+  const b=D.bin[binId], s=D.stats[binId]; if(!b||!s) return null;
+  const waiting=S.backfills.filter(r=>r.bin_id===binId&&OPEN_REQ.includes(r.status)).reduce((t,r)=>{
+    const sched=S.hauls.filter(h=>h.request_id===r.id&&h.status!=='cancelled').reduce((a,h)=>a+Number(h.volume_yd),0);
+    return t+Math.max(0,Number(r.qty_yd)-sched); },0);
+  return r1(Math.max(0,(Number(b.capacity_yd)||0)-s.proj-waiting));
+}
+function orderSizeBtns(pid,binId=D.defaultBin(pid)){
   const z=orderSizes(pid);
-  return z.length?z.map(x=>`<button type="button" class="btn sm size-btn" data-act="orderSize" data-yd="${x.yd}">Truck ${esc(x.no)} load · ${fmtN(x.yd)} yd³ (${fmtUnits(x.yd)})</button>`).join('')
-    :`<span class="muted" style="font-size:.82rem">No truck load sizes set for this product. Enter a volume.</span>`;
+  if(!z.length) return `<span class="muted" style="font-size:.82rem">No truck load sizes set for this product. Enter a volume.</span>`;
+  const room=binRoom(binId), b=D.bin[binId];
+  // Only the truck loads that fit in the bin without overflowing it.
+  const fit=room==null?z:z.filter(x=>x.yd<=room+0.01);
+  const roomNote=room==null?'':`<span class="muted" style="font-size:.82rem">Bin ${esc(b.code)} has room for ${fmtN(room)} yd³ (${fmtUnits(room)}).</span>`;
+  if(!fit.length) return `<span class="hint warn" style="font-size:.85rem">No full truck load fits: bin ${esc(b.code)} has room for ${fmtN(room)} yd³ (${fmtUnits(room)}), counting what's already ordered.</span>`;
+  return fit.map(x=>`<button type="button" class="btn sm size-btn" data-act="orderSize" data-yd="${x.yd}">Truck ${esc(x.no)} load · ${fmtN(x.yd)} yd³ (${fmtUnits(x.yd)})</button>`).join('')+roomNote;
 }
 
 /* ---------- shared fragments ---------- */
@@ -1135,7 +1149,7 @@ function orderFormFields(bin,qty=''){
     : `<label class="field"><span>Product</span><select id="rq-bin" name="product_id" required data-hint="rq-hint" data-hint-product="1" data-act-change="orderProduct">${productOptions(UI.prefillBin&&D.bin[UI.prefillBin]?.product_id,p=>p.hauled_by==='bulk')}</select></label>`;
   const pid=bin?bin.product_id:(UI.prefillBin&&D.bin[UI.prefillBin]?.product_id);
   return `        ${product}
-        <div class="field full"><span>Order size</span><div class="size-btns" data-order-sizes>${pid?orderSizeBtns(pid):'<span class="muted" style="font-size:.82rem">Choose a product to see its truck loads.</span>'}</div></div>
+        <div class="field full"><span>Order size</span><div class="size-btns" data-order-sizes>${pid?orderSizeBtns(pid,bin?bin.id:undefined):'<span class="muted" style="font-size:.82rem">Choose a product to see its truck loads.</span>'}</div></div>
         ${qtyField('qty','Volume needed', qty)}
         <label class="field"><span>Needed by</span><input id="rq-date" name="needed_by" type="date" value="${isoDay(1)}"></label>
         <input type="hidden" name="method" value="bulk">
