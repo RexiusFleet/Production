@@ -328,17 +328,18 @@ const SHOPIFY_VARIANT={"Red Ultrakote":"Red","Black Ultrakote":"Black"};
 const DEFAULT_TRUCKS=[{"no": "85", "cap": {"bark": {"dry": 37.5, "wet": 37.5}, "sawdust": {"dry": 37.5, "wet": 37.5}, "primary": {"dry": 22.5, "wet": 18.75}, "fng": {"dry": 18.75, "wet": 15.0}, "turf": {"dry": 18.75, "wet": 15.0}, "compost": {"dry": 30, "wet": 25}}}, {"no": "98", "cap": {"bark": {"dry": 60.0, "wet": 48.75}, "primary": {"dry": 45.0, "wet": 37.5}, "fng": {"dry": 37.5, "wet": 30.0}, "turf": {"dry": 37.5, "wet": 30.0}, "compost": {"dry": 52.5, "wet": 45.0}}}];
 const HAUL_GROUPS={"bark": "Barks / Fiberex", "sawdust": "Sawdust", "primary": "Primary", "fng": "Flower-n-Garden", "turf": "Turf Start", "compost": "Compost"};
 /* From the "Retail Yard Product Ordering" sheet: Kevin hauls these, so Jeff orders them in the app. */
-const BULK_PRODUCTS=["Econobark","Beautibark","Hemlock","Primary","Flower-n-Garden","Turf Start","Promix"];
+/* [product, Truck 85 units, Truck 98 units] — Kevin's list */
+const BULK_PRODUCTS=[["Econobark", 5, 8], ["Beautibark", 5, 8], ["Hemlock", 5, 8], ["Primary", 3, 6], ["Flower-n-Garden", 2.5, 5], ["Turf Start", 2.5, 5], ["LFNW", 4, 7], ["GVO Compost", 4, 7], ["Opus 1", 5, 8], ["GVO NO Potting", 5, 8], ["Sawdust", 5, null], ["Red Ultrakote", 5, 8], ["Black Ultrakote", 5, 8], ["Patio Potting Soil", 5, 8], ["Steer Plus", 4, 7], ["Decobark Nuggets", 5, 8], ["Fiberex", 5, 8], ["GVO With Worm Castings", 5, 8]];
 const PRODUCT_HAUL_GROUP={"Econobark": "bark", "Beautibark": "bark", "Hemlock": "bark", "Decobark Nuggets": "bark", "Red Ultrakote": "bark", "Black Ultrakote": "bark", "Fiberex": "bark", "Sawdust": "sawdust", "Alder Sawdust": "sawdust", "Primary": "primary", "Flower-n-Garden": "fng", "Turf Start": "turf", "GVO Compost": "compost", "LFNW": "compost", "Steer Plus": "compost"};
 const SHOPIFY_IGNORE=["Grass Seed", "Coir Fibre", "Chicken Compost", "Perlite", "3.8Ft Peat Moss", "Christmas Tree Fees", "Dump Card", "Bio-Bags", "Sand Bags", "Tip Fees-Curbside NEW", "Tip Fees-Food Waste NEW", "Bags", "Sanipac", "Chip Truck", "Opus Grows Mix #2", "Opus Grows Mix Zero", "Worm Castings", "Filled Tote"];
 const YARD_LANDMARKS=[{"label": "Scale booth", "x": 3, "y": 29, "w": 1, "h": 3, "kind": "booth"}, {"label": "Bagged goods", "x": 6, "y": 43, "w": 1, "h": 4, "kind": "bags"}];
 /* Yard Debris piles: [code, product, role, map column, Shopify "Tip Fees" variant] */
-/* Layout (10-column grid): Wood Debris over Ground Debris at the top; Green Waste and Excavation side by side below. */
+/* Layout (10-column grid): Wood Debris, Ground Debris and Green Waste down the left (each with room for a photo on its right); Excavation tall and narrow on the far right. */
 /* [code, product, role, [x,y,w,h], Tip Fees variant, display unit, capacity in units, alert over N units] */
-const DEBRIS_BINS=[["WOOD","Wood Debris","grind",[1,1,4,5],"Wood Waste"],["GROUND","Ground Debris","ground",[1,7,4,5],null,"units",200,50],["GREEN","Green Waste","grind",[1,15,4,5],"Yard Debris","units"],["EXC","Excavation","dump",[7,15,4,5],"Dirt and Rock"]];
+const DEBRIS_BINS=[["WOOD","Wood Debris","grind",[1,1,4,5],"Wood Waste"],["GROUND","Ground Debris","ground",[1,7,4,5],null,"units",200,50],["GREEN","Green Waste","grind",[1,15,4,5],"Yard Debris","units"],["EXC","Excavation","dump",[8,7,3,13],"Dirt and Rock"]];
 function seedDemo(){
   const names=[...new Set(YARD_BINS.map(b=>b[1]).filter(Boolean))];
-  const prods=names.map(n=>({id:uid(),name:n,sku:null,shopify_product_id:null,shopify_titles:SHOPIFY_TITLES[n]?[SHOPIFY_TITLES[n]]:[],shopify_variant_match:SHOPIFY_VARIANT[n]||null,haul_group:PRODUCT_HAUL_GROUP[n]||null,hauled_by:BULK_PRODUCTS.includes(n)?'bulk':null,supplier:null,order_size_1_yd:null,order_size_2_yd:null,active:true,created_at:nowISO()}));
+  const prods=names.map(n=>({id:uid(),name:n,sku:null,shopify_product_id:null,shopify_titles:SHOPIFY_TITLES[n]?[SHOPIFY_TITLES[n]]:[],shopify_variant_match:SHOPIFY_VARIANT[n]||null,haul_group:PRODUCT_HAUL_GROUP[n]||null,hauled_by:BULK_PRODUCTS.some(x=>x[0]===n)?'bulk':null,supplier:null,order_size_1_yd:(BULK_PRODUCTS.find(x=>x[0]===n)?.[1]??null)&&BULK_PRODUCTS.find(x=>x[0]===n)[1]*7.5,order_size_2_yd:(BULK_PRODUCTS.find(x=>x[0]===n)?.[2]??null)&&BULK_PRODUCTS.find(x=>x[0]===n)[2]*7.5,active:true,created_at:nowISO()}));
   const pid=n=>prods.find(p=>p.name===n)?.id||null;
   const bins=YARD_BINS.map(([code,name,cap,x,y,w,h],i)=>({id:uid(),code,product_id:pid(name),capacity_yd:cap,reorder_yd:r1(cap*.25),sort:i,active:true,notes:'',map_x:x,map_y:y,map_w:w,map_h:h,site:'retail',debris_role:null,created_at:nowISO()}));
   DEBRIS_BINS.forEach(([code,name,role,[x,y,w,h],variant,unit,capU,alertU],i)=>{
@@ -396,12 +397,12 @@ function seedDemo(){
   const H=(r,truck,vol,day,status)=>({id:uid(),created_at:nowISO(),request_id:r.id,method:r.method,truck_no:truck,loads:1,conditions:'dry',bin_id:r.bin_id,product_id:r.product_id,volume_yd:vol,haul_on:isoDay(day),status,delivered_at:status==='delivered'?nowISO():null,created_by_name:'Kevin Roemer'});
   const hauls=[H(rq[2],'98',60,-1,'delivered'),H(rq[2],'85',15,-1,'delivered'),H(rq[0],'85',30,1,'scheduled')];
 
-  return {v:21,receipts:[],debris_events:debris,userId:'u-jeff',settings:{yd_per_unit:7.5,tote_sizes:[1,1.5],trucks:DEFAULT_TRUCKS,yard_landmarks:YARD_LANDMARKS,shopify_ignore_titles:SHOPIFY_IGNORE},products:prods,bins,movements:mv,internal_orders:io,shopify_order_lines:lines,backfill_requests:rq,hauls};
+  return {v:23,receipts:[],debris_events:debris,userId:'u-jeff',settings:{yd_per_unit:7.5,tote_sizes:[1,1.5],trucks:DEFAULT_TRUCKS,yard_landmarks:YARD_LANDMARKS,shopify_ignore_titles:SHOPIFY_IGNORE},products:prods,bins,movements:mv,internal_orders:io,shopify_order_lines:lines,backfill_requests:rq,hauls};
 }
 
 function DemoAdapter(){
-  const KEY='ryt-demo-v21';
-  let db=store.get(KEY,null); if(!db||db.v!==21){ db=seedDemo(); }
+  const KEY='ryt-demo-v23';
+  let db=store.get(KEY,null); if(!db||db.v!==23){ db=seedDemo(); }
   const save=()=>store.set(KEY,db);
   const me=()=>DEMO_USERS.find(u=>u.id===db.userId)||DEMO_USERS[0];
   const defaultBin=pid=>db.bins.filter(b=>b.active!==false&&b.product_id===pid).sort((a,b)=>(a.sort-b.sort)||a.code.localeCompare(b.code))[0]?.id||null;
@@ -997,7 +998,8 @@ function debrisFields(kind,bin){
     <label class="field"><span>Loads</span><input name="loads" type="number" min="1" max="50" step="1" value="1"></label>`+num('qty','Volume',bin)+date+
     `<label class="field"><span>Status</span><select name="status"><option value="done">Hauled already (take out now)</option><option value="scheduled">Schedule (confirm when hauled)</option></select></label>`+notes;
 }
-const DEBRIS_FORMS={intake:['Add debris','order','Add to pile'],grind:['Record grind','primary','Save grind'],removal:['Haul away','take','Save removal']};
+// Haul away (removals) is switched off on the Yard Debris side; old removal records stay in the Ledger.
+const DEBRIS_FORMS={intake:['Add debris','order','Add to pile'],grind:['Record grind','primary','Save grind']};
 function debrisCard(b){
   const s=D.stats[b.id];
   return `<article class="bin st-${s.st}">
@@ -1011,7 +1013,7 @@ function debrisCard(b){
   </article>`;
 }
 const debrisAlerts=()=>(D?.debrisBins||[]).filter(overAlert);
-const debrisDue=()=>S.debris.filter(e=>e.kind==='removal'&&e.status==='scheduled'&&dayDiff(e.happened_on)<=0).length;
+const debrisDue=()=>0;   // no removals on the Yard Debris side
 function debrisRemovalRow(e){
   const late=dayDiff(e.happened_on)<0;
   return `<div class="row">
@@ -1030,12 +1032,11 @@ VIEWS.debris={
       <div class="sec">
         <div class="sec-head"><h2>Yard Debris</h2>
           ${can.debris()?`<button class="btn sm order" data-act="debrisForm" data-v="intake">Add debris</button>
-          <button class="btn sm" data-act="debrisForm" data-v="grind">Record grind</button>
-          <button class="btn sm take" data-act="debrisForm" data-v="removal">Haul away</button>`:''}</div>
+          <button class="btn sm" data-act="debrisForm" data-v="grind">Record grind</button>`:''}</div>
         ${f?`<div class="panel panel-pad"><div class="sec-head"><h3 style="margin:0">${esc(title)}</h3><button class="btn sm ghost" data-act="debrisForm" data-v="">Close</button></div>
           <form class="form" data-form="debris" data-kind="${f}" autocomplete="off">${debrisFields(f,null)}
           <div class="form-actions full"><button class="btn ${cls}">${esc(btn)}</button></div></form></div>`:''}
-        <p class="muted" style="margin:0;font-size:.85rem">Tip fees and intake add to the piles. Grinding moves green waste and wood debris onto Ground Debris. Removals take debris away. Tap a pile for its details.</p>
+        <p class="muted" style="margin:0;font-size:.85rem">Tip fees and intake add to the piles. Grinding moves green waste and wood debris onto Ground Debris. Tap a pile for its details.</p>
         <div class="alerts" data-dyn="dAlerts"></div>
         <div data-dyn="dMap"></div>
       </div>
@@ -1048,12 +1049,10 @@ VIEWS.debris={
       const tips=S.shopifyLines.filter(l=>l.status==='pulled'&&D.bin[D.lineBin(l)]?.site==='debris'&&dayDiff(tsDay(l.ordered_at||l.created_at))>=-6);
       const inn=S.debris.filter(e=>e.kind==='intake'&&wk(e)).reduce((s,e)=>s+Number(e.qty_yd),0)+tips.reduce((s,l)=>s+Number(l.qty_yd||0),0);
       const ground=S.debris.filter(e=>e.kind==='grind'&&wk(e)).reduce((s,e)=>s+Number(e.to_qty_yd),0);
-      const out=S.debris.filter(e=>e.kind==='removal'&&wk(e)).reduce((s,e)=>s+Number(e.qty_yd),0);
-      const sched=S.debris.filter(e=>e.kind==='removal'&&e.status==='scheduled');
       return `<div><span class="k">On the piles</span><span class="v num">${fmtN(total)}<small>yd³</small></span><span class="s">${bins.length} piles</span></div>
         <div><span class="k">Came in · 7 days</span><span class="v num">${fmtN(inn)}<small>yd³</small></span><span class="s">${tips.length} tip fee${tips.length===1?'':'s'} plus intake</span></div>
         <div><span class="k">Ground · 7 days</span><span class="v num">${fmtN(ground)}<small>yd³</small></span><span class="s">Ground material made</span></div>
-        <div><span class="k">Hauled away · 7 days</span><span class="v num">${fmtN(out)}<small>yd³</small></span><span class="s">${sched.length} removal${sched.length===1?'':'s'} scheduled</span></div>`;
+        <div><span class="k">Over alert level</span><span class="v num">${debrisAlerts().length}</span><span class="s">${debrisAlerts().map(b=>esc(prodName(b.product_id))).join(', ')||'None'}</span></div>`;
     },
     dMap(){
       if(!D.debrisBins.length) return `<div class="empty panel">No Yard Debris piles yet. Run schema.sql to add them.</div>`;
@@ -1062,8 +1061,7 @@ VIEWS.debris={
     },
     dAlerts(){
       return debrisAlerts().map(b=>{ const s=D.stats[b.id];
-        return `<div class="alert" style="--c:var(--bad)"><p><b>${esc(prodName(b.product_id))}</b> is over ${fmtB(b,b.alert_over_yd)}: ${fmtB(b,s.onHand)} on the pile. Time to haul some away.</p>
-          ${can.debris()?`<div class="btns"><button class="btn sm take" data-act="debrisHaul" data-id="${b.id}">Haul away</button></div>`:''}</div>`; }).join('');
+        return `<div class="alert" style="--c:var(--bad)"><p><b>${esc(prodName(b.product_id))}</b> is over ${fmtB(b,b.alert_over_yd)}: ${fmtB(b,s.onHand)} on the pile.</p></div>`; }).join('');
     },
     dSched(){
       const list=S.debris.filter(e=>e.kind==='removal'&&e.status==='scheduled').sort((a,b)=>a.happened_on.localeCompare(b.happened_on));
@@ -1522,9 +1520,7 @@ function debrisModalHTML(b,head,name){
     ${can.debris()||can.adjust()?`<div class="bm-actions">
       ${can.debris()&&b.debris_role!=='ground'?'<button class="btn order" data-act="binMode" data-v="intake">Add debris</button>':''}
       ${can.debris()&&b.debris_role==='grind'?'<button class="btn" data-act="binMode" data-v="grind">Record grind</button>':''}
-      ${can.debris()?'<button class="btn take" data-act="binMode" data-v="removal">Haul away</button>':''}
       ${can.adjust()?'<button class="btn" data-act="binMode" data-v="count">Count pile</button>':''}</div>`:''}
-    ${sched.length?label('Scheduled removals')+`<div class="rows">${sched.map(debrisRemovalRow).join('')}</div>`:''}
     ${recent.length?label('Recent activity')+`<div class="timeline">${recent.map(m=>`<div class="tl"><span class="d">${esc(fmtDate(m.occurred_on||m.created_at.slice(0,10)))}</span><span>${esc(m.note||m.kind)}</span><span class="q num ${m.qty_yd<0?'neg':'pos'}">${signed(bQty(b,m.qty_yd))}</span></div>`).join('')}</div>`:''}
     ${can.binCapacity()&&hasCap(b)?`<form class="cap-form" data-form="binCap" data-id="${b.id}" data-unit="${inUnits(b)?'unit':'yd'}" autocomplete="off">
       <label class="field"><span>Pile capacity</span><div class="qty"><input id="cap-${b.id}" name="capacity" type="number" min="1" step="0.5" inputmode="decimal" value="${esc(r1(bQty(b,b.capacity_yd)))}" required><span class="cap-unit">${bUnit(b)}</span></div></label>
