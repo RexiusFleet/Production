@@ -994,6 +994,13 @@ code{font-family:var(--mono);font-size:12px;background:var(--surface-3);padding:
           <label class="field">Requests table <input type="text" id="set_trackerTable"></label>
           <label class="field">Bins table <input type="text" id="set_trackerBinsTable"
             placeholder="bins — blank to size loads by truck only"></label>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <button class="btn sm ghost" id="btnFindTable">What tables can it see?</button>
+          <span class="muted small">Lists what PostgREST exposes in that schema, so the names
+            can be picked rather than guessed.</span>
+        </div>
+        <div class="three">
           <label class="field">Check every (min) <input type="number" min="1" max="120" id="set_trackerPollMin"></label>
           <label class="field">Yard trucks <input type="text" id="set_yardTrucks" placeholder="t85,t98"></label>
         </div>
@@ -7583,8 +7590,11 @@ function renderRequests(){
     warn.innerHTML = bits.length
       ? `<div class="warnbox"><div><b>The tracker link</b></div>${
           bits.map(t=>`<div>${esc(t)}</div>`).join('')}
-         <div class="small muted">Last checked ${DB.trackerPulledAt? esc(shortTime(DB.trackerPulledAt)) : 'never'}.
-           Press “Check the tracker” to try again.</div></div>` : '';
+         <div class="row" style="margin-top:6px">
+           <button class="btn sm ghost" id="reqFind">What tables can it see?</button>
+           <span class="small muted">Last checked ${DB.trackerPulledAt? esc(shortTime(DB.trackerPulledAt)) : 'never'}.</span>
+         </div></div>` : '';
+    const f = $('#reqFind'); if(f) f.onclick = findTableDialog;
   }
 
   tb.innerHTML = rows.map(r=>{
@@ -7852,6 +7862,79 @@ function openLogRequest(){
   ]);
 }
 
+/**
+ * Ask PostgREST what it can actually see. Its root is an OpenAPI document, so
+ * the table names are in there — which turns "guess what Jeff's table is called"
+ * into picking from a list. A schema that is not in Supabase's exposed list is
+ * invisible here too, which is itself the answer.
+ */
+async function discoverTables(schema){
+  const base = String(DB.settings.trackerUrl || sbUrl()).replace(/\/+$/,'');
+  if(!base) throw new Error('No project URL yet');
+  const h = {apikey: Tracker._key()};
+  if(Auth.required && Auth.token) h.Authorization = 'Bearer '+Auth.token;
+  if(schema) h['Accept-Profile'] = schema;
+  const res = await fetch(base + '/rest/v1/', {headers:h});
+  if(!res.ok){
+    const t = (await res.text()).slice(0,160);
+    throw new Error(res.status === 406 || res.status === 404
+      ? `the schema "${schema||'public'}" is not exposed — add it in Supabase → Settings → API → Exposed schemas`
+      : `${res.status} ${t}`);
+  }
+  const spec = await res.json();
+  const fromPaths = Object.keys(spec.paths || {})
+    .map(k=>k.replace(/^\//,''))
+    .filter(k=>k && !k.startsWith('rpc/'));
+  const fromDefs = Object.keys(spec.definitions || (spec.components||{}).schemas || {});
+  return [...new Set([...fromPaths, ...fromDefs])].sort();
+}
+
+function findTableDialog(){
+  const draw = async ()=>{
+    const schema = (($('#ftSchema')||{}).value || '').trim();
+    const box = $('#ftList');
+    if(box) box.innerHTML = '<div class="muted small">Asking…</div>';
+    try{
+      const tables = await discoverTables(schema);
+      if(!box) return;
+      box.innerHTML = tables.length
+        ? `<div class="small muted" style="margin-bottom:6px">${tables.length} table${
+             tables.length>1?'s':''} visible in <b>${esc(schema||'public')}</b> — click one to use it
+             for the requests.</div>
+           <div class="row" style="flex-wrap:wrap;gap:6px">${tables.map(t=>
+             `<button class="btn sm ghost" data-table="${esc(t)}">${esc(t)}</button>`).join('')}</div>`
+        : `<div class="warnbox">Nothing is exposed in <b>${esc(schema||'public')}</b>.</div>`;
+      $$('#ftList [data-table]').forEach(el=>{
+        el.onclick = ()=>{
+          DB.settings.trackerSchema = schema;
+          DB.settings.trackerTable = el.dataset.table;
+          DB.trackerError = null;
+          Store.save(); settingsToForm(); closeModal();
+          toast(`Requests now read from ${schema? schema+'.' : ''}${el.dataset.table}`, 4000);
+          pullTrackerNow();
+        };
+      });
+    }catch(e){
+      if(box) box.innerHTML = `<div class="warnbox">${esc(e.message)}</div>`;
+    }
+  };
+  openModal('What can the tracker connection see?', `
+    <div class="small muted">The dispatch app asks PostgREST for its own table list. A schema has to
+      be in <b>Settings → API → Exposed schemas</b> in Supabase before anything in it is visible —
+      including to this check.</div>
+    <label class="field" style="margin-top:9px">Schema
+      <input type="text" id="ftSchema" value="${esc(DB.settings.trackerSchema||'')}"
+        placeholder="blank = public"></label>
+    <div class="row" style="margin-top:8px"><button class="btn sm" id="ftGo">Look</button></div>
+    <div id="ftList" style="margin-top:10px"></div>`, [
+    {label:'Close', cls:'ghost', onClick:closeModal}
+  ]);
+  const go = $('#ftGo'); if(go) go.onclick = draw;
+  const inp = $('#ftSchema');
+  if(inp) inp.onkeydown = e=>{ if(e.key==='Enter') draw(); };
+  draw();
+}
+
 async function pullTrackerNow(){
   if(!Tracker.configured){ toast('Add the tracker table in Settings first', 4000); return; }
   const btn = $('#btnReqPull'); if(btn){ btn.disabled = true; btn.textContent = 'Checking…'; }
@@ -7948,6 +8031,7 @@ function wire(){
   $('#btnShopifyProducts').onclick = ()=>shopifyPull('products');
   $('#btnGeocodeAll').onclick = geocodeMissing;
   $('#btnReqPull').onclick = pullTrackerNow;
+  { const el = $('#btnFindTable'); if(el) el.onclick = findTableDialog; }
   $('#btnReqNew').onclick = openLogRequest;
 
   $('#btnAddTruck').onclick = ()=>editTruck(null);
