@@ -444,6 +444,17 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .signbox h1{margin:0;font-size:17px;text-transform:uppercase;letter-spacing:.04em}
 .signbox p{margin:2px 0 16px}
 #signEmail,#signPass,#newPass,#newPass2{font-size:14px;padding:9px 10px}
+.rankchip{display:inline-block;min-width:20px;text-align:center;padding:1px 4px;
+  border-radius:var(--r-sm);background:var(--bar);color:#fff;font-size:10px;font-weight:650}
+.bingauge{position:relative;height:6px;margin:3px 0 2px;border-radius:3px;
+  background:var(--surface-3);overflow:hidden;max-width:110px}
+.bingauge span,.bingauge em{position:absolute;top:0;bottom:0;left:0;display:block}
+.bingauge span{background:var(--brand)}
+.bingauge em{background:repeating-linear-gradient(45deg,var(--s4),var(--s4) 3px,
+  transparent 3px,transparent 6px)}
+.binfull{color:var(--crit)}
+.drvrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:6px 0 2px}
+.drvrow select{font-size:12px;padding:3px 6px}
 .linky{background:none;border:0;padding:0;font:inherit;color:var(--brand);
   cursor:pointer;text-decoration:underline}
 .linky:hover{opacity:.82}
@@ -964,6 +975,8 @@ code{font-family:var(--mono);font-size:12px;background:var(--surface-3);padding:
         </div>
         <div class="three">
           <label class="field">Requests table <input type="text" id="set_trackerTable"></label>
+          <label class="field">Bins table <input type="text" id="set_trackerBinsTable"
+            placeholder="bins — blank to size loads by truck only"></label>
           <label class="field">Check every (min) <input type="number" min="1" max="120" id="set_trackerPollMin"></label>
           <label class="field">Yard trucks <input type="text" id="set_yardTrucks" placeholder="t85,t98"></label>
         </div>
@@ -1065,6 +1078,7 @@ const DEFAULT_SETTINGS = {
   yardsPerUnit: 7.5, yardTrucks: 't85,t98,t65',
   waveObjective: 'time', fillWeight: 4, pairBonus: 0,
   trackerUrl: '', trackerKey: '', trackerTable: 'backfill_requests', trackerSchema: '',
+  trackerBinsTable: 'bins',
   trackerWriteBack: true, trackerPollMin: 10,
   shopProxy: '', shopTag: 'bulk-delivery'
 };
@@ -1281,6 +1295,8 @@ function migrateDB(){
   });
 
   if(!DB.requests) DB.requests = [];
+  if(!DB.bins) DB.bins = [];
+  if(!DB.dayDrivers) DB.dayDrivers = {};
   return notes;
 }
 
@@ -1592,6 +1608,8 @@ const Store = {
       DB.zones    = parsed.zones    || deep(DEFAULT_ZONES);
       DB.orders   = parsed.orders   || [];
       DB.requests = parsed.requests || [];
+      DB.bins = parsed.bins || [];
+      DB.dayDrivers = parsed.dayDrivers || {};
       // which default trucks this browser has already been offered
       DB.seenTrucks = Array.isArray(parsed.seenTrucks) ? parsed.seenTrucks : null;
       DB.plans    = parsed.plans    || {};
@@ -2016,6 +2034,21 @@ function driversOn(iso){ return activeDrivers().filter(d=>driverWorking(iso, d))
  * who is qualified on a single truck gets it and the flexible driver covers
  * whatever is left — which is what forces Chris onto 29 whenever Isaiah works.
  */
+/* Kevin's own pick for a truck on a date, if he made one. Keyed date|truck so a
+ * choice never leaks into the next day. */
+function dayDriverKey(iso, truckId){ return `${iso}|${truckId}`; }
+function dayDriverId(iso, truckId){
+  const id = (DB.dayDrivers||{})[dayDriverKey(iso, truckId)];
+  if(!id) return null;
+  const d = byId(DB.drivers, id);
+  return (d && driverWorking(iso, d)) ? id : null;   // a day off beats a stale pick
+}
+function setDayDriver(iso, truckId, driverId){
+  DB.dayDrivers = DB.dayDrivers || {};
+  const k = dayDriverKey(iso, truckId);
+  if(driverId) DB.dayDrivers[k] = driverId; else delete DB.dayDrivers[k];
+}
+
 function assignDrivers(iso){
   const pool = driversOn(iso)
     .slice()
@@ -2025,9 +2058,16 @@ function assignDrivers(iso){
   const byTruck = {};
   const used = new Set();
 
+  // Pass 0: Kevin said who is in this truck today. That stands, and the
+  // automatic assignment fills in around it.
+  for(const t of trucks){
+    const id = dayDriverId(iso, t.id);
+    if(id && !used.has(id)){ byTruck[t.id] = id; used.add(id); }
+  }
   // Pass 1: drivers with exactly one qualified truck.
   for(const d of pool){
     const ids = (d.truckIds||[]).filter(id=>trucks.some(t=>t.id===id));
+    if(used.has(d.id)) continue;
     if(ids.length === 1 && !byTruck[ids[0]]){ byTruck[ids[0]] = d.id; used.add(d.id); }
   }
   // Pass 2: everyone else onto the biggest uncovered truck they can drive.
@@ -2043,6 +2083,31 @@ function assignDrivers(iso){
 function driverFor(iso, truckId){
   const a = assignDrivers(iso);
   return a[truckId] ? byId(DB.drivers, a[truckId]) : null;
+}
+
+/* Two ways to put a driver in a seat, and they do not fight: the truck has
+ * someone for the day, and a single load can name someone else. The load wins,
+ * because it is the more specific statement — but Kevin is asked before a day
+ * assignment silently replaces load-level choices he already made. */
+function loadDriver(o){
+  if(!o) return null;
+  if(o.driverId){ const d = byId(DB.drivers, o.driverId); if(d) return d; }
+  return o.schedDate && o.truckId ? driverFor(o.schedDate, o.truckId) : null;
+}
+function loadDriverIsOverride(o){
+  if(!o || !o.driverId) return false;
+  const day = o.schedDate && o.truckId ? driverFor(o.schedDate, o.truckId) : null;
+  return !day || day.id !== o.driverId;
+}
+/** Loads on this truck that day carrying a driver of their own. */
+function loadsWithOwnDriver(iso, truckId){
+  return (DB.orders||[]).filter(o=>o.schedDate === iso && o.truckId === truckId &&
+    o.status !== 'cancelled' && o.driverId);
+}
+/** Drivers qualified on a truck and working that day. */
+function driverChoices(iso, truckId){
+  return (DB.drivers||[]).filter(d=>d.active !== false &&
+    (d.truckIds||[]).includes(truckId) && driverWorking(iso, d));
 }
 /** A truck runs on a date only when someone is in it. */
 function truckRunsOn(iso, truckId){ return !!assignDrivers(iso)[truckId]; }
@@ -2104,9 +2169,13 @@ const REQ_STATUS = {
 };
 
 function requestById(id){ return (DB.requests||[]).find(r=>r.id===id) || null; }
+/* Jeff's rank is the running order; 1 is next. Anything he has not ranked sits
+ * below everything ranked, and inside each group urgency then need-by decide. */
+function reqRank(r){ const n = num(r.rank, 0); return n > 0 ? n : 9e6; }
 function openRequests(){
   return (DB.requests||[]).filter(r=>r.status==='open')
-    .sort((a,b)=>reqUrgency(a).rank - reqUrgency(b).rank ||
+    .sort((a,b)=>reqRank(a) - reqRank(b) ||
+                 reqUrgency(a).rank - reqUrgency(b).rank ||
                  String(a.needBy||'9999').localeCompare(String(b.needBy||'9999')));
 }
 function liveRequests(){
@@ -2130,6 +2199,70 @@ function reqYards(r){
   if(num(r.units,0) > 0) return r1(num(r.units) * num(DB.settings.yardsPerUnit, 7.5));
   return 0;
 }
+/* ---------------------------------------------------------------- the bins
+ * The tracker owns the bins at Hwy 99 — their size and what is in them. The
+ * dispatch board reads them so a load can be sized to fit on arrival instead of
+ * being tipped onto the ground. Everything here degrades to "no bin data" if
+ * the feed is not configured: loads are then sized by the truck alone.
+ */
+function binList(){ return DB.bins || []; }
+
+/** Match a request's bin wording to the tracker's bin, then fall back to product. */
+function binForRequest(r){
+  if(!r) return null;
+  const bins = binList();
+  if(!bins.length) return null;
+  const want = normAddrKey(r.bin||'').replace(/[^a-z0-9 ]/g,'');
+  const norm = b => normAddrKey(b.name||'').replace(/[^a-z0-9 ]/g,'');
+  if(want){
+    const hit = bins.find(b=>norm(b)===want) ||
+                bins.find(b=>norm(b).includes(want) || want.includes(norm(b)));
+    if(hit) return hit;
+  }
+  const p = reqProduct(r);
+  if(p) return bins.find(b=>b.productId === p.id) ||
+             bins.find(b=>normAddrKey(b.product||'') === normAddrKey(p.name)) || null;
+  return null;
+}
+
+/** Yards already heading to this bin on the board but not yet tipped in. */
+function inboundToBin(bin, skipOrderId){
+  if(!bin) return 0;
+  const key = normAddrKey(bin.name||'');
+  return r1((DB.orders||[]).reduce((a,o)=>{
+    if(o.kind !== 'yard-haul' || o.status === 'cancelled' || o.status === 'delivered') return a;
+    if(skipOrderId && o.id === skipOrderId) return a;
+    const r = o.requestId ? requestById(o.requestId) : null;
+    const b = r ? binForRequest(r) : null;
+    const same = b ? normAddrKey(b.name||'') === key
+                   : (o.notes||'').toLowerCase().includes('bin '+String(bin.name||'').toLowerCase());
+    return same ? a + num(o.yards,0) : a;
+  }, 0));
+}
+
+/**
+ * How much will actually fit when the truck gets there: the empty space, less
+ * whatever is already booked to go in before it. Draws between now and then
+ * only make this number better, so it is the safe end of the estimate.
+ */
+function binHeadroom(bin, opts){
+  if(!bin || !num(bin.capacity,0)) return null;          // null = unknown, not zero
+  const o = opts || {};
+  return r1(Math.max(0, num(bin.capacity,0) - num(bin.current,0) - inboundToBin(bin, o.skipOrderId)));
+}
+
+/** Where a request stands against its bin, in one object the UI can render. */
+function binState(r){
+  const bin = binForRequest(r);
+  if(!bin) return {bin:null, known:false};
+  const cap = num(bin.capacity,0), cur = num(bin.current,0);
+  const inbound = inboundToBin(bin);
+  const room = binHeadroom(bin);
+  return {bin, known: cap > 0, capacity:r1(cap), current:r1(cur), inbound,
+          room, pct: cap ? Math.min(1, (cur + inbound)/cap) : 0,
+          low: cap ? (cur / cap) <= num(bin.reorderAt, 0.25) : false};
+}
+
 function reqUrgency(r){
   const by = r.needBy;
   if(!by) return {rank:3, label:'no date', chip:''};
@@ -2141,15 +2274,13 @@ function reqUrgency(r){
   return {rank:3, label:prettyDate(by), chip:''};
 }
 
-/** Trucks that can take a backfill haul, the yard trucks first. */
+/** Trucks that can take a backfill haul — the yard trucks, and only those. */
 function backfillTrucks(iso){
-  const yardIds = String(DB.settings.yardTrucks || 't85,t98').split(',').map(s=>s.trim());
-  return runningTrucks(iso).slice().sort((a,b)=>
-    (yardIds.includes(a.id)?0:1) - (yardIds.includes(b.id)?0:1) ||
-    String(a.name).localeCompare(String(b.name)));
+  return runningTrucks(iso).filter(isYardTruck)
+    .sort((a,b)=>String(a.name).localeCompare(String(b.name)));
 }
 function isYardTruck(t){
-  return String(DB.settings.yardTrucks || 't85,t98').split(',').map(s=>s.trim()).includes(t.id);
+  return String(DB.settings.yardTrucks || 't85,t98,t65').split(',').map(s=>s.trim()).includes(t.id);
 }
 
 /** The order a request becomes once Kevin schedules it. */
@@ -2180,13 +2311,13 @@ function reqBooked(r){
 function reqRemaining(r){ return r1(Math.max(0, reqYards(r) - reqBooked(r))); }
 
 /**
- * Trucks a backfill would realistically go on: the yard trucks when any are
- * active, otherwise whatever else is running.
+ * Trucks a backfill can go on. The yard trucks and nothing else — 29 and 128 are
+ * on customer waves and do not run internal loads to 99, so if none of the yard
+ * trucks is running that day there is no internal haul that day. No fallback:
+ * quietly borrowing a wave truck would be a promise the board cannot keep.
  */
 function haulPool(iso){
-  const all = iso ? runningTrucks(iso) : activeTrucks();
-  const yard = all.filter(isYardTruck);
-  return yard.length ? yard : all;
+  return (iso ? runningTrucks(iso) : activeTrucks()).filter(isYardTruck);
 }
 /** Most one truck can move in a single trip. */
 function reqPerLoad(r, iso){
@@ -2196,8 +2327,42 @@ function reqPerLoad(r, iso){
   return r1(Math.max(0, ...pool.map(t=>haulCapacity(t, p).cap)));
 }
 function reqTrips(r, iso){
-  const per = reqPerLoad(r, iso);
+  const per = reqLoadPlan(r, iso).take;
   return per > 0 ? Math.ceil(reqRemaining(r) / per) : 0;
+}
+
+/**
+ * How big the next load should be. Full truck for that product, except where
+ * the bin cannot take a full one — then it is sized to what fits on arrival.
+ * A partial load is offered rather than withheld: a short load today beats a
+ * full one after the bin has run dry.
+ */
+function reqLoadPlan(r, iso){
+  const per   = reqPerLoad(r, iso);              // truck volume ∩ weight
+  const left  = reqRemaining(r);
+  const st    = binState(r);
+  const room  = st.known ? st.room : null;
+  let take = Math.min(per, left);
+  let capped = null;
+  if(room !== null && room < take - 0.01){ take = room; capped = 'bin'; }
+  else if(left < per - 0.01) capped = 'request';
+  else if(per > 0) capped = 'truck';
+  return {per:r1(per), left:r1(left), room, take:r1(Math.max(0, take)), capped,
+          partial: capped === 'bin' && take > 0.01, full: capped !== 'bin' || take >= per - 0.01,
+          bin: st.bin, binKnown: st.known};
+}
+
+/** Said in words, for the board and the scheduling dialog. */
+function loadSizeWhy(plan){
+  if(!plan) return '';
+  if(plan.take <= 0.01)
+    return plan.capped === 'bin'
+      ? 'the bin has no room left — nothing more can go in until it draws down'
+      : 'nothing left to haul on this request';
+  if(plan.capped === 'bin')
+    return `${plan.take} yd — a part load, because that is all the bin will take on arrival`;
+  if(plan.capped === 'request') return `${plan.take} yd — the rest of the request`;
+  return `${plan.take} yd — a full load`;
 }
 
 function logRequest(rec){
@@ -2221,8 +2386,13 @@ function declineRequest(id, why){
 function scheduleRequest(id, iso, truckId, time, yards){
   const r = requestById(id); if(!r) return null;
   const t = truckById(truckId);
+  if(t && !isYardTruck(t)) return null;          // 85, 98 and 65 only
   const per = t ? r1(haulCapacity(t, reqProduct(r)).cap) : reqRemaining(r);
-  const take = r1(Math.min(num(yards, reqRemaining(r)) || reqRemaining(r), per));
+  // never book more than the bin will hold when it arrives
+  const st = binState(r);
+  const room = st.known ? st.room : null;
+  const ceiling = room === null ? per : Math.min(per, room);
+  const take = r1(Math.min(num(yards, reqRemaining(r)) || reqRemaining(r), ceiling));
   if(take <= 0.01) return null;
 
   const o = requestToOrder(r);
@@ -3685,7 +3855,10 @@ function renderSchedule(){
     html += `<div class="hd" style="grid-column:${i+2};grid-row:1;box-shadow:inset 0 3px 0 ${c}">
       <div class="tn"><i class="swatch" style="background:${c}"></i>${esc(t.name)}
         ${drv? `<span class="muted" style="font-weight:400">· ${esc(drv.name)}</span>`
-             : `<span class="nodriver" style="font-weight:400">· no driver</span>`}</div>
+             : `<span class="nodriver" style="font-weight:400">· no driver</span>`}
+        <button class="icon-btn" data-daydriver="${esc(t.id)}"
+          title="Who is in this truck today">&#9662;</button>${
+        dayDriverId(iso, t.id)? '<span class="chip" title="set by hand for this day">set</span>' : ''}</div>
       <div class="meta">
         <span>${esc(boxSummary(t))}</span>
         <span>${isWindowTruck(t) ? 'AM / PM waves' : num(t.slotMinutes,60)+'-min slots'}</span>
@@ -4308,6 +4481,54 @@ function wireGrid(){
   $$('#sGrid [data-truckmenu]').forEach(el=>{
     el.onclick = e=>{ e.stopPropagation(); truckDayMenu(el.dataset.truckmenu); };
   });
+  $$('#sGrid [data-daydriver]').forEach(el=>{
+    el.onclick = e=>{ e.stopPropagation(); dayDriverDialog(UI.date, el.dataset.daydriver); };
+  });
+}
+
+/**
+ * Who is in this truck for the day. Loads on it can still name someone else —
+ * if any already do, Kevin is asked rather than having his own choices
+ * silently replaced.
+ */
+function dayDriverDialog(iso, truckId){
+  const t = truckById(truckId); if(!t) return;
+  const choices = driverChoices(iso, truckId);
+  const auto = (()=>{ const saved = (DB.dayDrivers||{})[dayDriverKey(iso, truckId)];
+                      setDayDriver(iso, truckId, null);
+                      const d = driverFor(iso, truckId);
+                      setDayDriver(iso, truckId, saved);
+                      return d; })();
+  const cur = dayDriverId(iso, truckId);
+  const own = loadsWithOwnDriver(iso, truckId);
+
+  openModal(`${esc(t.name)} — ${esc(prettyDate(iso))}`, `
+    <label class="field">Driver for the day
+      <select id="ddPick">
+        <option value="">Whoever the roster gives it${auto? ` — ${esc(auto.name)}` : ' — nobody today'}</option>
+        ${choices.map(d=>`<option value="${esc(d.id)}" ${d.id===cur?'selected':''}>${esc(d.name)}</option>`).join('')}
+      </select></label>
+    ${choices.length? '' : `<div class="warnbox" style="margin-top:8px">Nobody qualified on
+      ${esc(t.name)} is working that day. Qualify someone on the Employees tab first.</div>`}
+    ${own.length? `<div class="warnbox" style="margin-top:8px">
+       ${own.length} load${own.length>1?'s':''} on this truck ${own.length>1?'have':'has'} a driver of
+       ${own.length>1?'their':'its'} own:
+       ${esc(own.map(o=>`${min2hm(hm2min(o.schedTime||'00:00'))} ${(byId(DB.drivers,o.driverId)||{}).name||'?'}`).join(', '))}.
+       <label class="check" style="margin-top:6px"><input type="checkbox" id="ddClear">
+         Replace those with the day driver too</label></div>` : ''}
+    <div class="small muted" style="margin-top:8px">A load's own driver wins over the day driver,
+      so you can keep one run on someone else without changing the rest.</div>`, [
+    {label:'Save', cls:'primary', onClick:()=>{
+      const pick = ($('#ddPick')||{}).value || null;
+      setDayDriver(iso, truckId, pick);
+      if(($('#ddClear')||{}).checked) own.forEach(o=>{ o.driverId = null; });
+      runDay(iso); Store.save(); closeModal(); renderSchedule(); renderOrders();
+      const d = pick ? byId(DB.drivers, pick) : null;
+      toast(d ? `${t.name} is ${d.name}'s for ${prettyDate(iso)}`
+              : `${t.name} back on the roster for ${prettyDate(iso)}`);
+    }},
+    {label:'Cancel', cls:'ghost', onClick:closeModal}
+  ]);
 }
 
 /* ------------------------------------------- drag a run of slots into a job */
@@ -4556,7 +4777,9 @@ function openBookingDetail(orderId, iso){
       <tr><td class="muted">Box</td><td>${s && s.boxLabels && s.boxLabels.length
         ? esc(s.boxLabels.join(' + ')) + (s.boxLabels.length>1? ' (whole truck)':'') : '—'}</td></tr>
       <tr><td class="muted">Day</td><td>${esc(prettyDate(iso))}</td></tr>
-      <tr><td class="muted">Driver</td><td>${esc((driverFor(iso, o.pinTruck)||{}).name || '—')}</td></tr>
+      <tr><td class="muted">Driver</td><td>${(()=>{ const d = loadDriver({...o, schedDate:iso, truckId:o.pinTruck});
+        return d ? esc(d.name) + (loadDriverIsOverride({...o, schedDate:iso, truckId:o.pinTruck})
+          ? ' <span class="chip">this load only</span>' : '') : '—'; })()}</td></tr>
       <tr><td class="muted">Route says</td><td>${s? `${min2hm(s.arriveMin)} (${s.drift>0?'+':''}${s.drift||0} min)` : 'run “Check the day”'}</td></tr>
       ${o.notes? `<tr><td class="muted">Notes</td><td>${esc(o.notes)}</td></tr>`:''}
       <tr><td class="muted">Added</td><td>${o.createdAt? esc(new Date(o.createdAt).toLocaleString()) + ' · ' + esc(sinceLabel(o.createdAt)) : '—'}</td></tr>
@@ -4912,6 +5135,16 @@ function editOrder(id, prefill){
     .map(p=>`<option value="${esc(p.id)}" ${p.id===o.productId?'selected':''}>${esc(p.name)}</option>`).join('');
   const truckOpts = `<option value="">— optimizer decides —</option>` + DB.trucks
     .map(t=>`<option value="${esc(t.id)}" ${t.id===o.pinTruck?'selected':''}>${esc(t.name)}</option>`).join('');
+  /* A load can name its own driver; blank means whoever has the truck that day. */
+  const drvTruck = o.truckId || o.pinTruck || null;
+  const drvDay   = o.schedDate || todayISO();
+  const drvAuto  = drvTruck ? driverFor(drvDay, drvTruck) : null;
+  const driverOpts = `<option value="">${drvAuto ? 'Whoever has the truck — '+esc(drvAuto.name)
+                                                 : 'Whoever has the truck that day'}</option>` +
+    (DB.drivers||[]).filter(d=>d.active !== false)
+      .map(d=>`<option value="${esc(d.id)}" ${d.id===o.driverId?'selected':''}>${esc(d.name)}${
+        drvTruck && !(d.truckIds||[]).includes(drvTruck) ? ' — not qualified on this truck' : ''
+      }</option>`).join('');
   const advanced = kind !== 'delivery' || !!o.slotTime || !!o.pinTruck;
   const body = `
     <div id="customerFields" ${kind==='delivery'?'':'hidden'}>
@@ -4971,6 +5204,9 @@ function editOrder(id, prefill){
         <label class="field">Pin to truck<select name="pinTruck">${truckOpts}</select></label>
         <label class="field">Booked slot (hourly trucks)
           <input type="time" name="slotTime" value="${esc(o.slotTime||'')}"></label>
+        <label class="field">Driver for this load<select name="driverId">${driverOpts}</select></label>
+      </div>
+      <div class="three">
         <label class="field">Slots held
           <input type="number" min="1" max="12" name="slotSpan" value="${esc(num(o.slotSpan,1))}"></label>
       </div>
@@ -5015,6 +5251,7 @@ function editOrder(id, prefill){
         pinTruck: val(m,'pinTruck') || null,
         slotTime: val(m,'slotTime') || null,
         slotSpan: Math.max(1, num(val(m,'slotSpan'), 1)),
+        driverId: val(m,'driverId') || null,
         city: val(m,'city').trim(),
         lat: val(m,'lat')===''? null : num(val(m,'lat')),
         lng: val(m,'lng')===''? null : num(val(m,'lng')),
@@ -6791,6 +7028,7 @@ const SETTING_FIELDS = [
   ['set_trackerUrl','trackerUrl','text'], ['set_trackerKey','trackerKey','text'],
   ['set_trackerSchema','trackerSchema','text'], ['set_trackerTable','trackerTable','text'],
   ['set_trackerPollMin','trackerPollMin','num'], ['set_yardTrucks','yardTrucks','text'],
+  ['set_trackerBinsTable','trackerBinsTable','text'],
   ['set_trackerWriteBack','trackerWriteBack','bool'],
   ['set_shopProxy','shopProxy','text'], ['set_shopTag','shopTag','text']
 ];
@@ -7070,6 +7308,55 @@ function restoreBackup(){
   inp.click();
 }
 
+/* ------------------------------------------- the Hwy 99 bins, from the tracker
+ * Read-only. The tracker owns these numbers; the board only needs to know how
+ * much room a bin has so a load can be sized to fit on arrival. Column names are
+ * guessed from the usual spellings, the same way requests are adopted, so the
+ * tracker's schema can change without this needing a rewrite.
+ */
+const Bins = {
+  get configured(){ return Tracker.configured && !!DB.settings.trackerBinsTable; },
+  _url(q){ return `${Tracker._base()}/rest/v1/${DB.settings.trackerBinsTable}${q||''}`; },
+
+  adopt(row){
+    const pick = (...names)=>{ for(const n of names) if(row[n]!=null && row[n]!=='') return row[n]; return null; };
+    const unit = num(DB.settings.yardsPerUnit, 7.5);
+    const asYards = (yards, units)=> num(yards,0) > 0 ? num(yards) : num(units,0) * unit;
+    return {
+      extId:   String(pick('id','bin_id','uuid') ?? ''),
+      name:    String(pick('name','bin','bin_name','label','location') ?? ''),
+      product: String(pick('product','product_name','material','item') ?? ''),
+      capacity: r1(asYards(pick('capacity_yards','capacity','size_yards','max_yards','yards_capacity'),
+                           pick('capacity_units','max_units'))),
+      current:  r1(asYards(pick('current_yards','current','on_hand_yards','on_hand','level_yards','qty_yards','yards'),
+                           pick('current_units','on_hand_units','units'))),
+      reorderAt: (()=>{ const p = num(pick('reorder_pct','reorder_point_pct'), 0);
+                        return p > 1 ? p/100 : (p || 0.25); })(),
+      updatedAt: String(pick('updated_at','counted_at','as_of') ?? '') || null
+    };
+  },
+
+  async pull(){
+    if(!this.configured) throw new Error('No bins table configured');
+    const res = await fetch(this._url('?select=*'), {headers:Tracker._headers()});
+    if(!res.ok) throw new Error('bins read '+res.status+' '+(await res.text()).slice(0,160));
+    const rows = await res.json();
+    const seen = [];
+    for(const row of rows){
+      const b = this.adopt(row);
+      if(!b.name && !b.extId) continue;
+      // tie the bin to a product in this catalogue where the wording allows
+      const p = b.product ? reqProduct({product:b.product}) : null;
+      b.productId = p ? p.id : null;
+      seen.push(b);
+    }
+    DB.bins = seen;
+    DB.binsPulledAt = new Date().toISOString();
+    Store.save();
+    return {bins: seen.length, withCapacity: seen.filter(b=>num(b.capacity,0) > 0).length};
+  }
+};
+
 /* -------------------------------------- the Retail Yard tracker connection */
 const Tracker = {
   get configured(){
@@ -7104,6 +7391,8 @@ const Tracker = {
       needBy:     String(pick('need_by','needed_by','due_date','requested_for') ?? '').slice(0,10) || null,
       requestedBy:String(pick('requested_by','requester','created_by','user_name') ?? ''),
       note:       String(pick('note','notes','comment') ?? ''),
+      // Jeff's running order. 1 is top of the list; blank sorts after everything ranked.
+      rank:       num(pick('priority','rank','sort_order','position','priority_rank'), 0) || null,
       trackerStatus: String(pick('status') ?? 'open')
     };
   },
@@ -7189,6 +7478,8 @@ function startTrackerPolling(){
     try{
       const r = await Tracker.pull();
       await Tracker.flush();
+      // bin levels move on their own, so refresh them on the same beat
+      if(Bins.configured) try{ await Bins.pull(); }catch(e){ console.warn('bins poll failed', e.message); }
       if(r.added || r.updated){ renderRequests(); markTabCounts(); }
       if(r.added) toast(`${r.added} new yard request${r.added>1?'s':''} from the tracker`, 4000);
     }catch(e){ console.warn('tracker poll failed', e.message); }
@@ -7196,6 +7487,23 @@ function startTrackerPolling(){
 }
 
 /* ----------------------------------------------------- yard requests tab */
+
+/** The bin's level under its name in the table: filled, inbound, room. */
+function binCell(r){
+  const st = binState(r);
+  if(!st.bin || !st.known) return '';
+  const fill = st.capacity ? st.current / st.capacity : 0;
+  const inb  = st.capacity ? st.inbound / st.capacity : 0;
+  return `<div class="bingauge" title="${esc(st.bin.name)} — ${st.current}/${st.capacity} yd${
+      st.inbound? `, ${st.inbound} yd on the way` : ''}">
+      <span style="width:${Math.round(fill*100)}%"></span>
+      <em style="left:${Math.round(fill*100)}%;width:${Math.round(inb*100)}%"></em>
+    </div>
+    <div class="small ${st.room < 0.01 ? 'binfull' : 'muted'}">${
+      st.room < 0.01 ? 'bin full' : `${st.room} yd room`}${
+      st.low ? ' · low' : ''}</div>`;
+}
+
 function markTabCounts(){
   const el = $('#reqCount'); if(!el) return;
   const n = openRequests().length;
@@ -7221,6 +7529,9 @@ function renderRequests(){
     ['Yards to move', yards, open.length? `across ${open.length} request${open.length>1?'s':''}` : '—'],
     ['Scheduled', sched.length, sched.length? 'on the board' : 'nothing booked yet'],
     ['Needs a product', unmatched, unmatched? "the tracker's wording didn't match" : 'all matched'],
+    ['Bin room', Bins.configured ? (binList().length? binList().length+' bins' : 'none read') : 'not linked',
+      Bins.configured ? (DB.binsPulledAt? 'levels as of '+shortTime(DB.binsPulledAt) : 'not read yet')
+                      : 'loads sized by truck only'],
     ['Tracker', Tracker.configured ? 'linked' : 'not linked',
       Tracker.configured ? (DB.trackerPulledAt? 'last checked '+shortTime(DB.trackerPulledAt) : 'never checked')
                          : 'add it in Settings']
@@ -7235,7 +7546,8 @@ function renderRequests(){
     const st = REQ_STATUS[r.status] || {label:r.status, chip:''};
     const o = r.orderId ? orderById(r.orderId) : null;
     return `<tr data-id="${esc(r.id)}">
-      <td class="small">${r.needBy? esc(prettyDate(r.needBy)) : '—'}
+      <td class="small">${num(r.rank,0)? `<span class="rankchip">#${num(r.rank)}</span> ` : ''}${
+        r.needBy? esc(prettyDate(r.needBy)) : '—'}
         ${r.status==='open' && u.chip? `<span class="chip ${u.chip}">${esc(u.label)}</span>`:''}</td>
       <td>${p ? esc(p.name) : `<span style="color:var(--crit)">${esc(r.product||'not set')}</span>
             <div class="small muted">not in the catalogue — pick one when you schedule it</div>`}</td>
@@ -7244,7 +7556,7 @@ function renderRequests(){
         reqBooked(r) && reqRemaining(r) > 0.01
           ? `<div class="small" style="color:#8a6100">${esc(reqRemaining(r))} yd still to book</div>`
           : (reqBooked(r)? `<div class="small muted">${(r.hauls||[]).length} trip${(r.hauls||[]).length>1?'s':''}</div>`:'')}</td>
-      <td class="small">${esc(r.bin||'—')}</td>
+      <td class="small">${esc(r.bin||'—')}${binCell(r)}</td>
       <td class="small">${esc(r.requestedBy||'—')}
         ${r.src==='manual'? '<span class="chip">logged here</span>':''}</td>
       <td><span class="chip ${st.chip}">${esc(st.label)}</span>${
@@ -7305,49 +7617,69 @@ function openRequestScheduler(id){
     const pool = haulPool(null);
     const per = pool.length ? r1(Math.max(0, ...pool.map(t=>haulCapacity(t, prod).cap))) : 0;
     const perTruck = pool.find(t=>r1(haulCapacity(t, prod).cap) === per);
-    const trips = per > 0 ? Math.ceil(left / per) : 0;
-    const thisTrip = r1(Math.min(left, per));
+
+    /* Size the load: a full truck of this product, unless the bin cannot take a
+     * full one on arrival — then as much as will actually fit. */
+    const st   = binState({...r, productId: prodId});
+    const room = st.known ? st.room : null;
+    const thisTrip = r1(Math.max(0, Math.min(left, per, room === null ? per : room)));
+    const binCapped = room !== null && room < Math.min(left, per) - 0.01;
+    const trips = thisTrip > 0.01 ? Math.ceil(left / thisTrip) : 0;
 
     const probe = {kind:'yard-haul', productId: prodId, yards: thisTrip,
                    destDepot: r.toDepot||'reload', forceDepot: r.fromDepot||'home'};
-    const slots = suggestSlots(probe, {from: todayISO(), days: 14})
-      .filter(x=>{ const t = truckById(x.truckId); return t && !isWindowTruck(t); })
-      .slice(0, 20);
-    const waves = [];
-    for(let i=0;i<14 && waves.length<6;i++){
-      const iso = addDays(todayISO(), i);
-      for(const w of ['am','pm']) if(waveRoom(iso, w, thisTrip, {productId: prodId}).ok) waves.push({iso, w});
-    }
+    // 85, 98 and 65 only — the wave trucks do not run internal loads to 99
+    const slots = thisTrip > 0.01
+      ? suggestSlots(probe, {from: todayISO(), days: 14})
+          .filter(x=>{ const t = truckById(x.truckId); return t && isYardTruck(t); })
+          .slice(0, 20)
+      : [];
 
     const head = $('#reqPlan');
     if(head) head.innerHTML = per <= 0
-      ? `<span style="color:var(--crit)">No truck can haul ${esc(prod? prod.name : 'this')} at all —
+      ? `<span style="color:var(--crit)">No yard truck can haul ${esc(prod? prod.name : 'this')} at all —
          check its weight per yard in Products.</span>`
-      : `<b>${left} yd</b> still to move${done? ` (${done} yd already booked)` : ''} ·
-         ${esc((perTruck||{}).name || 'a truck')} takes <b>${per} yd</b> a trip
-         (${esc(haulCapacity(perTruck||pool[0], prod).limit)}), so this is
-         <b>${trips} trip${trips>1?'s':''}</b>. You are booking the next one: <b>${thisTrip} yd</b>.` +
-        (trips > 1 ? ` Book the rest the same way — the request stays open until it is covered.` : '') +
-        (prod && num(prod.maxYardsPerLoad,0) && per > num(prod.maxYardsPerLoad)
-          ? `<div class="small muted">Yard-to-yard, so the ${num(prod.maxYardsPerLoad)} yd retail limit
-             on ${esc(prod.name)} does not apply — weight and bin size do.</div>` : '');
+      : (thisTrip <= 0.01
+        ? `<div style="color:var(--crit)">${esc(st.bin? st.bin.name : 'That bin')} has no room —
+           ${st.current}/${st.capacity} yd${st.inbound? ` with ${st.inbound} yd already on the way`:''}.</div>
+           <div class="small muted">Nothing more can go in until it draws down. The request stays open.</div>`
+        : `<div><b>${left} yd</b> still to move${done? ` (${done} yd already booked)` : ''} ·
+           ${esc((perTruck||{}).name || 'a yard truck')} takes <b>${per} yd</b> a trip
+           (${esc(haulCapacity(perTruck||pool[0], prod).limit)}).
+           Next load: <b>${thisTrip} yd</b>${binCapped
+             ? ` — a part load, because that is all ${esc(st.bin? st.bin.name : 'the bin')} will take
+                 (${st.current}/${st.capacity} yd${st.inbound? `, ${st.inbound} yd already on the way`:''})`
+             : ''}.`
+          + (trips > 1 ? ` ${trips} trips at that size — book them one at a time; the request stays
+             open until it is covered.` : '')
+          + (room !== null && room < left - 0.01
+             ? ` The bin can only take <b>${room} yd</b> of that for now; each load is re-sized as it
+                 draws down, so the rest waits rather than being promised.` : '') + `</div>`
+          + (st.known ? `<div class="bingauge" style="max-width:220px;margin-top:6px">
+                 <span style="width:${Math.round((st.capacity? st.current/st.capacity:0)*100)}%"></span>
+                 <em style="left:${Math.round((st.capacity? st.current/st.capacity:0)*100)}%;
+                     width:${Math.round((st.capacity? st.inbound/st.capacity:0)*100)}%"></em></div>
+               <div class="small muted">${esc(st.bin.name)} — ${st.current} of ${st.capacity} yd in${
+                 st.inbound? `, ${st.inbound} yd booked in`:''}, <b>${st.room} yd</b> room</div>` : '')
+          + (!st.known && Bins.configured
+              ? `<div class="small muted">No bin matched "${esc(r.bin||'')}" in the tracker — sized by
+                 the truck alone.</div>` : '')
+          + (prod && num(prod.maxYardsPerLoad,0) && per > num(prod.maxYardsPerLoad)
+            ? `<div class="small muted">Yard-to-yard, so the ${num(prod.maxYardsPerLoad)} yd retail limit
+               on ${esc(prod.name)} does not apply — weight and bin size do.</div>` : ''));
 
     const list = $('#reqSlots');
     if(list) list.innerHTML = slots.map(x=>{
       const t = truckById(x.truckId);
+      const drv = driverFor(x.date, x.truckId);
       return `<div class="slotopt" data-pick="${esc(x.truckId)}|${esc(x.date)}|${esc(x.time)}|${thisTrip}">
         <div><div>${esc(prettyDate(x.date))} · ${esc(min2hm(hm2min(x.time)))}</div>
-          <div class="small muted">${esc(t.name)}${isYardTruck(t)? ' · yard truck' : ' · not a yard truck'}
-            · ${thisTrip} yd</div></div>
+          <div class="small muted">${esc(t.name)} · ${thisTrip} yd${
+            drv? ' · '+esc(drv.name) : ' · no driver yet'}</div></div>
         <div class="added">${x.added? `+${x.added} min` : 'no extra driving'}</div></div>`;
-    }).join('') || `<div class="empty">No hourly slot in the next two weeks fits this.${
-      waves.length? ' There is room in a wave — see below.' : ''}</div>`;
-
-    const wv = $('#reqWaves');
-    if(wv) wv.innerHTML = waves.length
-      ? `Waves with room for ${thisTrip} yd: ${waves.map(x=>
-          `${prettyDate(x.iso)} ${WINDOWS[x.w].short}`).join(' · ')} — book one of those from the calendar.`
-      : '';
+    }).join('') || `<div class="empty">${thisTrip <= 0.01
+      ? 'Nothing to book while the bin is full.'
+      : 'No hourly slot on 85, 98 or 65 in the next two weeks fits this.'}</div>`;
 
     $$('#reqSlots [data-pick]').forEach(el=>el.onclick=()=>{
       const [truckId, date, time, take] = el.dataset.pick.split('|');
@@ -7369,7 +7701,7 @@ function openRequestScheduler(id){
   openModal(`Schedule the restock — ${esc(guess? guess.name : (r.product||'product not set'))}`, `
     <div class="small muted">From the ${esc(depotPoints().home.name)} to the
       ${esc(depotPoints().reload.name)}${r.needBy? ` · wanted by ${esc(prettyDate(r.needBy))}` : ''}${
-      r.bin? ` · bin ${esc(r.bin)}` : ''}. Yard trucks are offered first.</div>
+      r.bin? ` · bin ${esc(r.bin)}` : ''}. Trucks 85, 98 and 65 only.</div>
     ${guess? '' : `<div class="warnbox">The tracker called this
       “${esc(r.product||'')}”, which isn't in the catalogue. Pick the right product.</div>`}
     <div class="two">
@@ -7378,8 +7710,7 @@ function openRequestScheduler(id){
         value="${esc(reqYards(r))}" ${reqBooked(r)? 'disabled':''}></label>
     </div>
     <div class="warnbox" id="reqPlan" style="margin-top:8px"></div>
-    <div class="slotlist" id="reqSlots" style="margin-top:8px"></div>
-    <div class="small muted" id="reqWaves" style="margin-top:6px"></div>`, [
+    <div class="slotlist" id="reqSlots" style="margin-top:8px"></div>`, [
     {label:'Done', cls:'ghost', onClick:closeModal}
   ]);
   ['reqProd','reqYards'].forEach(idd=>{
