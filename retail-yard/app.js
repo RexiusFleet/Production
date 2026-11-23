@@ -99,7 +99,7 @@ const WRITE_SCHEMAS={
     display_unit:V.oneOf(['yd3','units']), no_capacity:V.bool(), hide_volume:V.bool(), alert_over_yd:V.num(0.01,5000,{null:true,label:'Alert level'}) },
   'bins.update':null,
   'backfill_requests.insert':{
-    product_id:V.id({req:true}), bin_id:V.id({req:true}), qty_yd:V.num(0.01,2000,{req:true,label:'Volume'}),
+    product_id:V.id({req:true}), bin_id:V.id({req:true}), qty_yd:V.num(0.01,2000,{null:true,label:'Volume'}),   // null: Kevin picks the truck and volume
     needed_by:V.date(31,366,{null:true,label:'Needed by'}), method:V.oneOf(['bulk','slinger'],{req:true}),
     status:V.oneOf(['requested'],{req:true}), notes:V.str(500,{null:true,label:'Notes'}) },
   'backfill_requests.update':{ status:V.oneOf(['cancelled']), priority:V.int(1,999,{null:true,label:'Priority'}) },
@@ -404,14 +404,17 @@ function DemoAdapter(){
   const KEY='ryt-demo-v23';
   let db=store.get(KEY,null); if(!db||db.v!==23){ db=seedDemo(); }
   const save=()=>store.set(KEY,db);
+  // An order placed without a volume takes the total of its scheduled trucks (see syncReq).
+  const syncReqVolume=id=>{ if(id) syncReq(id); };
   const me=()=>DEMO_USERS.find(u=>u.id===db.userId)||DEMO_USERS[0];
   const defaultBin=pid=>db.bins.filter(b=>b.active!==false&&b.product_id===pid).sort((a,b)=>(a.sort-b.sort)||a.code.localeCompare(b.code))[0]?.id||null;
   const move=m=>db.movements.unshift({id:uid(),created_at:nowISO(),occurred_on:isoDay(),created_by_name:me().name,...m});
   function syncReq(rid){
     const r=db.backfill_requests.find(x=>x.id===rid); if(!r||r.status==='cancelled') return;
     const hs=db.hauls.filter(h=>h.request_id===rid);
+    if(r.volume_by_dispatch){ const v=hs.filter(h=>h.status!=='cancelled').reduce((s,h)=>s+Number(h.volume_yd),0); r.qty_yd=v>0?v:null; }
     const del=hs.filter(h=>h.status==='delivered').reduce((s,h)=>s+Number(h.volume_yd),0);
-    r.status = del>=r.qty_yd ? 'delivered' : hs.some(h=>['en_route','delivered'].includes(h.status)) ? 'in_progress' : hs.some(h=>h.status==='scheduled') ? 'scheduled' : 'requested';
+    r.status = r.qty_yd>0&&del>=r.qty_yd ? 'delivered' : hs.some(h=>['en_route','delivered'].includes(h.status)) ? 'in_progress' : hs.some(h=>h.status==='scheduled') ? 'scheduled' : 'requested';
   }
   function pullTrigger(t,row,old){
     if(t==='internal_orders'||t==='shopify_order_lines'){
@@ -491,14 +494,18 @@ function DemoAdapter(){
       if(['internal_orders','backfill_requests','hauls'].includes(t)&&db.bins.find(b=>b.id===row.bin_id)?.site==='debris') throw new Error('Yard Debris bins are managed on the Yard Debris tab');
       const tmpl={id:uid(),created_at:nowISO(),created_by_name:me().name};
       const r={...tmpl,...row};
+      if(t==='backfill_requests') r.volume_by_dispatch=r.qty_yd==null;
       if(t==='hauls'||t==='shopify_order_lines'||t==='internal_orders'||t==='debris_events'||t==='receipts'){ pullTrigger(t,r,{status:''}); db[t].unshift(r); }
       else db[t].unshift(r);
+      if(t==='hauls') syncReqVolume(r.request_id);
       save(); return r;
     },
     async update(t,id,patch){
       const r=db[t].find(x=>x.id===id); if(!r) throw new Error('Record not found');
       const old={...r}; const next={...r,...patch};
-      pullTrigger(t,next,old); Object.assign(r,next); save();
+      pullTrigger(t,next,old); Object.assign(r,next);
+      if(t==='hauls') syncReqVolume(r.request_id);
+      save();
     },
     async setSetting(k,v){ db.settings[k]=v; save(); },
     async updateMany(t,ids,patch){ for(const id of ids) await this.update(t,id,patch); },
@@ -890,7 +897,7 @@ VIEWS.yard={
       }
       if(has('hauling','admin')){
         S.backfills.filter(r=>r.method==='bulk'&&r.status==='requested').forEach(r=>{
-          items.push(`<div class="alert" style="--c:var(--info)"><p><b>${esc(r.created_by_name||'Jeff')}</b> requests <b class="num">${fmtYd(r.qty_yd)}</b> ${esc(prodName(r.product_id))}, needed ${whenDate(r.needed_by)}.</p>
+          items.push(`<div class="alert" style="--c:var(--info)"><p>${prioRank()[r.id]?`<span class="prio-n">#${prioRank()[r.id]}</span> `:''}<b>${esc(r.created_by_name||'Jeff')}</b> needs <b>${esc(prodName(r.product_id))}</b>${r.qty_yd?` (<span class="num">${fmtYd(r.qty_yd)}</span>)`:''}, needed ${whenDate(r.needed_by)}.</p>
             <div class="btns"><button class="btn sm primary" data-act="scheduleReq" data-id="${r.id}">Schedule a truck</button></div></div>`);
         });
       }
@@ -1147,10 +1154,8 @@ function orderFormFields(bin,qty=''){
   const product = bin
     ? `<input type="hidden" id="rq-bin" name="product_id" value="${esc(bin.product_id)}" data-hint="rq-hint" data-hint-bin="${esc(bin.id)}"><input type="hidden" name="bin_id" value="${esc(bin.id)}">`
     : `<label class="field"><span>Product</span><select id="rq-bin" name="product_id" required data-hint="rq-hint" data-hint-product="1" data-act-change="orderProduct">${productOptions(UI.prefillBin&&D.bin[UI.prefillBin]?.product_id,p=>p.hauled_by==='bulk')}</select></label>`;
-  const pid=bin?bin.product_id:(UI.prefillBin&&D.bin[UI.prefillBin]?.product_id);
+  // No volume: Jeff ranks what he needs, Kevin picks the truck and volume when he schedules it.
   return `        ${product}
-        <div class="field full"><span>Order size</span><div class="size-btns" data-order-sizes>${pid?orderSizeBtns(pid,bin?bin.id:undefined):'<span class="muted" style="font-size:.82rem">Choose a product to see its truck loads.</span>'}</div></div>
-        ${qtyField('qty','Volume needed', qty)}
         <label class="field"><span>Needed by</span><input id="rq-date" name="needed_by" type="date" value="${isoDay(1)}"></label>
         <input type="hidden" name="method" value="bulk">
         <label class="field full"><span>Notes for Kevin</span><input id="rq-notes" name="notes" maxlength="500"></label>
@@ -1176,7 +1181,14 @@ const recvWho=r=>r.delivered_by==='external'?(r.company||'External company'):HAU
 
 const CUSTOMERS=['Eugene Blowers','CAS','Bagger','Other'];
 const trucks=()=>{ const v=S.settings.trucks; return Array.isArray(v)?v:DEFAULT_TRUCKS; };
-const truckCap=(no,pid,cond)=>{ const t=trucks().find(t=>String(t.no)===String(no)); const g=D.product[pid]?.haul_group; const c=t&&g&&t.cap?.[g]; return c?Number(c[cond==='wet'?'wet':'dry'])||null:null; };
+const truckCap=(no,pid,cond)=>{
+  const list=trucks(), i=list.findIndex(t=>String(t.no)===String(no)), t=list[i]; const p=D.product[pid];
+  const g=p?.haul_group, c=t&&g&&t.cap?.[g];
+  const group=c?Number(c[cond==='wet'?'wet':'dry'])||null:null;
+  // Kevin's per-product load (Setup → Products) for this truck, dry; wet falls back to the haul group.
+  const own=i===0?Number(p?.order_size_1_yd):i===1?Number(p?.order_size_2_yd):0;
+  return cond==='wet'?(group||own||null):(own||group||null);
+};
 function truckFields(pid,{remaining=0,method='bulk'}={}){
   const opts=trucks().map(t=>`<option value="${esc(t.no)}">Truck ${esc(t.no)}</option>`).join('');
   return `<label class="field"><span>Truck</span><select name="truck_sel" data-act-change="haulCalc">${opts}<option value="other">${method==='slinger'?'Slinger / other':'Other truck'}</option></select></label>
@@ -1280,7 +1292,9 @@ VIEWS.backfill={
       return list.map((r,i)=>{ const late=dayDiff(r.needed_by)<0;
         return `<div class="row prio-row"><span class="prio-n big">#${i+1}</span>
           <div class="main"><span class="t">${esc(prodName(r.product_id))}</span>
-            <span class="m">${fmtUnits(r.qty_yd)} (${fmtYd(r.qty_yd)}) · needed ${esc(whenDate(r.needed_by))}${r.notes?' · '+esc(r.notes):''}</span></div>
+            <span class="m">${(()=>{ const hs=S.hauls.filter(h=>h.request_id===r.id&&h.status!=='cancelled');
+              return hs.length?hs.map(h=>`Truck ${esc(h.truck_no)} · ${fmtYd(h.volume_yd)} (${fmtUnits(h.volume_yd)}) · ${esc(whenDate(h.haul_on))}`).join(' + ')
+                :'Kevin picks the truck &amp; volume'; })()} · needed ${esc(whenDate(r.needed_by))}${r.notes?' · '+esc(r.notes):''}</span></div>
           <span class="chip ${r.status==='requested'?'c-warn':'c-info'}">${r.status==='requested'?'Requested':'Scheduled'}</span>${late?'<span class="chip c-bad">Late</span>':''}
           ${edit?`<span class="act">
             <button class="btn sm" data-act="prioMove" data-id="${r.id}" data-v="top" ${i===0?'disabled':''} aria-label="Move to top">⤒ Top</button>
@@ -1340,21 +1354,24 @@ function reqCard(r){
   const hs=S.hauls.filter(h=>h.request_id===r.id&&h.status!=='cancelled');
   const del=hs.filter(h=>h.status==='delivered').reduce((s,h)=>s+Number(h.volume_yd),0);
   const sched=hs.reduce((s,h)=>s+Number(h.volume_yd),0);
-  const remaining=r1(Math.max(0,r.qty_yd-sched));
+  const open=r.qty_yd==null;                       // Kevin hasn't picked a volume yet
+  const remaining=open?0:r1(Math.max(0,r.qty_yd-sched));
   const late=r.status!=='delivered'&&dayDiff(r.needed_by)<0;
   const canD=can.dispatch(r.method)&&r.status!=='delivered';
-  const open=UI.openHaulFor===r.id;
+  const formOpen=UI.openHaulFor===r.id;
   return `<article class="card">
     <div class="top-line">${prioRank()[r.id]?`<span class="prio-n" title="Priority for Kevin">#${prioRank()[r.id]}</span>`:''}<span class="chip ${r.method==='bulk'?'c-info':'c-acc'}">${METHOD[r.method].label}</span>${late?'<span class="chip c-bad">Late</span>':''}</div>
-    <div><div class="big num">${fmtYd(r.qty_yd)}</div><div style="font-weight:600">${esc(prodName(r.product_id))}</div></div>
+    <div>${open?`<div class="muted" style="font-size:.82rem">Truck &amp; volume: Kevin decides</div>`:`<div class="big num">${fmtYd(r.qty_yd)} <small class="muted" style="font-size:.6em">${fmtUnits(r.qty_yd)}</small></div>`}<div style="font-weight:600">${esc(prodName(r.product_id))}</div></div>
     <div class="meta">Needed ${esc(whenDate(r.needed_by))} · ${esc(METHOD[r.method].who)} dispatches${r.notes?'<br>'+esc(r.notes):''}</div>
     ${r.method==='bulk'&&remaining>0&&!hs.length?(()=>{ const sug=trucks().map(t=>{ const c=truckCap(t.no,r.product_id,'dry'); return c?`${Math.ceil(remaining/c)} load${Math.ceil(remaining/c)>1?'s':''} on ${esc(t.no)}`:null; }).filter(Boolean);
       return sug.length?`<div class="meta">≈ ${sug.join(' · ')} <span class="muted">(dry)</span></div>`:`<div class="meta" style="color:var(--warn)">No truck capacity on file for this product</div>`; })():''}
-    ${hs.length?`<div class="progress" title="${fmtN(del)} of ${fmtN(r.qty_yd)} yd³ delivered"><i style="width:${Math.min(100,del/r.qty_yd*100)}%"></i></div>
+    ${hs.length&&r.qty_yd?`<div class="progress" title="${fmtN(del)} of ${fmtN(r.qty_yd)} yd³ delivered"><i style="width:${Math.min(100,del/r.qty_yd*100)}%"></i></div>`:''}
+    ${hs.length?`
       <div class="hauls-mini">${hs.map(haulLine).join('')}</div>`:''}
-    ${canD?(open?`<form class="form inline-form" data-form="haul" data-req="${r.id}" data-pid="${r.product_id}" data-remaining="${remaining}" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr))">
+ ${canD?(formOpen?`<form class="form inline-form" data-form="haul" data-req="${r.id}" data-pid="${r.product_id}" data-remaining="${remaining}" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr))">
         ${truckFields(r.product_id,{remaining,method:r.method})}
         <label class="field"><span>Date</span><input name="haul_on" type="date" value="${dayDiff(r.needed_by)>=0?r.needed_by:isoDay()}"></label>
+        ${(()=>{ const room=binRoom(r.bin_id), b=D.bin[r.bin_id]; return room==null?'':`<div class="hint full" data-room="${room}">Bin ${esc(b.code)} has room for ${fmtN(room)} yd³ (${fmtUnits(room)}).</div>`; })()}
         <div class="form-actions full"><button class="btn primary sm">Schedule haul</button><button type="button" class="btn sm ghost" data-act="haulClose">Close</button></div></form>`
       :hs.length?'':`<div class="form-actions"><button class="btn sm primary" data-act="haulOpen" data-id="${r.id}">Schedule truck</button>
         ${r.status==='requested'&&can.request()?confirmBtn('cancelReq','Cancel request',`data-id="${r.id}"`,'cancel'):''}</div>`):''}
@@ -1743,6 +1760,14 @@ const CHANGE={
       hint.textContent=`Truck ${sel.value} carries ${fmtN(cap)} yd³ (${fmtUnits(cap)}) of ${HAUL_GROUPS[D.product[pid]?.haul_group]||'this product'} ${cond} per load · ${n} load${n>1?'s':''} = ${fmtYd(n*cap)}`;
       hint.classList.remove('warn'); }
     else { hint.textContent = !pid ? '' : sel.value==='other' ? 'Enter the volume for this truck.' : `No capacity on file for ${prodName(pid)} on Truck ${sel.value}. Enter the volume.`; hint.classList.toggle('warn',!!pid&&sel.value!=='other'); }
+    CHANGE.haulRoom(f);
+  },
+  haulRoom(f){
+    const r=f.querySelector('[data-room]'); if(!r) return;
+    const room=Number(r.dataset.room), v=Number(f.querySelector('[name=volume]')?.value)||0;
+    const over=v>room+0.01;
+    r.classList.toggle('warn',over);
+    r.textContent=`Bin has room for ${fmtN(room)} yd³ (${fmtUnits(room)}).`+(over?` This would overflow it by ${fmtN(r1(v-room))} yd³.`:'');
   },
   drawMode(){
     const f=$('[data-form="internal"]'); if(!f) return; const totes=$('#io-mode')?.value==='totes';
@@ -1809,8 +1834,8 @@ const FORM={
     const inModal=!!f.dataset.modal;
     if(!bin){ toast('That product has no bin. Add one in Setup.',true); return; }
     if(!isBulk(bin.product_id)){ toast(`${prodName(bin.product_id)} isn't hauled by Kevin, so it isn't ordered here. Record the delivery when it arrives.`,true); return; }
-    const ok=await run(()=>A.insert('backfill_requests',{bin_id:bin.id,product_id:bin.product_id,qty_yd:toYd(fd),needed_by:fd.get('needed_by')||null,method:m,status:'requested',notes:fd.get('notes').trim()||null}),
-      'Order sent to Kevin.');
+    const ok=await run(()=>A.insert('backfill_requests',{bin_id:bin.id,product_id:bin.product_id,qty_yd:null,needed_by:fd.get('needed_by')||null,method:m,status:'requested',notes:fd.get('notes').trim()||null}),
+      `${prodName(bin.product_id)} added to Kevin's list. Rank it in the priority list.`);
     if(inModal){ if(ok){ UI.binMode='view'; renderBinModal(); } return; }
     f.reset(); $('#rq-date').value=isoDay(1);
   },
