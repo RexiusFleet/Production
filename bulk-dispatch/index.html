@@ -443,7 +443,10 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
   border-radius:var(--r);padding:26px 24px 24px}
 .signbox h1{margin:0;font-size:17px;text-transform:uppercase;letter-spacing:.04em}
 .signbox p{margin:2px 0 16px}
-#signEmail{font-size:14px;padding:9px 10px}
+#signEmail,#signPass,#newPass,#newPass2{font-size:14px;padding:9px 10px}
+.linky{background:none;border:0;padding:0;font:inherit;color:var(--brand);
+  cursor:pointer;text-decoration:underline}
+.linky:hover{opacity:.82}
 .whoami{display:flex;align-items:center;gap:7px;font-size:11px;color:rgba(255,255,255,.72)}
 .whoami button{background:none;border:0;color:rgba(255,255,255,.72);cursor:pointer;
   font:inherit;text-decoration:underline;padding:0}
@@ -1339,24 +1342,57 @@ const Auth = {
     }catch(e){ console.warn('could not keep the session', e); }
   },
 
-  /** Email a one-time sign-in link back to this page. */
-  async sendLink(email){
-    const res = await fetch(`${this._base()}/auth/v1/otp`, {
+  /** Email and password, the same as the other apps in the production repo. */
+  async signIn(email, password){
+    const res = await fetch(`${this._base()}/auth/v1/token?grant_type=password`, {
       method:'POST',
       headers:{apikey:this._anon(), 'Content-Type':'application/json'},
-      body: JSON.stringify({email, create_user:false,
-                            options:{email_redirect_to: location.href.split('#')[0]}})
+      body: JSON.stringify({email, password})
+    });
+    const body = await res.json().catch(()=>({}));
+    if(!res.ok){
+      const said = `${body.error_code||body.error||''} ${body.msg||body.error_description||''}`;
+      if(/email_not_confirmed/i.test(said))
+        throw new Error('That account still has to confirm its email address.');
+      if(res.status === 400)
+        throw new Error('That email and password do not match an account.');
+      if(res.status === 429)
+        throw new Error('Too many tries. Wait a minute and try again.');
+      throw new Error(`sign-in failed (${res.status}) ${said.trim().slice(0,120)}`);
+    }
+    body.expires_at = num(body.expires_at, Math.floor(Date.now()/1000) + num(body.expires_in, 3600));
+    this.store(body);
+    return body;
+  },
+
+  /** Email a reset link back to this page. Answers the same either way, so a
+   *  stranger cannot use it to find out who has an account. */
+  async sendReset(email){
+    const back = encodeURIComponent(location.href.split('#')[0]);
+    await fetch(`${this._base()}/auth/v1/recover?redirect_to=${back}`, {
+      method:'POST',
+      headers:{apikey:this._anon(), 'Content-Type':'application/json'},
+      body: JSON.stringify({email})
+    }).catch(()=>{});
+    return true;
+  },
+
+  /** Set a new password for whoever the current token belongs to. */
+  async setPassword(password){
+    const res = await fetch(`${this._base()}/auth/v1/user`, {
+      method:'PUT',
+      headers:{apikey:this._anon(), Authorization:'Bearer '+this.token,
+               'Content-Type':'application/json'},
+      body: JSON.stringify({password})
     });
     if(!res.ok){
-      const t = await res.text();
-      throw new Error(res.status === 422
-        ? 'That email is not on the allowed list — ask for an account first'
-        : `sign-in failed (${res.status}) ${t.slice(0,120)}`);
+      const b = await res.json().catch(()=>({}));
+      throw new Error((b.msg || b.error_description || `could not set the password (${res.status})`).slice(0,140));
     }
     return true;
   },
 
-  /** Supabase sends the session back in the URL fragment. */
+  /** A reset link comes back with the session in the URL fragment. */
   captureFromUrl(){
     const h = location.hash || '';
     if(!h.includes('access_token=')) return false;
@@ -1368,6 +1404,7 @@ const Auth = {
       user: {email: null}
     };
     if(!s.access_token) return false;
+    this.recovery = (q.get('type') === 'recovery');
     this.store(s);
     history.replaceState(null, '', location.pathname + location.search);
     return true;
@@ -1427,7 +1464,7 @@ function stampWhoami(){
 }
 
 /** The sign-in screen, shown instead of the app. */
-function renderSignIn(msg, tone){
+function renderSignIn(msg, tone, keep){
   const el = document.getElementById('signin');
   if(!el) return;
   el.hidden = false;
@@ -1438,31 +1475,80 @@ function renderSignIn(msg, tone){
       <p class="small muted">Rexius · retail bulk</p>
       ${msg? `<div class="${tone==='bad'?'warnbox':'okbox'}" style="margin:14px 0">${esc(msg)}</div>`:''}
       <label class="field">Work email
-        <input type="email" id="signEmail" placeholder="you@rexius.com" autocomplete="email"></label>
-      <button class="btn primary" id="signGo" style="width:100%;margin-top:10px">
-        Email me a sign-in link</button>
+        <input type="email" id="signEmail" placeholder="you@rexius.com" autocomplete="username"></label>
+      <label class="field" style="margin-top:8px">Password
+        <input type="password" id="signPass" autocomplete="current-password"></label>
+      <button class="btn primary" id="signGo" style="width:100%;margin-top:12px">Sign in</button>
       <div class="small muted" style="margin-top:12px">
-        You will get a link that signs you in on this device. No password to remember,
-        and nothing to share — access is granted per person.</div>
+        Your own account — access is granted and withdrawn per person.
+        <button type="button" class="linky" id="signForgot">Forgot password?</button></div>
     </div>`;
-  const go = document.getElementById('signGo');
-  const input = document.getElementById('signEmail');
+  const go    = document.getElementById('signGo');
+  const email = document.getElementById('signEmail');
+  const pass  = document.getElementById('signPass');
+  if(keep) email.value = keep;
+
   const send = async ()=>{
-    const email = (input.value||'').trim();
-    if(!email || !email.includes('@')){ input.focus(); return; }
-    go.disabled = true; go.textContent = 'Sending…';
+    const e1 = (email.value||'').trim(), p1 = pass.value||'';
+    if(!e1 || !e1.includes('@')){ email.focus(); return; }
+    if(!p1){ pass.focus(); return; }
+    go.disabled = true; go.textContent = 'Signing in…';
     try{
-      await Auth.sendLink(email);
-      renderSignIn(`Check ${email} — the link signs you in on this device.`, 'ok');
-    }catch(e){
-      renderSignIn(e.message, 'bad');
-      const again = document.getElementById('signEmail');
-      if(again) again.value = email;
+      await Auth.signIn(e1, p1);
+      location.reload();                  // land exactly where a fresh load would
+    }catch(err){
+      renderSignIn(err.message, 'bad', e1);
     }
   };
   go.onclick = send;
-  input.onkeydown = e=>{ if(e.key === 'Enter') send(); };
-  input.focus();
+  const onEnter = ev=>{ if(ev.key === 'Enter') send(); };
+  email.onkeydown = onEnter; pass.onkeydown = onEnter;
+
+  document.getElementById('signForgot').onclick = async ()=>{
+    const e1 = (email.value||'').trim();
+    if(!e1 || !e1.includes('@')){
+      renderSignIn('Put your work email in first, then press Forgot password.', 'bad', e1);
+      return;
+    }
+    await Auth.sendReset(e1);
+    renderSignIn(`If ${e1} has an account, a reset link is on its way. Open it on this device.`, 'ok', e1);
+  };
+  (keep ? pass : email).focus();
+}
+
+/** After a reset link: they are signed in, but must choose a password now. */
+function renderSetPassword(msg, tone){
+  const el = document.getElementById('signin');
+  if(!el) return;
+  el.hidden = false;
+  document.getElementById('appShell').hidden = true;
+  el.innerHTML = `
+    <div class="signbox">
+      <h1>Choose a password</h1>
+      <p class="small muted">Rexius · retail bulk</p>
+      ${msg? `<div class="${tone==='bad'?'warnbox':'okbox'}" style="margin:14px 0">${esc(msg)}</div>`:''}
+      <label class="field">New password
+        <input type="password" id="newPass" autocomplete="new-password"></label>
+      <label class="field" style="margin-top:8px">Again
+        <input type="password" id="newPass2" autocomplete="new-password"></label>
+      <button class="btn primary" id="newGo" style="width:100%;margin-top:12px">Save and continue</button>
+      <div class="small muted" style="margin-top:12px">At least 8 characters.</div>
+    </div>`;
+  const go = document.getElementById('newGo');
+  const a = document.getElementById('newPass'), b = document.getElementById('newPass2');
+  const save = async ()=>{
+    if((a.value||'').length < 8){ renderSetPassword('That is shorter than 8 characters.', 'bad'); return; }
+    if(a.value !== b.value){ renderSetPassword('Those two do not match.', 'bad'); return; }
+    go.disabled = true; go.textContent = 'Saving…';
+    try{
+      await Auth.setPassword(a.value);
+      Auth.recovery = false;
+      location.reload();
+    }catch(err){ renderSetPassword(err.message, 'bad'); }
+  };
+  go.onclick = save;
+  b.onkeydown = ev=>{ if(ev.key === 'Enter') save(); };
+  a.focus();
 }
 
 function showApp(){
@@ -7587,7 +7673,7 @@ async function boot(refresh){
     Auth.load();
     if(!Auth.live && Auth.session) await Auth.refresh();
     if(!Auth.live){
-      renderSignIn(Auth.session ? 'That sign-in has expired — here is a fresh link.' : '', 
+      renderSignIn(Auth.session ? 'That sign-in has expired — please sign in again.' : '',
                    Auth.session ? 'bad' : '');
       return;
     }
@@ -7597,6 +7683,7 @@ async function boot(refresh){
       renderSignIn('That sign-in is no longer valid. Try again.', 'bad');
       return;
     }
+    if(Auth.recovery){ renderSetPassword(); return; }
     showApp();
     stampWhoami();
   }
