@@ -81,7 +81,14 @@ const WRITE_SCHEMAS={
     name:V.str(80,{req:true,label:'Product name'}), sku:V.str(40,{null:true,label:'SKU'}),
     shopify_product_id:V.int(1,Number.MAX_SAFE_INTEGER,{null:true,label:'Shopify product ID'}),
     shopify_titles:V.strList(10,200,{label:'Shopify titles'}), shopify_variant_match:V.str(40,{null:true,label:'Variant text'}),
-    haul_group:V.oneOf(HAUL_GROUP_KEYS,{null:true,label:'Haul group'}), active:V.bool() },
+    haul_group:V.oneOf(HAUL_GROUP_KEYS,{null:true,label:'Haul group'}), active:V.bool(),
+    hauled_by:V.oneOf(['bulk','slinger','external'],{null:true,label:'Hauled by'}), supplier:V.str(80,{null:true,label:'Supplier'}),
+    order_size_1_yd:V.num(0.25,500,{null:true,label:'Order size 1'}), order_size_2_yd:V.num(0.25,500,{null:true,label:'Order size 2'}) },
+  'receipts.insert':{
+    bin_id:V.id({req:true,label:'Bin'}), product_id:V.id({req:true,label:'Product'}), qty_yd:V.num(0.01,2000,{req:true,label:'Volume'}),
+    delivered_by:V.oneOf(['bulk','slinger','external'],{req:true,label:'Delivered by'}), company:V.str(80,{null:true,label:'Company'}),
+    received_on:V.date(31,0,{req:true,label:'Date'}), status:V.oneOf(['done'],{req:true}), notes:V.str(500,{null:true,label:'Notes'}) },
+  'receipts.update':{ status:V.oneOf(['cancelled']) },
   'products.update':null,   // same fields as insert, all optional (set below)
   'bins.insert':{
     code:V.str(12,{req:true,pattern:BIN_CODE_RE,label:'Bin code'}), product_id:V.id({null:true}),
@@ -320,6 +327,8 @@ const SHOPIFY_VARIANT={"Red Ultrakote":"Red","Black Ultrakote":"Black"};
 /* Bulk trucks Kevin dispatches (Trucks_and_Hauling.xlsx). Capacity per load in yd³, by product haul group. */
 const DEFAULT_TRUCKS=[{"no": "85", "cap": {"bark": {"dry": 37.5, "wet": 37.5}, "sawdust": {"dry": 37.5, "wet": 37.5}, "primary": {"dry": 22.5, "wet": 18.75}, "fng": {"dry": 18.75, "wet": 15.0}, "turf": {"dry": 18.75, "wet": 15.0}, "compost": {"dry": 30, "wet": 25}}}, {"no": "98", "cap": {"bark": {"dry": 60.0, "wet": 48.75}, "primary": {"dry": 45.0, "wet": 37.5}, "fng": {"dry": 37.5, "wet": 30.0}, "turf": {"dry": 37.5, "wet": 30.0}, "compost": {"dry": 52.5, "wet": 45.0}}}];
 const HAUL_GROUPS={"bark": "Barks / Fiberex", "sawdust": "Sawdust", "primary": "Primary", "fng": "Flower-n-Garden", "turf": "Turf Start", "compost": "Compost"};
+/* From the "Retail Yard Product Ordering" sheet: Kevin hauls these, so Jeff orders them in the app. */
+const BULK_PRODUCTS=["Econobark","Beautibark","Hemlock","Primary","Flower-n-Garden","Turf Start","Promix"];
 const PRODUCT_HAUL_GROUP={"Econobark": "bark", "Beautibark": "bark", "Hemlock": "bark", "Decobark Nuggets": "bark", "Red Ultrakote": "bark", "Black Ultrakote": "bark", "Fiberex": "bark", "Sawdust": "sawdust", "Alder Sawdust": "sawdust", "Primary": "primary", "Flower-n-Garden": "fng", "Turf Start": "turf", "GVO Compost": "compost", "LFNW": "compost", "Steer Plus": "compost"};
 const SHOPIFY_IGNORE=["Grass Seed", "Coir Fibre", "Chicken Compost", "Perlite", "3.8Ft Peat Moss", "Christmas Tree Fees", "Dump Card", "Bio-Bags", "Sand Bags", "Tip Fees-Curbside NEW", "Tip Fees-Food Waste NEW", "Bags", "Sanipac", "Chip Truck", "Opus Grows Mix #2", "Opus Grows Mix Zero", "Worm Castings", "Filled Tote"];
 const YARD_LANDMARKS=[{"label": "Scale booth", "x": 3, "y": 29, "w": 1, "h": 3, "kind": "booth"}, {"label": "Bagged goods", "x": 6, "y": 43, "w": 1, "h": 4, "kind": "bags"}];
@@ -329,7 +338,7 @@ const YARD_LANDMARKS=[{"label": "Scale booth", "x": 3, "y": 29, "w": 1, "h": 3, 
 const DEBRIS_BINS=[["WOOD","Wood Debris","grind",[1,1,4,5],"Wood Waste"],["GROUND","Ground Debris","ground",[1,7,4,5],null,"units",200,50],["GREEN","Green Waste","grind",[1,15,4,5],"Yard Debris","units"],["EXC","Excavation","dump",[7,15,4,5],"Dirt and Rock"]];
 function seedDemo(){
   const names=[...new Set(YARD_BINS.map(b=>b[1]).filter(Boolean))];
-  const prods=names.map(n=>({id:uid(),name:n,sku:null,shopify_product_id:null,shopify_titles:SHOPIFY_TITLES[n]?[SHOPIFY_TITLES[n]]:[],shopify_variant_match:SHOPIFY_VARIANT[n]||null,haul_group:PRODUCT_HAUL_GROUP[n]||null,active:true,created_at:nowISO()}));
+  const prods=names.map(n=>({id:uid(),name:n,sku:null,shopify_product_id:null,shopify_titles:SHOPIFY_TITLES[n]?[SHOPIFY_TITLES[n]]:[],shopify_variant_match:SHOPIFY_VARIANT[n]||null,haul_group:PRODUCT_HAUL_GROUP[n]||null,hauled_by:BULK_PRODUCTS.includes(n)?'bulk':null,supplier:null,order_size_1_yd:null,order_size_2_yd:null,active:true,created_at:nowISO()}));
   const pid=n=>prods.find(p=>p.name===n)?.id||null;
   const bins=YARD_BINS.map(([code,name,cap,x,y,w,h],i)=>({id:uid(),code,product_id:pid(name),capacity_yd:cap,reorder_yd:r1(cap*.25),sort:i,active:true,notes:'',map_x:x,map_y:y,map_w:w,map_h:h,site:'retail',debris_role:null,created_at:nowISO()}));
   DEBRIS_BINS.forEach(([code,name,role,[x,y,w,h],variant,unit,capU,alertU],i)=>{
@@ -387,12 +396,12 @@ function seedDemo(){
   const H=(r,truck,vol,day,status)=>({id:uid(),created_at:nowISO(),request_id:r.id,method:r.method,truck_no:truck,loads:1,conditions:'dry',bin_id:r.bin_id,product_id:r.product_id,volume_yd:vol,haul_on:isoDay(day),status,delivered_at:status==='delivered'?nowISO():null,created_by_name:'Kevin Roemer'});
   const hauls=[H(rq[2],'98',60,-1,'delivered'),H(rq[2],'85',15,-1,'delivered'),H(rq[0],'85',30,1,'scheduled')];
 
-  return {v:20,debris_events:debris,userId:'u-jeff',settings:{yd_per_unit:7.5,tote_sizes:[1,1.5],trucks:DEFAULT_TRUCKS,yard_landmarks:YARD_LANDMARKS,shopify_ignore_titles:SHOPIFY_IGNORE},products:prods,bins,movements:mv,internal_orders:io,shopify_order_lines:lines,backfill_requests:rq,hauls};
+  return {v:21,receipts:[],debris_events:debris,userId:'u-jeff',settings:{yd_per_unit:7.5,tote_sizes:[1,1.5],trucks:DEFAULT_TRUCKS,yard_landmarks:YARD_LANDMARKS,shopify_ignore_titles:SHOPIFY_IGNORE},products:prods,bins,movements:mv,internal_orders:io,shopify_order_lines:lines,backfill_requests:rq,hauls};
 }
 
 function DemoAdapter(){
-  const KEY='ryt-demo-v20';
-  let db=store.get(KEY,null); if(!db||db.v!==20){ db=seedDemo(); }
+  const KEY='ryt-demo-v21';
+  let db=store.get(KEY,null); if(!db||db.v!==21){ db=seedDemo(); }
   const save=()=>store.set(KEY,db);
   const me=()=>DEMO_USERS.find(u=>u.id===db.userId)||DEMO_USERS[0];
   const defaultBin=pid=>db.bins.filter(b=>b.active!==false&&b.product_id===pid).sort((a,b)=>(a.sort-b.sort)||a.code.localeCompare(b.code))[0]?.id||null;
@@ -418,6 +427,17 @@ function DemoAdapter(){
         move({bin_id:old.bin_id,product_id:old.product_id,qty_yd:-sign(old.bin_id)*Number(old.qty_yd),kind:'adjustment',note:(row.status==='cancelled'&&isShop?'Order cancelled — ':isShop?'Reversed draw — ':'Order undone — ')+label});
         row.pulled_at=null;
       }
+    }
+    if(t==='receipts'){
+      // Mirrors trg_receipt_* in ordering_and_receiving.sql
+      const b=db.bins.find(x=>x.id===row.bin_id);
+      if(!b||b.site==='debris') throw new Error('Choose a Retail Bins bin');
+      row.product_id=b.product_id;
+      if(row.delivered_by==='external'&&!row.company) throw new Error('Enter the company that delivered it');
+      const who=row.delivered_by==='external'?row.company:row.delivered_by==='slinger'?'Slingers':'bulk truck';
+      if(row.status==='done'&&!old.status) move({bin_id:b.id,product_id:b.product_id,qty_yd:Number(row.qty_yd),kind:'backfill',note:'Delivered by '+who,occurred_on:row.received_on,source_table:'receipts',source_id:row.id});
+      else if(old.status==='done'&&row.status==='cancelled') move({bin_id:b.id,product_id:b.product_id,qty_yd:-Number(old.qty_yd),kind:'adjustment',note:'Delivery undone ('+who+')',source_table:'receipts',source_id:row.id});
+      else if(old.status) throw new Error('That change is not allowed');
     }
     if(t==='debris_events'){
       // Mirrors trg_debris_event() in schema.sql
@@ -464,13 +484,13 @@ function DemoAdapter(){
     async load(){
       const onHand={}; db.movements.forEach(m=>{onHand[m.bin_id]=(onHand[m.bin_id]||0)+Number(m.qty_yd);});
       return {products:db.products,bins:db.bins,onHand,movements:db.movements.slice(0,400),internalOrders:db.internal_orders,
-        shopifyLines:db.shopify_order_lines,backfills:db.backfill_requests,hauls:db.hauls,debris:db.debris_events,photos:demoPhotos.filter(p=>!p.cleared_at),settings:db.settings,me:me()};
+        shopifyLines:db.shopify_order_lines,backfills:db.backfill_requests,hauls:db.hauls,debris:db.debris_events,receipts:db.receipts,photos:demoPhotos.filter(p=>!p.cleared_at),settings:db.settings,me:me()};
     },
     async insert(t,row){
       if(['internal_orders','backfill_requests','hauls'].includes(t)&&db.bins.find(b=>b.id===row.bin_id)?.site==='debris') throw new Error('Yard Debris bins are managed on the Yard Debris tab');
       const tmpl={id:uid(),created_at:nowISO(),created_by_name:me().name};
       const r={...tmpl,...row};
-      if(t==='hauls'||t==='shopify_order_lines'||t==='internal_orders'||t==='debris_events'){ pullTrigger(t,r,{status:''}); db[t].unshift(r); }
+      if(t==='hauls'||t==='shopify_order_lines'||t==='internal_orders'||t==='debris_events'||t==='receipts'){ pullTrigger(t,r,{status:''}); db[t].unshift(r); }
       else db[t].unshift(r);
       save(); return r;
     },
@@ -551,7 +571,9 @@ function LiveAdapter(cfg){
       const shopifyLines=lines.map(l=>({...l,order_name:l.shopify_orders?.order_name,customer_name:l.shopify_orders?.customer_name,ordered_at:l.shopify_orders?.created_at_shopify||l.created_at}));
       const st={}; settings.forEach(s=>st[s.key]=s.value);
       const photos=await loadPhotos();
-      return {products,bins,onHand,movements,internalOrders,shopifyLines,backfills,hauls,debris,photos,settings:st,
+      const receipts=await q(sb.from('receipts').select('*').order('created_at',{ascending:false}).limit(300))
+        .catch(e=>{ console.warn('Deliveries unavailable (run ordering_and_receiving.sql?)',e); return []; });
+      return {products,bins,onHand,movements,internalOrders,shopifyLines,backfills,hauls,debris,photos,receipts,settings:st,
         me:{id:user.id,name:profile?.full_name||user.email,role:profile?.role||null}};
     },
     async insert(t,row){ const clean={...row}; delete clean.created_by_name; return q(sb.from(t).insert(clean).select().single()); },
@@ -588,7 +610,8 @@ const can={
   setup:()=>has('inventory','admin'),
   binCapacity:()=>has('hauling','inventory','admin'),
   debris:()=>has('admin','inventory','hauling','debris'),   // Yard Debris: Jeff, Kevin, Mike, admins
-  photo:()=>has('inventory','admin'),                        // pile photos: Jeff and admins
+  photo:()=>has('inventory','admin'),
+  receive:()=>has('inventory','admin'),                      // record product delivered without an order                        // pile photos: Jeff and admins
 };
 const tabsFor=()=> (ROLES[role()]||ROLES.viewer).tabs;
 
@@ -636,9 +659,27 @@ const ST_CHIP={debris:['Yard debris','c-mute'],alert:['Over alert level','c-bad'
 const prodName=id=>D.product[id]?.name||'Unassigned';
 const binLabel=id=>{ const b=D.bin[id]; return b?b.code:'—'; };
 
+/* ---------- Ordering vs receiving ----------
+   Jeff orders in the app only what Kevin hauls (hauled_by = bulk). Everything else is
+   recorded when it arrives, with who delivered it (Slingers or an outside company). */
+const isBulk=pid=>D.product[pid]?.hauled_by==='bulk';
+const HAULED_BY={bulk:'Bulk · Kevin',slinger:'Slingers',external:'External company'};
+// The two order sizes: a full load on each of Kevin's trucks (Setup can override per product).
+function orderSizes(pid){
+  const p=D.product[pid]; if(!p) return [];
+  const t=trucks();
+  return [[t[0]?.no,p.order_size_1_yd],[t[1]?.no,p.order_size_2_yd]].filter(([no])=>no)
+    .map(([no,own])=>({no,yd:Number(own)||truckCap(no,pid,'dry')})).filter(x=>x.yd>0);
+}
+function orderSizeBtns(pid){
+  const z=orderSizes(pid);
+  return z.length?z.map(x=>`<button type="button" class="btn sm size-btn" data-act="orderSize" data-yd="${x.yd}">Truck ${esc(x.no)} load · ${fmtN(x.yd)} yd³ (${fmtUnits(x.yd)})</button>`).join('')
+    :`<span class="muted" style="font-size:.82rem">No truck load sizes set for this product. Enter a volume.</span>`;
+}
+
 /* ---------- shared fragments ---------- */
-function productOptions(sel){
-  return `<option value="">Choose a product</option>`+S.products.filter(p=>p.active!==false&&D.defaultBin(p.id)).sort((x,y)=>x.name.localeCompare(y.name))
+function productOptions(sel,filter=()=>true){
+  return `<option value="">Choose a product</option>`+S.products.filter(p=>p.active!==false&&D.defaultBin(p.id)&&filter(p)).sort((x,y)=>x.name.localeCompare(y.name))
     .map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(p.name)}</option>`).join('');
 }
 function binOptions(sel, {blank='Choose a bin', withLevel=true, bins=D.activeBins, codes=true}={}){
@@ -825,7 +866,7 @@ VIEWS.yard={
           if(['low','out','watch'].includes(s.st)&&!s.hasReq&&b.product_id){
             const why = `is at ${fmtN(s.onHand)} yd³ (reorder at ${fmtN(b.reorder_yd)})`;
             items.push(`<div class="alert" style="--c:var(--${s.st==='out'?'bad':'warn'})"><p><b>${esc(b.code)} ${esc(prodName(b.product_id))}</b> ${why}.</p>
-              <div class="btns"><button class="btn sm primary" data-act="quickReq" data-bin="${b.id}">Order product</button></div></div>`);
+              <div class="btns"><button class="btn sm primary" data-act="quickReq" data-bin="${b.id}">${isBulk(b.product_id)?'Order product':'Record delivery'}</button></div></div>`);
           }});
         if(D.unmapped.length) items.push(`<div class="alert" style="--c:var(--warn)"><p><b>${D.unmapped.length} Shopify line${D.unmapped.length>1?'s':''}</b> are on hold. They draw from inventory once their product is linked.</p><div class="btns"><button class="btn sm" data-act="tab" data-tab="pulls">Link products</button></div></div>`);
         const toConfirm=S.hauls.filter(h=>['scheduled','en_route'].includes(h.status)&&(h.status==='en_route'||dayDiff(h.haul_on)<=0)).length;
@@ -853,7 +894,7 @@ VIEWS.yard={
 function binCard(b){
   const s=D.stats[b.id]; const [lbl,cls]=ST_CHIP[s.st];
   const reqBtn = can.request()&&b.product_id&&['low','out','watch'].includes(s.st)
-    ? (s.hasReq?`<span class="chip c-info">Product ordered</span>`:`<button class="btn sm" data-act="quickReq" data-bin="${b.id}">Order product</button>`) : '';
+    ? (s.hasReq?`<span class="chip c-info">Product ordered</span>`:`<button class="btn sm" data-act="quickReq" data-bin="${b.id}">${isBulk(b.product_id)?'Order product':'Record delivery'}</button>`) : '';
   return `<article class="bin st-${s.st}">
     <div class="bin-h"><span class="prod">${esc(prodName(b.product_id))}</span><span class="chip ${cls}">${lbl}</span></div>
     <div class="code">Bin ${esc(b.code)}</div>
@@ -985,7 +1026,7 @@ VIEWS.debris={
     const f=UI.debrisForm&&can.debris()?UI.debrisForm:null; const [title,cls,btn]=f?DEBRIS_FORMS[f]:[];
     return `<section class="view">
     <div class="summary" data-dyn="dSummary"></div>
-    <div class="split">
+    <div>
       <div class="sec">
         <div class="sec-head"><h2>Yard Debris</h2>
           ${can.debris()?`<button class="btn sm order" data-act="debrisForm" data-v="intake">Add debris</button>
@@ -998,11 +1039,7 @@ VIEWS.debris={
         <div class="alerts" data-dyn="dAlerts"></div>
         <div data-dyn="dMap"></div>
       </div>
-      <aside class="sec">
-        <h2>Scheduled removals</h2><div class="rows" data-dyn="dSched"></div>
-        <h2>Recent activity</h2><div class="rows" data-dyn="dRecent"></div>
-      </aside>
-    </div></section>`;
+    </div></section>`;   // Scheduled removals and activity are in each pile's pop-up
   },
   dyn:{
     dSummary(){
@@ -1078,16 +1115,33 @@ function drawFormFields(bin){
 function orderFormFields(bin,qty=''){
   const product = bin
     ? `<input type="hidden" id="rq-bin" name="product_id" value="${esc(bin.product_id)}" data-hint="rq-hint" data-hint-bin="${esc(bin.id)}"><input type="hidden" name="bin_id" value="${esc(bin.id)}">`
-    : `<label class="field"><span>Product</span><select id="rq-bin" name="product_id" required data-hint="rq-hint" data-hint-product="1">${productOptions(UI.prefillBin&&D.bin[UI.prefillBin]?.product_id)}</select></label>`;
+    : `<label class="field"><span>Product</span><select id="rq-bin" name="product_id" required data-hint="rq-hint" data-hint-product="1" data-act-change="orderProduct">${productOptions(UI.prefillBin&&D.bin[UI.prefillBin]?.product_id,p=>p.hauled_by==='bulk')}</select></label>`;
+  const pid=bin?bin.product_id:(UI.prefillBin&&D.bin[UI.prefillBin]?.product_id);
   return `        ${product}
+        <div class="field full"><span>Order size</span><div class="size-btns" data-order-sizes>${pid?orderSizeBtns(pid):'<span class="muted" style="font-size:.82rem">Choose a product to see its truck loads.</span>'}</div></div>
         ${qtyField('qty','Volume needed', qty)}
         <label class="field"><span>Needed by</span><input id="rq-date" name="needed_by" type="date" value="${isoDay(1)}"></label>
-        <div class="field full"><span>Haul with</span><div class="seg">
-          <label><input type="radio" name="method" value="bulk" checked> Bulk truck <span class="muted">· Kevin Roemer dispatches</span></label>
-          <label><input type="radio" name="method" value="slinger"> Slinger <span class="muted">· you dispatch</span></label></div></div>
-        <label class="field full"><span>Notes for dispatch</span><input id="rq-notes" name="notes" maxlength="500"></label>
+        <input type="hidden" name="method" value="bulk">
+        <label class="field full"><span>Notes for Kevin</span><input id="rq-notes" name="notes" maxlength="500"></label>
 `;
 }
+
+function receiveFields(bin){
+  const p=bin?D.product[bin.product_id]:null, by=p?.hauled_by==='external'?'external':p?.hauled_by==='bulk'?'bulk':'slinger';
+  const product = bin
+    ? `<input type="hidden" name="bin_id" value="${esc(bin.id)}">`
+    : `<label class="field"><span>Product</span><select name="product_id" required data-act-change="recvProduct">${productOptions()}</select></label>`;
+  return `${product}
+    ${qtyField('qty','Volume delivered')}
+    <label class="field"><span>Delivered by</span><select name="delivered_by" data-act-change="recvBy">
+      <option value="slinger" ${by==='slinger'?'selected':''}>Slingers</option>
+      <option value="external" ${by==='external'?'selected':''}>External company</option>
+      <option value="bulk" ${by==='bulk'?'selected':''}>Bulk truck (Kevin)</option></select></label>
+    <label class="field" data-recv-company ${by==='external'?'':'hidden'}><span>Company</span><input name="company" maxlength="80" value="${esc(p?.supplier||'')}" ${by==='external'?'required':''}></label>
+    <label class="field"><span>Date delivered</span><input name="received_on" type="date" value="${isoDay()}" max="${isoDay()}"></label>
+    <label class="field full"><span>Notes</span><input name="notes" maxlength="500"></label>`;
+}
+const recvWho=r=>r.delivered_by==='external'?(r.company||'External company'):HAULED_BY[r.delivered_by]||r.delivered_by;
 
 const CUSTOMERS=['Eugene Blowers','CAS','Bagger','Other'];
 const trucks=()=>{ const v=S.settings.trucks; return Array.isArray(v)?v:DEFAULT_TRUCKS; };
@@ -1173,21 +1227,27 @@ VIEWS.backfill={
         <div class="form-actions full"><button class="btn primary">Send order</button><span class="hint" id="rq-hint"></span></div>
       </form></details>`:''}
     <div class="sec"><div class="sec-head"><h2>Product orders</h2><div class="filters" data-dyn="bFilters"></div></div>
-      <p class="muted" style="margin:0;font-size:.85rem">Order → schedule a truck → ${can.confirmDelivery()?'confirm the delivery here when it arrives':'the yard confirms the delivery when it arrives'}. Product is added to the bin only when a delivery is confirmed.</p>
+      <p class="muted" style="margin:0;font-size:.85rem">Only products Kevin hauls are ordered here. Order → Kevin schedules a truck → ${can.confirmDelivery()?'confirm the delivery here when it arrives':'the yard confirms the delivery when it arrives'}. Product is added to the bin only when a delivery is confirmed.</p>
       <div class="cols" data-dyn="bBoard"></div></div>
-    ${can.confirmDelivery()?`<details class="panel panel-pad adder">
-      <summary class="sec-head"><h2>Log a delivery without an order</h2><span class="btn sm">Log delivery</span></summary>
-      <form class="form" data-form="haulFree" autocomplete="off">
-        <label class="field"><span>Product</span><select id="hf-bin" name="product_id" required data-act-change="haulCalc">${productOptions()}</select></label>
-        ${truckFields(null)}
-        <label class="field"><span>Date</span><input id="hf-date" name="haul_on" type="date" value="${isoDay()}"></label>
-        <label class="field"><span>Hauled by</span><select id="hf-method" name="method"><option value="bulk">Bulk truck</option><option value="slinger">Slinger</option></select></label>
-        <label class="field"><span>Status</span><select id="hf-status" name="status"><option value="delivered">Delivered (add to bin now)</option><option value="scheduled">Scheduled (confirm later)</option></select></label>
-        <div class="form-actions full"><button class="btn primary">Save</button><span class="hint">Shows on the board as an order with this truck.</span></div>
+    ${can.receive()?`<details class="panel panel-pad adder">
+      <summary class="sec-head"><h2>Record a delivery</h2><span class="btn sm order">Record delivery</span></summary>
+      <p class="muted" style="margin:0;font-size:.85rem">For product that isn't ordered through Kevin: when Slingers or an outside company drop it off, record it here and it's added to the bin.</p>
+      <form class="form" data-form="receipt" autocomplete="off">${receiveFields(null)}
+        <div class="form-actions full"><button class="btn order">Add to bin</button></div>
       </form></details>`:''}
+    <div class="sec"><div class="sec-head"><h2>Deliveries recorded · 14 days</h2></div><div class="rows" data-dyn="bRecv"></div></div>
   </section>`,
   dyn:{
-    bFilters(){ return [['all','All'],['bulk','Bulk · Kevin'],['slinger','Slinger · Jeff']].map(([k,l])=>`<button data-act="bfFilter" data-v="${k}" aria-pressed="${UI.bfFilter===k}">${l}</button>`).join(''); },
+    bFilters(){ return ''; },   // every order is a bulk order now
+    bRecv(){
+      const list=(S.receipts||[]).filter(r=>dayDiff(r.received_on)>=-14).sort((a,b)=>b.received_on.localeCompare(a.received_on)||String(b.created_at).localeCompare(String(a.created_at)));
+      if(!list.length) return `<div class="empty">No deliveries recorded in the last 14 days.</div>`;
+      return list.map(r=>{ const off=r.status==='cancelled';
+        return `<div class="row ${off?'dim':''}"><span class="chip ${off?'c-mute':r.delivered_by==='external'?'c-warn':r.delivered_by==='bulk'?'c-info':'c-ok'}">${off?'Undone':esc(r.delivered_by==='external'?'External':HAULED_BY[r.delivered_by])}</span>
+          <div class="main"><span class="t">${esc(prodName(r.product_id))}</span><span class="m">Delivered by ${esc(recvWho(r))}${r.notes?' · '+esc(r.notes):''}${r.created_by_name?' · recorded by '+esc(r.created_by_name):''}</span></div>
+          <span class="vol">+${fmtN(r.qty_yd)} yd³</span><span class="date">${esc(fmtDate(r.received_on))}</span>
+          <span class="act">${!off&&can.receive()?confirmBtn('receiptUndo','Undo',`data-id="${r.id}"`,'ghost'):''}</span></div>`; }).join('');
+    },
     bBoard(){
       const f=UI.bfFilter;
       const list=S.backfills.filter(r=>r.status!=='cancelled'&&(f==='all'||r.method===f));
@@ -1303,6 +1363,10 @@ VIEWS.setup={
           <label class="field"><span>Name</span><input id="pr-name" name="name" required maxlength="80" value="${esc(ep?.name||'')}"></label>
           <label class="field"><span>SKU</span><input id="pr-sku" name="sku" maxlength="40" value="${esc(ep?.sku||'')}"></label>
           <label class="field full"><span>Shopify product title(s)</span><input id="pr-titles" name="shopify_titles" maxlength="2000" value="${esc((ep?.shopify_titles||[]).join(', '))}" placeholder="e.g. Premium Hemlock — separate several with commas"></label>
+          <label class="field"><span>Hauled by</span><select name="hauled_by"><option value="">Not set (record deliveries)</option>${Object.entries(HAULED_BY).map(([k,l])=>`<option value="${k}" ${ep?.hauled_by===k?'selected':''}>${esc(l)}</option>`).join('')}</select></label>
+          <label class="field"><span>Supplier / hauler (external)</span><input name="supplier" maxlength="80" value="${esc(ep?.supplier||'')}"></label>
+          <label class="field"><span>Order size 1 · Truck ${esc(trucks()[0]?.no||'1')} (yd³, blank = truck load)</span><input name="order_size_1_yd" type="number" min="0.25" step="0.25" value="${esc(ep?.order_size_1_yd??'')}"></label>
+          <label class="field"><span>Order size 2 · Truck ${esc(trucks()[1]?.no||'2')} (yd³, blank = truck load)</span><input name="order_size_2_yd" type="number" min="0.25" step="0.25" value="${esc(ep?.order_size_2_yd??'')}"></label>
           <label class="field"><span>Haul group (truck capacity)</span><select id="pr-hg" name="haul_group"><option value="">None</option>${Object.entries(HAUL_GROUPS).map(([k,l])=>`<option value="${k}" ${ep?.haul_group===k?'selected':''}>${esc(l)}</option>`).join('')}</select></label>
           <label class="field full"><span>Only when the Shopify variant includes</span><input id="pr-var" name="shopify_variant_match" maxlength="40" value="${esc(ep?.shopify_variant_match||'')}" placeholder="Leave blank, or e.g. Red when one Shopify product feeds two bins"></label>
           <label class="field full"><span>Shopify product ID</span><input id="pr-shop" name="shopify_product_id" inputmode="numeric" value="${esc(ep?.shopify_product_id||'')}" placeholder="Filled in automatically by the first order"></label>
@@ -1313,7 +1377,7 @@ VIEWS.setup={
       ${S.bins.slice().sort((a,b)=>(a.sort-b.sort)||a.code.localeCompare(b.code)).map(b=>`<tr><td><b>${esc(b.code)}</b></td><td>${esc(prodName(b.product_id))}</td><td class="n">${fmtN(S.onHand[b.id]||0)}</td><td class="n">${fmtN(b.capacity_yd)}</td><td class="n">${fmtN(b.reorder_yd)}</td><td class="muted">${b.map_x&&b.map_y?'Col '+b.map_x+' · Row '+b.map_y:'—'}</td><td>${b.active===false?'<span class="chip c-mute">Inactive</span>':'<span class="chip c-ok">Active</span>'}</td><td><button class="btn sm" data-act="editBin" data-id="${b.id}">Edit</button></td></tr>`).join('')||'<tr><td colspan="8" class="muted">No bins yet.</td></tr>'}
     </tbody></table></div></div>
     <div class="sec"><h2>Products</h2><div class="tbl-wrap"><table><thead><tr><th>Product</th><th>Haul group</th><th>Shopify title</th><th>Shopify ID</th><th>Bins</th><th></th></tr></thead><tbody>
-      ${S.products.map(p=>`<tr><td><b>${esc(p.name)}</b></td><td class="muted">${esc(HAUL_GROUPS[p.haul_group]||'—')}</td><td>${(p.shopify_titles||[]).length?esc(p.shopify_titles.join(', '))+(p.shopify_variant_match?' <span class="muted">· variant “'+esc(p.shopify_variant_match)+'”</span>':''):'<span class="chip c-warn">Not linked</span>'}</td><td class="num muted">${p.shopify_product_id?esc(p.shopify_product_id):'—'}</td><td>${S.bins.filter(b=>b.product_id===p.id).map(b=>esc(b.code)).join(', ')||'—'}</td><td><button class="btn sm" data-act="editProduct" data-id="${p.id}">Edit</button></td></tr>`).join('')}
+      ${S.products.map(p=>`<tr><td><b>${esc(p.name)}</b><br><span class="muted" style="font-size:.78rem">${p.hauled_by?esc(HAULED_BY[p.hauled_by])+(p.supplier?' · '+esc(p.supplier):''):'Hauled by: not set'}</span></td><td class="muted">${esc(HAUL_GROUPS[p.haul_group]||'—')}</td><td>${(p.shopify_titles||[]).length?esc(p.shopify_titles.join(', '))+(p.shopify_variant_match?' <span class="muted">· variant “'+esc(p.shopify_variant_match)+'”</span>':''):'<span class="chip c-warn">Not linked</span>'}</td><td class="num muted">${p.shopify_product_id?esc(p.shopify_product_id):'—'}</td><td>${S.bins.filter(b=>b.product_id===p.id).map(b=>esc(b.code)).join(', ')||'—'}</td><td><button class="btn sm" data-act="editProduct" data-id="${p.id}">Edit</button></td></tr>`).join('')}
     </tbody></table></div></div>
     <div class="sec"><h2>Bulk trucks</h2>
       <p class="muted" style="margin:0;font-size:.85rem">Units per load (1 unit = ${fmtN(ydu())} yd³). Leave a cell blank if the truck doesn't haul that product. These fill in the volume when Kevin schedules a haul.</p>
@@ -1406,6 +1470,13 @@ function binModalHTML(){
     <form class="form" data-form="request" data-modal="1" autocomplete="off">${orderFormFields(b,fill)}
       <div class="form-actions full"><button class="btn order">Send order</button><span class="hint" id="rq-hint"></span></div></form>`;
   }
+  if(UI.binMode==='receive'){
+    return head('Record delivery', `${name} · Bin ${b.code}`)+`
+    <button class="btn sm ghost bm-back" data-act="binMode" data-v="view">← Back to bin</button>
+    <p class="muted" style="margin:0;font-size:.85rem">${esc(name)} isn't ordered through Kevin. Record it when it's dropped off and it's added to the bin.</p>
+    <form class="form" data-form="receipt" data-modal="1" autocomplete="off">${receiveFields(b)}
+      <div class="form-actions full"><button class="btn order">Add to bin</button></div></form>`;
+  }
   if(UI.binMode==='count'){
     const s=D.stats[b.id];
     return head('Count bin', `${name} · Bin ${b.code}`)+`
@@ -1423,7 +1494,8 @@ function binModalHTML(){
     ${binCard(b)}
     ${b.product_id&&(can.order()||can.request()||can.adjust())?`<div class="bm-actions">
       ${can.order()?'<button class="btn take" data-act="binMode" data-v="draw">Take out product</button>':''}
-      ${can.request()?'<button class="btn order" data-act="binMode" data-v="order">Order product</button>':''}
+      ${isBulk(b.product_id)?(can.request()?'<button class="btn order" data-act="binMode" data-v="order">Order product</button>':'')
+        :(can.receive()?'<button class="btn order" data-act="binMode" data-v="receive">Record delivery</button>':'')}
       ${can.adjust()?'<button class="btn" data-act="binMode" data-v="count">Count bin</button>':''}</div>`:''}
     ${hauls.length?`<div class="muted" style="font:500 .7rem var(--f-mono);text-transform:uppercase;letter-spacing:.08em">Coming in</div>
       ${tl(hauls.map(h=>`<div class="tl"><span class="d">${esc(fmtDate(h.haul_on))}</span><span>Truck ${esc(h.truck_no)} (${esc(h.status.replace('_',' '))})</span><span class="q num pos">${signed(Number(h.volume_yd))}</span></div>`))}`:''}
@@ -1468,7 +1540,7 @@ function renderBinModal(){
   m.innerHTML=`<div class="bm-panel" role="dialog" aria-modal="true" aria-label="Bin ${esc(D.bin[UI.selBin].code)}">${binModalHTML()}</div>`;
   m.querySelectorAll('[data-hint]').forEach(updateHint);
   if(UI.binMode==='draw') $('#io-cust')?.focus();
-  else if(UI.binMode==='order'||UI.binMode==='count') $('#qty-'+UI.tab)?.focus();
+  else if(UI.binMode==='order'||UI.binMode==='count'||UI.binMode==='receive') $('#qty-'+UI.tab)?.focus();
   else if(DEBRIS_FORMS[UI.binMode]) $('#bin-modal [name=qty]')?.focus();
 }
 function closeBinModal(){ UI.selBin=null; UI.binMode='view'; renderBinModal(); renderDyn(true); }
@@ -1518,7 +1590,9 @@ const ACT={
   haulFilter(d){ UI.haulFilter=d.v; renderDyn(true); },
   quickReq(d){
     // From the yard ("Needs attention" list): open the order form in the bin pop-up instead of leaving the map.
-    if(UI.tab==='yard'&&D.bin[d.bin]){ UI.selBin=d.bin; UI.binMode='order'; renderBinModal(); renderDyn(true); return; }
+    const mode=isBulk(D.bin[d.bin]?.product_id)?'order':'receive';
+    if(UI.tab==='yard'&&D.bin[d.bin]){ UI.selBin=d.bin; UI.binMode=mode; renderBinModal(); renderDyn(true); return; }
+    if(mode==='receive'){ UI.selBin=d.bin; UI.binMode='receive'; UI.tab='yard'; render(); renderBinModal(); return; }
     const b=D.bin[d.bin], s=D.stats[d.bin];
     UI.prefillBin=d.bin; UI.prefillQty=Math.max(0, r1((Number(b.capacity_yd)||0) - s.proj)) || '';
     UI.tab='backfill'; render(); UI.prefillBin=null; UI.prefillQty=null;
@@ -1553,6 +1627,13 @@ const ACT={
   debrisDone(d){ run(()=>A.update('debris_events',d.id,{status:'done'}),'Removal confirmed. Volume taken off the pile.'); },
   debrisCancel(d){ run(()=>A.update('debris_events',d.id,{status:'cancelled'}),'Removal cancelled.'); },
   debrisUndo(d){ run(()=>A.update('debris_events',d.id,{status:'cancelled'}),'Undone. The piles are back to where they were.'); },
+  orderSize(d,el){
+    const f=el.closest('form'); const q=f?.querySelector('[name=qty]'), u=f?.querySelector('[name=qty_unit]'); if(!q) return;
+    // Truck loads are counted in units, so the size goes in as units.
+    const yd=Number(d.yd); q.step='any'; if(u){ u.value='unit'; q.value=Math.round(yd/ydu()*100)/100; } else q.value=yd;
+    f.querySelectorAll('.size-btn').forEach(b=>b.classList.toggle('on',b===el));
+  },
+  receiptUndo(d){ run(()=>A.update('receipts',d.id,{status:'cancelled'}),'Delivery undone. Volume taken back out of the bin.'); },
   haulUndo(d){ run(()=>A.update('hauls',d.id,{status:'scheduled'}),'Delivery undone. Volume taken back out of the bin.'); },
   mapOpen(d){ UI.mapLine=d.id; renderDyn(true); },
   mapClose(){ UI.mapLine=null; renderDyn(true); },
@@ -1610,6 +1691,11 @@ const CHANGE={
     const file=el.files?.[0]; const b=D.bin[el.dataset.id]; el.value=''; if(!file||!b) return;
     await uploadPilePhoto(file,b);
   },
+  orderProduct(el){ const box=el.closest('form')?.querySelector('[data-order-sizes]'); if(box) box.innerHTML=el.value?orderSizeBtns(el.value):''; },
+  recvBy(el){ const f=el.closest('form'), w=f?.querySelector('[data-recv-company]'); if(!w) return; const ext=el.value==='external'; w.hidden=!ext; const i=w.querySelector('input'); i.required=ext; if(ext) i.focus(); },
+  recvProduct(el){ const f=el.closest('form'), p=D.product[el.value]; if(!f||!p) return;
+    const by=f.querySelector('[name=delivered_by]'); by.value=p.hauled_by==='external'?'external':p.hauled_by==='bulk'?'bulk':'slinger'; CHANGE.recvBy(by);
+    const c=f.querySelector('[name=company]'); if(c&&!c.value&&p.supplier) c.value=p.supplier; },
   debrisBinUnit(el){ const o=el.selectedOptions[0]; const u=el.closest('form')?.querySelector('[data-follows-bin]'); if(u&&o?.dataset.unit) u.value=o.dataset.unit; },
   debrisTruck(el){ const f=el.closest('form'); const o=f?.querySelector('[data-other-truck]'); if(!o) return; o.hidden=el.value!=='other'; const i=f.querySelector('[name=truck_other]'); i.required=el.value==='other'; if(el.value==='other') i.focus(); },
 };
@@ -1648,11 +1734,12 @@ const FORM={
     f.reset(); $('#io-date').value=isoDay(); $('#io-other-wrap').hidden=true; CHANGE.drawMode(); if($('#io-prod')) updateHint($('#io-prod'));
   },
   async request(fd,f){
-    const bin=D.bin[fd.get('bin_id')||D.defaultBin(fd.get('product_id'))]; const m=fd.get('method');
+    const bin=D.bin[fd.get('bin_id')||D.defaultBin(fd.get('product_id'))]; const m='bulk';
     const inModal=!!f.dataset.modal;
     if(!bin){ toast('That product has no bin. Add one in Setup.',true); return; }
+    if(!isBulk(bin.product_id)){ toast(`${prodName(bin.product_id)} isn't hauled by Kevin, so it isn't ordered here. Record the delivery when it arrives.`,true); return; }
     const ok=await run(()=>A.insert('backfill_requests',{bin_id:bin.id,product_id:bin.product_id,qty_yd:toYd(fd),needed_by:fd.get('needed_by')||null,method:m,status:'requested',notes:fd.get('notes').trim()||null}),
-      m==='bulk'?'Order sent to Kevin.':'Slinger order added. Schedule it on the board.');
+      'Order sent to Kevin.');
     if(inModal){ if(ok){ UI.binMode='view'; renderBinModal(); } return; }
     f.reset(); $('#rq-date').value=isoDay(1);
   },
@@ -1661,6 +1748,19 @@ const FORM={
     UI.openHaulFor=null;
     const tr=truckOf(fd); if(!tr){ toast('Enter the truck number.',true); return; }
     await run(()=>A.insert('hauls',{request_id:r.id,method:r.method,truck_no:tr,loads:Math.max(1,parseInt(fd.get('loads'),10)||1),conditions:fd.get('conditions'),bin_id:r.bin_id,product_id:r.product_id,volume_yd:r1(fd.get('volume')),haul_on:fd.get('haul_on')||isoDay(),status:'scheduled'}),'Haul scheduled.');
+  },
+  async receipt(fd,f){
+    const inModal=!!f.dataset.modal;
+    const bin=D.bin[fd.get('bin_id')||D.defaultBin(fd.get('product_id'))];
+    if(!bin){ toast('That product has no bin. Add one in Setup.',true); return; }
+    const qty=toYd(fd); if(!(qty>0)){ toast('Enter the volume delivered.',true); return; }
+    const by=fd.get('delivered_by'), company=String(fd.get('company')||'').trim()||null;
+    if(by==='external'&&!company){ toast('Enter the company that delivered it.',true); return; }
+    const day=fd.get('received_on')||isoDay(); if(dayDiff(day)>0){ toast('The delivery date can’t be in the future.',true); return; }
+    const row={bin_id:bin.id,product_id:bin.product_id,qty_yd:qty,delivered_by:by,company:by==='external'?company:null,received_on:day,status:'done',notes:String(fd.get('notes')||'').trim()||null};
+    const ok=await run(()=>A.insert('receipts',row),`Added ${fmtYd(qty)} of ${prodName(bin.product_id)}, delivered by ${recvWho(row)}.`);
+    if(!ok) return;
+    if(inModal){ UI.binMode='view'; renderBinModal(); } else { f.reset(); CHANGE.recvBy(f.querySelector('[name=delivered_by]')); }
   },
   async haulFree(fd,f){
     // A delivery that arrived (or is booked) without an order: create the order and its truck
@@ -1769,7 +1869,9 @@ const FORM={
   async product(fd,f){
     const shop=fd.get('shopify_product_id').trim();
     const titles=[...new Set(fd.get('shopify_titles').split(',').map(t=>t.trim()).filter(Boolean))];
-    const row={name:fd.get('name').trim(),sku:fd.get('sku').trim()||null,shopify_product_id:shop?Number(shop):null,shopify_titles:titles,shopify_variant_match:fd.get('shopify_variant_match').trim()||null,haul_group:fd.get('haul_group')||null};
+    const row={name:fd.get('name').trim(),sku:fd.get('sku').trim()||null,shopify_product_id:shop?Number(shop):null,shopify_titles:titles,shopify_variant_match:fd.get('shopify_variant_match').trim()||null,haul_group:fd.get('haul_group')||null,
+      hauled_by:fd.get('hauled_by')||null,supplier:String(fd.get('supplier')||'').trim()||null,
+      order_size_1_yd:Number(fd.get('order_size_1_yd'))>0?Math.round(Number(fd.get('order_size_1_yd'))*100)/100:null,order_size_2_yd:Number(fd.get('order_size_2_yd'))>0?Math.round(Number(fd.get('order_size_2_yd'))*100)/100:null};
     const id=f.dataset.id; UI.editProduct=null;
     await run(()=>id?A.update('products',id,row):A.insert('products',{...row,active:true}), id?'Product saved.':'Product added.');
     render();
