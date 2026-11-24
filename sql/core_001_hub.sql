@@ -132,11 +132,12 @@ revoke all on function core.my_hub(), core.is_admin() from anon, public;
 grant execute on function core.my_hub(), core.is_admin() to authenticated;
 
 -- ---------------------------------------------------------------------
--- The four apps
+-- The apps
 -- ---------------------------------------------------------------------
 insert into core.apps (slug, name, description, department, path, sort) values
   ('retail-yard',   'Retail Yard',      'Bin inventory, internal orders and backfill hauling.', 'Retail Yard',    '/Production/retail-yard/',   10),
-  ('mix-board',     'Mix Board',        'Dept 14 specialty production, counts and sales.',      'Dept 14',        '/Production/dept14/',        20),
+  ('specialty',     'Specialty',        'Dept 14 specialty production, counts and sales.',      'Dept 14',        '/Production/dept14/',        20),
+  ('mix-board',     'Mix Board',        'Soil mix jobs scheduled by lane.',                     'Soil Mixing',    '/Production/',               25),
   ('bulk-dispatch', 'Bulk Dispatch',    'Bulk delivery trucks, waves and route planning.',      'Bulk Delivery',  '/Production/bulk-dispatch/', 30),
   ('blower',        'Blower Scheduler', 'Blower quotes and the truck schedule.',                'Eugene Blowers', '/EB-CRM/',                   40)
 on conflict (slug) do nothing;
