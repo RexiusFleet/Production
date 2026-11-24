@@ -41,11 +41,12 @@
   }
   async function load() {
     var res = await Promise.all([
-      core.from('apps').select('slug,name,sort,active').order('sort'),
+      core.from('apps').select('*').order('sort'),
       core.from('products').select('*').order('name'),
       core.from('product_apps').select('product_id,app_slug')
     ]);
-    S.apps = must(res[0]).filter(function (a) { return a.active && a.slug !== 'products'; });
+    /* uses_catalog is added by sql/core_003_catalog_apps.sql; until then every app shows. */
+    S.apps = must(res[0]).filter(function (a) { return a.active && a.slug !== 'products' && a.uses_catalog !== false; });
     S.products = must(res[1]);
     S.pa = new Set(must(res[2]).map(function (x) { return x.product_id + '|' + x.app_slug; }));
   }

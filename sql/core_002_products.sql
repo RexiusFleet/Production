@@ -248,11 +248,10 @@ begin
     ('3/4 in. Round Rock','bulk-dispatch','Rock',2750,'estimate'), ('1 1/2 in. Round Rock','bulk-dispatch','Rock',2700,'estimate'),
     ('Garden Sand','bulk-dispatch','Rock',2400,'estimate'), ('Sandy Loam','bulk-dispatch','Rock',2200,'estimate');
 
-  -- Live lists from the other apps' own tables. (Mix Board is left out on
-  -- purpose: its products are specific to that app and stay in its own list.)
+  -- Live lists from the other apps' own tables. (Mix Board and Specialty are left
+  -- out on purpose: their products are specific to those apps.)
   for src in select * from (values
-      ('retail-yard', 'select distinct name from yard.products where name is not null'),
-      ('specialty',   'select distinct name from dept14.items where name is not null and unit = ''yd''')
+      ('retail-yard', 'select distinct name from yard.products where name is not null')
     ) as t(app, q)
   loop
     begin
