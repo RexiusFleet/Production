@@ -139,8 +139,11 @@ insert into core.apps (slug, name, description, department, path, sort) values
   ('specialty',     'Specialty',        'Dept 14 specialty production, counts and sales.',      'Dept 14',        '/Production/dept14/',        20),
   ('mix-board',     'Mix Board',        'Soil mix jobs scheduled by lane.',                     'Soil Mixing',    '/Production/',               25),
   ('bulk-dispatch', 'Bulk Dispatch',    'Bulk delivery trucks, waves and route planning.',      'Bulk Delivery',  '/Production/bulk-dispatch/', 30),
-  ('blower',        'Blower Scheduler', 'Blower quotes and the truck schedule.',                'Eugene Blowers', '/EB-CRM/',                   40)
+  ('blower',        'Blower Scheduler', 'Blower quotes and the truck schedule.',                'Eugene Blowers', '/EB-CRM/',                   40),
+  ('wms',           'WMS Rentals',      'Container rentals, inventory and billing.',            'Western Mobile Storage', '/WMS/',              50)
 on conflict (slug) do nothing;
+-- Blower Scheduler and WMS Rentals are link-only tiles: each lives on its own
+-- Supabase project with its own sign-in.
 
 -- ---------------------------------------------------------------------
 -- LAST STEP — make yourself the first admin.

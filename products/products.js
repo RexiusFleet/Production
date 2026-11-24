@@ -12,7 +12,7 @@
     return;
   }
   var core = R.client.schema('core');
-  var S = { me: {}, apps: [], products: [], pa: new Set(), q: '', app: '', showOff: false };
+  var S = { me: {}, apps: [], products: [], pa: new Set(), q: '', app: '', showOff: false, blower: null, blowerNote: '' };
   var MAX_LBS = 10000;
 
   /* Same rule as core.norm_name() in the database. */
@@ -37,7 +37,65 @@
     try {
       var hub = await R.myHub(); S.me = hub.me || {};
       await load(); shell(); rows();
+      loadBlower().then(function () { if (S.blower || S.blowerNote) { shell(); rows(); } });
     } catch (err) { failScreen(err); }
+  }
+
+  /* ---------- Blower Scheduler (separate database), read-only, admins only ----------
+     The page never talks to the Blower database itself. It asks a small function in
+     this project, which checks the caller is a hub admin and reads Blower's product
+     feed. Nothing here can change anything in Blower. */
+  async function loadBlower() {
+    S.blower = null; S.blowerNote = '';
+    if (!S.me.is_admin) return;
+    try {
+      var cfg = window.REXIUS_CONFIG || {}, s = await R.session();
+      if (!s) return;
+      var res = await fetch(cfg.supabaseUrl + '/functions/v1/blower-products', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + s.access_token, apikey: cfg.supabaseKey, 'Content-Type': 'application/json' },
+        body: '{}'
+      });
+      var body = await res.json().catch(function () { return {}; });
+      if (!res.ok) { S.blowerNote = body.error || ('The Blower link answered ' + res.status + '.'); return; }
+      var crews = {}, byKey = {}, list = [];
+      (body.crews || []).forEach(function (c) { crews[c.id] = c.name || ('Crew ' + c.id); });
+      (body.rate_card || []).forEach(function (r) {
+        var it = { name: r.product, costPerYard: r.cost_per_yard, unitCost: r.unit_cost, yardsPerUnit: r.yards_per_unit,
+                   active: r.active !== false, loads: [], matched: false };
+        byKey[norm(r.product)] = it; list.push(it);
+      });
+      (body.truck_capacity || []).forEach(function (c) {
+        var it = byKey[norm(c.product)];
+        if (!it) { it = { name: c.product, costPerYard: null, active: true, loads: [], matched: false }; byKey[norm(c.product)] = it; list.push(it); }
+        it.loads.push({ crew: crews[c.crew_id] || ('Crew ' + c.crew_id), dry: c.dry_yards, wet: c.wet_yards });
+      });
+      list.forEach(function (it) { it.loads.sort(function (a, b) { return a.crew.localeCompare(b.crew); }); });
+      S.blower = { byKey: byKey, list: list, asOf: body.as_of };
+    } catch (err) { S.blowerNote = 'Couldn\'t reach the Blower link.'; }
+  }
+  /* Every Blower product this catalog product is known as (its name or any other name). */
+  function blowerFor(p) {
+    if (!S.blower) return [];
+    var seen = [], out = [];
+    [p.name].concat(p.aliases || []).map(norm).forEach(function (k) {
+      var it = S.blower.byKey[k];
+      if (it && seen.indexOf(it) === -1) { seen.push(it); out.push(it); }
+    });
+    return out;
+  }
+  function money(v) { return v == null || isNaN(Number(v)) ? '' : '$' + Number(v).toFixed(2); }
+  function blowerCell(p) {
+    var hits = blowerFor(p);
+    if (!hits.length) return '<span class="muted">—</span>';
+    return hits.map(function (it) {
+      return '<div>' + (hits.length > 1 ? '<span class="sub">' + esc(it.name) + '</span>' : '') +
+        (it.costPerYard != null ? '<span class="mono">' + esc(money(it.costPerYard)) + '</span><span class="muted"> / yd</span>' : '<span class="muted">no cost</span>') +
+        (it.active ? '' : ' <span class="tag">Inactive</span>') +
+        (it.loads.length ? '<span class="sub">' + it.loads.map(function (l) {
+          return esc(l.crew) + ' ' + esc(Number(l.dry)) + '/' + esc(Number(l.wet));
+        }).join(' · ') + '</span>' : '') + '</div>';
+    }).join('');
   }
   async function load() {
     var res = await Promise.all([
@@ -72,8 +130,11 @@
       (admin ? '<button class="btn" id="upload">Upload weights</button><button class="btn primary" id="add">Add product</button>' : '') +
       '</div>' +
       '<div class="scroll"><table><thead><tr><th>Product</th><th>Category</th><th class="n">Lbs / yd</th><th>Updated</th>' +
+      (S.blower ? '<th title="Read from the Blower Scheduler. Cost per yard, then each truck\'s load in yards, dry/wet.">Blower cost · loads dry/wet</th>' : '') +
       S.apps.map(function (a) { return '<th class="c">' + esc(a.name) + '</th>'; }).join('') +
-      (admin ? '<th></th>' : '') + '</tr></thead><tbody id="rows"></tbody></table></div>';
+      (admin ? '<th></th>' : '') + '</tr></thead><tbody id="rows"></tbody></table></div>' +
+      '<div id="blowerNote" class="muted" style="margin-top:10px;font-size:.84rem"></div>';
+    $('#q').value = S.q; $('#fapp').value = S.app; $('#off').checked = S.showOff;
 
     $('#q').addEventListener('input', function (e) { S.q = e.target.value; rows(); });
     $('#fapp').addEventListener('change', function (e) { S.app = e.target.value; rows(); });
@@ -103,7 +164,8 @@
     });
   }
   function rows() {
-    var admin = !!S.me.is_admin, list = visible(), cols = 4 + S.apps.length + (admin ? 1 : 0);
+    var admin = !!S.me.is_admin, list = visible(), cols = 4 + S.apps.length + (admin ? 1 : 0) + (S.blower ? 1 : 0);
+    blowerNote();
     $('#count').textContent = list.length + ' of ' + S.products.length;
     $('#rows').innerHTML = list.length ? list.map(function (p) {
       var w = p.lbs_per_yard == null ? '' : Number(p.lbs_per_yard);
@@ -118,6 +180,7 @@
           : '<span class="mono">' + esc(w === '' ? '—' : w) + '</span>') + '</td>' +
         '<td>' + (p.weight_source === 'estimate' ? '<span class="tag warn">Estimate</span>'
                  : p.weight_updated_at ? '<span class="muted">' + esc(fmtDate(p.weight_updated_at)) + '</span>' : '') + '</td>' +
+        (S.blower ? '<td>' + blowerCell(p) + '</td>' : '') +
         S.apps.map(function (a) {
           return '<td class="c"><input type="checkbox" data-pid="' + esc(p.id) + '" data-app="' + esc(a.slug) + '"' +
             (S.pa.has(p.id + '|' + a.slug) ? ' checked' : '') + (admin ? '' : ' disabled') +
@@ -126,6 +189,24 @@
         (admin ? '<td class="n"><button class="btn sm" data-edit="' + esc(p.id) + '">Edit</button></td>' : '') + '</tr>';
     }).join('') : '<tr><td class="empty" colspan="' + cols + '">' +
       (S.products.length ? 'No products match.' : 'No products yet.') + '</td></tr>';
+  }
+
+  /* Under the table: when the Blower figures were read, and any Blower product the catalog doesn't know. */
+  function blowerNote() {
+    var el = $('#blowerNote'); if (!el) return;
+    if (!S.me.is_admin) { el.textContent = ''; return; }
+    if (!S.blower) {
+      el.innerHTML = S.blowerNote ? '<span class="tag warn">Blower</span> ' + esc(S.blowerNote.replace(/^SETUP:\s*/, 'Setup not finished: ')) : '';
+      return;
+    }
+    S.blower.list.forEach(function (it) { it.matched = false; });
+    S.products.forEach(function (p) { blowerFor(p).forEach(function (it) { it.matched = true; }); });
+    var loose = S.blower.list.filter(function (it) { return !it.matched; }).map(function (it) { return it.name; });
+    el.innerHTML = 'Blower figures are read-only, straight from the Blower Scheduler' +
+      (S.blower.asOf ? ' (' + esc(new Date(S.blower.asOf).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) + ')' : '') + '. ' +
+      (loose.length ? '<b>' + loose.length + '</b> Blower product' + (loose.length > 1 ? 's are' : ' is') +
+        ' not matched to anything in this list: ' + esc(loose.join(', ')) +
+        '. Add the Blower name under "Other names" on the right product to link it.' : 'Every Blower product is matched.');
   }
 
   async function onRowChange(e) {
