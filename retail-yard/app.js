@@ -898,7 +898,7 @@ VIEWS.yard={
       if(has('hauling','admin')){
         S.backfills.filter(r=>r.method==='bulk'&&r.status==='requested').forEach(r=>{
           items.push(`<div class="alert" style="--c:var(--info)"><p>${prioRank()[r.id]?`<span class="prio-n">#${prioRank()[r.id]}</span> `:''}<b>${esc(r.created_by_name||'Jeff')}</b> needs <b>${esc(prodName(r.product_id))}</b>${r.qty_yd?` (<span class="num">${fmtYd(r.qty_yd)}</span>)`:''}, needed ${whenDate(r.needed_by)}.</p>
-            <div class="btns"><button class="btn sm primary" data-act="scheduleReq" data-id="${r.id}">Schedule a truck</button></div></div>`);
+            <div class="btns"><a class="btn sm primary" style="text-decoration:none" href="../bulk-dispatch/">Schedule in Bulk Dispatch</a></div></div>`);
         });
       }
       return items.join('')||`<div class="empty panel">Nothing needs attention right now.</div>`;
@@ -1335,7 +1335,8 @@ function haulLine(h){
   const disp=can.dispatch(h.method)||can.confirmDelivery();
   let act='';
   if(open&&can.confirmDelivery()) act+=`<button class="btn sm order" data-act="haulStatus" data-v="delivered" data-id="${h.id}">Confirm delivered</button>`;
-  if(open&&disp) act+=confirmBtn('haulCancel','Cancel',`data-id="${h.id}"`,'cancel');
+  // Bulk hauls are booked, moved and cancelled in Bulk Dispatch, which writes them here.
+  if(open&&disp&&h.method!=='bulk') act+=confirmBtn('haulCancel','Cancel',`data-id="${h.id}"`,'cancel');
   if(h.status==='delivered'&&can.confirmDelivery()) act+=confirmBtn('haulUndo','Undo',`data-id="${h.id}"`,'ghost');
   return `<div class="haul-line"><div class="hl-top"><span>Truck ${esc(h.truck_no)}${h.loads>1?' × '+h.loads:''} · ${esc(fmtDate(h.haul_on))}</span><span class="num">${fmtN(h.volume_yd)} yd³ ${statusChip(h.status==='delivered'?'confirmed':h.status)}</span></div>
     ${act?`<div class="hl-act">${act}</div>`:''}</div>`;
@@ -1357,7 +1358,9 @@ function reqCard(r){
   const open=r.qty_yd==null;                       // Kevin hasn't picked a volume yet
   const remaining=open?0:r1(Math.max(0,r.qty_yd-sched));
   const late=r.status!=='delivered'&&dayDiff(r.needed_by)<0;
-  const canD=can.dispatch(r.method)&&r.status!=='delivered';
+  // Bulk trucks are scheduled in Bulk Dispatch (one place, no double booking); slingers stay here.
+  const bulkD=r.method==='bulk'&&can.dispatch(r.method)&&r.status!=='delivered';
+  const canD=can.dispatch(r.method)&&r.status!=='delivered'&&r.method!=='bulk';
   const formOpen=UI.openHaulFor===r.id;
   return `<article class="card">
     <div class="top-line">${prioRank()[r.id]?`<span class="prio-n" title="Priority for Kevin">#${prioRank()[r.id]}</span>`:''}<span class="chip ${r.method==='bulk'?'c-info':'c-acc'}">${METHOD[r.method].label}</span>${late?'<span class="chip c-bad">Late</span>':''}</div>
@@ -1375,6 +1378,9 @@ function reqCard(r){
         <div class="form-actions full"><button class="btn primary sm">Schedule haul</button><button type="button" class="btn sm ghost" data-act="haulClose">Close</button></div></form>`
       :hs.length?'':`<div class="form-actions"><button class="btn sm primary" data-act="haulOpen" data-id="${r.id}">Schedule truck</button>
         ${r.status==='requested'&&can.request()?confirmBtn('cancelReq','Cancel request',`data-id="${r.id}"`,'cancel'):''}</div>`):''}
+    ${bulkD?`<div class="form-actions"><a class="btn sm primary" style="text-decoration:none" href="../bulk-dispatch/">${hs.length?'Manage in Bulk Dispatch':'Schedule in Bulk Dispatch'}</a>
+        ${!hs.length&&r.status==='requested'&&can.request()?confirmBtn('cancelReq','Cancel request',`data-id="${r.id}"`,'cancel'):''}</div>`:''}
+    ${r.method==='bulk'&&!bulkD&&r.status==='requested'?`<div class="meta">Kevin schedules the truck in Bulk Dispatch.</div>`:''}
     <div class="meta">Requested by ${esc(r.created_by_name||'—')}</div>
   </article>`;
 }

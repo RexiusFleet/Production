@@ -720,6 +720,10 @@ code{font-family:var(--mono);font-size:12px;background:var(--surface-3);padding:
       </div>
       <div class="row">
         <span class="small muted" id="reqSync"></span>
+        <label class="small muted" style="display:inline-flex;align-items:center;gap:6px">Loads sized for
+          <select id="reqCond" style="width:auto;padding:5px 8px">
+            <option value="dry">dry product</option><option value="wet">wet product</option>
+          </select></label>
         <button class="btn" id="btnReqPull">Check the tracker</button>
         <button class="btn primary" id="btnReqNew">+ Log a request</button>
       </div>
@@ -2578,6 +2582,10 @@ function productOf(o){ return byId(DB.products, o.productId); }
 
 /** Biggest single drop a truck can make, and which limit bound it. */
 function effCapacity(t, prod, opts){
+  if(opts && opts.internal){
+    const y = yardLoad(t, prod);
+    if(y > 0) return { cap: y, limit: 'Retail Yard load size, ' + yardConditions() };
+  }
   const byVol = truckTotalYards(t);
   const byWt  = prod && num(prod.lbsPerYard,0) > 0 ? num(t.weightCapacity, Infinity)/num(prod.lbsPerYard) : Infinity;
   // maxYardsPerLoad is how much the STORE will sell in one drop. Moving our own
@@ -2589,6 +2597,15 @@ function effCapacity(t, prod, opts){
 }
 /** What one truck can move between yards in a single trip. */
 function haulCapacity(t, prod){ return effCapacity(t, prod, {internal:true}); }
+function yardConditions(){ return DB.settings.yardConditions === 'wet' ? 'wet' : 'dry'; }
+/** Retail Yard's load size for this truck and product (0 when it has none on file). */
+function yardLoad(t, prod){
+  if(!t || !prod || !DB.yardLoads) return 0;
+  const c = (DB.yardLoads[YardHauls.truckNo(t.id)] || {})[prod.id];
+  if(!c) return 0;
+  const v = yardConditions() === 'wet' ? (c.wet || c.dry) : (c.dry || c.wet);
+  return Math.floor(num(v, 0) * 10 + 1e-6) / 10;       // never round a load UP past what fits
+}
 
 function depotStocks(depot, prod){
   return depotsFor(prod).some(d=>d.id===depot.id);
@@ -7744,6 +7761,44 @@ const Tracker = {
  *                             on its side, and that is what fills the bin
  *   trip cancelled/removed -> haul 'cancelled'
  */
+const YardCaps = {
+  get configured(){ return Tracker.configured && Tracker.isFeed; },
+  async pull(){
+    if(!this.configured) return {rows:0};
+    const res = await fetch(`${Tracker._base()}/rest/v1/dispatch_truck_loads?select=*`, {headers:Tracker._headers()});
+    if(!res.ok) throw new Error('load sizes read ' + res.status);
+    const rows = await res.json();
+    const loads = {}, biggest = {};
+    for(const row of rows){
+      const no = String(row.truck_no||'');
+      const dry = num(row.dry_yd, 0), wet = num(row.wet_yd, 0);
+      biggest[no] = Math.max(biggest[no]||0, dry, wet);
+      const p = reqProduct({product: row.product,
+                            productNames: Array.isArray(row.product_names) ? row.product_names : null});
+      if(!p) continue;
+      (loads[no] = loads[no] || {})[p.id] = {dry, wet};
+    }
+    DB.yardLoads = loads;
+    DB.yardLoadsPulledAt = new Date().toISOString();
+    /* A yard truck still on its placeholder box gets the largest load Retail Yard
+     * has on file for it, so a full yard haul is not flagged as too big. A box
+     * someone has set by hand is never touched. */
+    const fixed = [];
+    (DB.trucks||[]).forEach(t=>{
+      const big = biggest[YardHauls.truckNo(t.id)];
+      if(!big || !/^PLACEHOLDER/i.test(String(t.notes||''))) return;
+      if(!Array.isArray(t.boxes) || t.boxes.length !== 1) return;
+      t.boxes[0].yards = big;
+      t.notes = `Box set to ${big} yd from Retail Yard's largest load for this truck. `
+              + `Weight limit is still a placeholder. Single box, one stop per load.`;
+      fixed.push(t.name);
+    });
+    if(fixed.length){ Store.save(); try{ renderAll(); }catch(e){} toast(`Box size updated from Retail Yard — ${fixed.join(', ')}`, 6000); }
+    else Store.saveLocal();
+    return {rows: rows.length, trucks: Object.keys(loads).length};
+  }
+};
+
 const YardHauls = {
   on(){ return Tracker.configured && !!DB.settings.trackerWriteBack && Tracker.isFeed; },
   _url(q){ return `${Tracker._base()}/rest/v1/hauls${q||''}`; },
@@ -7816,6 +7871,7 @@ const YardHauls = {
       if(!have){
         const row = await this._send('POST', '', {
           request_id: r.extId, method: 'bulk', truck_no: w[k].truck, loads: 1,
+          conditions: yardConditions(),
           product_id: r.yardProductId, bin_id: r.yardBinId,
           volume_yd: w[k].yards, haul_on: w[k].date, status: 'scheduled'});
         if(!row || !row.id) throw new Error('Retail Yard did not confirm the haul');
@@ -7872,6 +7928,7 @@ function startTrackerPolling(){
       await Tracker.flush();
       // bin levels move on their own, so refresh them on the same beat
       if(Bins.configured) try{ await Bins.pull(); }catch(e){ DB.binsError = e.message; }
+      if(YardCaps.configured) try{ await YardCaps.pull(); }catch(e){ console.warn(e.message); }
       if(Catalog.configured) try{ await Catalog.pull(); }catch(e){ DB.catalogError = e.message; }
       renderRequests(); markTabCounts();
       if(r.added) toast(`${r.added} new yard request${r.added>1?'s':''} from the tracker`, 4000);
@@ -7935,6 +7992,11 @@ function renderRequests(){
   ].map(([k,v,sub])=>`<div class="tile"><div class="k">${esc(k)}</div>
       <div class="v">${esc(String(v))}</div><div class="sub">${esc(sub)}</div></div>`).join('');
 
+  const cond = $('#reqCond');
+  if(cond){
+    cond.value = yardConditions();
+    cond.onchange = ()=>{ DB.settings.yardConditions = cond.value === 'wet' ? 'wet' : 'dry'; Store.save(); renderRequests(); };
+  }
   const pend = Tracker.pending().length;
   $('#reqSync').textContent = pend ? `${pend} update${pend>1?'s':''} not sent back yet` : '';
 
@@ -8404,6 +8466,7 @@ async function pullTrackerNow(){
     DB.trackerError = null; DB.binsError = null; DB.catalogError = null;
     const r = await Tracker.pull();
     const sent = await Tracker.flush();
+    if(YardCaps.configured) try{ await YardCaps.pull(); }catch(e){ console.warn(e.message); }
     let binNote = '';
     if(Bins.configured){
       try{
@@ -8666,6 +8729,7 @@ async function boot(refresh){
     try{
       const r = await Tracker.pull();
       await Tracker.flush();
+      if(YardCaps.configured) try{ await YardCaps.pull(); }catch(e){ console.warn(e.message); }
       renderRequests();
       if(r.added) toast(`${r.added} yard request${r.added>1?'s':''} waiting`, 4500);
     }catch(e){ console.warn('tracker pull failed', e.message); }

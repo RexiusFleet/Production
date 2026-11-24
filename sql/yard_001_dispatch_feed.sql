@@ -81,3 +81,45 @@ where b.site = 'retail' and b.active;
 
 revoke all on yard.dispatch_requests, yard.dispatch_bins from anon, public;
 grant select on yard.dispatch_requests, yard.dispatch_bins to authenticated;
+
+-- ---------------------------------------------------------------------
+-- Added 2026-11-24 (migration "yard_dispatch_truck_loads_and_kevin_staff"):
+-- Retail Yard's load sizes per truck and product, dry and wet, so Bulk
+-- Dispatch sizes a yard haul the way Retail Yard does.
+--   dry = the product's own load size for that truck, else its haul group's
+--   wet = the haul group's wet figure, else the product's own
+-- ---------------------------------------------------------------------
+create or replace view yard.dispatch_truck_loads
+with (security_invoker = true) as
+with t as (
+  select e.value ->> 'no' as truck_no, e.ordinality::int as pos, e.value -> 'cap' as cap
+  from yard.settings s
+  cross join lateral jsonb_array_elements(s.value) with ordinality e
+  where s.key = 'trucks' and jsonb_typeof(s.value) = 'array'
+)
+select
+  t.truck_no, p.id as product_id, p.name as product,
+  (select array_agg(distinct n)
+     from unnest(array[p.name, c.name] || coalesce(c.aliases, '{}')) n
+    where n is not null)                     as product_names,
+  coalesce(x.own, x.grp_dry)                 as dry_yd,
+  coalesce(x.grp_wet, x.own)                 as wet_yd
+from t
+cross join yard.products p
+cross join lateral (
+  select nullif(case t.pos when 1 then p.order_size_1_yd when 2 then p.order_size_2_yd end, 0) as own,
+         nullif((t.cap -> p.haul_group ->> 'dry')::numeric, 0) as grp_dry,
+         nullif((t.cap -> p.haul_group ->> 'wet')::numeric, 0) as grp_wet
+) x
+left join lateral (
+  select c.name, c.aliases
+  from core.products c
+  where core.norm_name(c.name) = core.norm_name(p.name)
+     or core.norm_name(p.name) in (select core.norm_name(a) from unnest(c.aliases) a)
+  order by (core.norm_name(c.name) = core.norm_name(p.name)) desc
+  limit 1
+) c on true
+where p.active and coalesce(x.own, x.grp_dry, x.grp_wet) is not null;
+
+revoke all on yard.dispatch_truck_loads from anon, public;
+grant select on yard.dispatch_truck_loads to authenticated;
