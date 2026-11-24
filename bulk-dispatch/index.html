@@ -716,7 +716,7 @@ code{font-family:var(--mono);font-size:12px;background:var(--surface-3);padding:
       <div>
         <h3 style="margin:0 0 2px">Retail yard backfill</h3>
         <div class="muted small">What the yard has asked for. Scheduling one creates a haul
-          from the Coburg Rd yard to Hwy 99 and tells the tracker it is on the books.</div>
+          from the Coburg Rd yard to Hwy 99 and shows it as scheduled in Retail Yard.</div>
       </div>
       <div class="row">
         <span class="small muted" id="reqSync"></span>
@@ -1103,8 +1103,8 @@ const DEFAULT_SETTINGS = {
   sbUrl: '', sbKey: '', sbTable: 'bulk_dispatch', sbSchema: 'dispatch', requireLogin: true,
   yardsPerUnit: 7.5, yardTrucks: 't85,t98,t65',
   waveObjective: 'time', fillWeight: 4, pairBonus: 0,
-  trackerUrl: '', trackerKey: '', trackerTable: 'backfill_requests', trackerSchema: '',
-  trackerBinsTable: 'bins',
+  trackerUrl: '', trackerKey: '', trackerTable: 'dispatch_requests', trackerSchema: 'yard',
+  trackerBinsTable: 'dispatch_bins',
   catalogTable: '', catalogSchema: '',
   trackerWriteBack: true, trackerPollMin: 10,
   shopProxy: '', shopTag: 'bulk-delivery'
@@ -2220,6 +2220,14 @@ function reqProduct(r){
     const bySku = (DB.products||[]).find(p=>p.sku && String(p.sku) === String(r.productRef));
     if(bySku) return bySku;
   }
+  /* The feed sends every name this product goes by — Retail Yard's own, the shared
+   * catalogue's and its aliases. An exact hit on any of them is a real match. */
+  if(Array.isArray(r.productNames) && r.productNames.length){
+    const key = t => normAddrKey(String(t||'')).replace(/[^a-z0-9]/g,'');
+    const names = new Set(r.productNames.map(key).filter(Boolean));
+    const exact = (DB.products||[]).find(p=>names.has(key(p.name)));
+    if(exact) return exact;
+  }
   const want = normAddrKey(r.product).replace(/[^a-z0-9 ]/g,'');
   if(!want) return null;
   const list = DB.products || [];
@@ -2232,7 +2240,13 @@ function reqProduct(r){
 function reqYards(r){
   if(num(r.yards,0) > 0) return r1(num(r.yards));
   if(num(r.units,0) > 0) return r1(num(r.units) * num(DB.settings.yardsPerUnit, 7.5));
+  if(r.openVolume) return reqSuggested(r);
   return 0;
+}
+/** No volume asked for: one truckload, or less if that is all the bin has room for. */
+function reqSuggested(r){
+  const per = reqPerLoad(r, null), room = num(r.suggestYd, 0);
+  return r1(per > 0 && room > 0 ? Math.min(per, room) : (per || room || 0));
 }
 /* ---------------------------------------------------------------- the bins
  * The tracker owns the bins at Hwy 99 — their size and what is in them. The
@@ -2341,7 +2355,7 @@ function reqBooked(r){
   return r1((r.hauls||[]).reduce((a,h)=>{
     const o = orderById(h.orderId);
     return a + (o && o.status !== 'cancelled' ? num(o.yards,0) : 0);
-  }, 0));
+  }, 0) + num(r.extBookedYd, 0));
 }
 function reqRemaining(r){ return r1(Math.max(0, reqYards(r) - reqBooked(r))); }
 
@@ -2487,6 +2501,7 @@ function syncRequestsFromOrders(){
       changed = true; trackerPush(r);
     }
   });
+  if(YardHauls.on() && YardHauls.pending(true).length) YardHauls.kick();
   return changed;
 }
 
@@ -7461,6 +7476,7 @@ const Bins = {
   },
 
   async pull(){
+    Tracker.upgrade();
     if(!this.configured) throw new Error('No bins table configured');
     const res = await fetch(this._url('?select=*'), {headers:Tracker._headers()});
     if(!res.ok) throw new Error('bins read '+res.status+' '+(await res.text()).slice(0,160));
@@ -7472,7 +7488,8 @@ const Bins = {
       if(!b.name && !b.extId) continue;
       // tie the bin to a product in this catalogue where the wording allows
       const ref = Bins._match(row, ['productid','productuuid','productkey','sku'], []);
-      const p = reqProduct({product: b.product, productRef: ref ? String(ref.value) : ''});
+      const p = reqProduct({product: b.product, productRef: ref ? String(ref.value) : '',
+                            productNames: Array.isArray(row.product_names) ? row.product_names : null});
       b.productId = p ? p.id : null;
       seen.push(b);
     }
@@ -7524,11 +7541,71 @@ const Tracker = {
       note:       String(pick('note','notes','comment') ?? ''),
       // Jeff's running order. 1 is top of the list; blank sorts after everything ranked.
       rank:       num(pick('priority','rank','sort_order','position','priority_rank'), 0) || null,
-      trackerStatus: String(pick('status') ?? 'open')
+      trackerStatus: String(pick('status') ?? 'open'),
+      ...this.adoptFeed(row)
     };
   },
 
+  /** Extra fields from yard.dispatch_requests, the feed built for this board. */
+  adoptFeed(row){
+    if(!Array.isArray(row.hauls) || !('volume_by_dispatch' in row)) return {};
+    const cap = num(row.bin_capacity_yd, 0), cur = Math.max(0, num(row.bin_on_hand_yd, 0));
+    return {
+      feed: true,
+      productRef: String(row.catalog_product_id || ''),
+      productNames: Array.isArray(row.product_names) ? row.product_names.map(String) : [],
+      yardProductId: String(row.product_id || ''),
+      yardBinId: String(row.bin_id || ''),
+      yards: num(row.qty_yd, 0), units: 0,
+      openVolume: !!row.volume_by_dispatch,          // no volume asked for: Kevin decides
+      suggestYd: cap > 0 ? r1(Math.max(0, cap - cur)) : 0,
+      yardHaulsSeen: row.hauls.map(h=>({
+        id: String(h.id), truck: String(h.truck_no||''), yards: num(h.volume_yd,0),
+        date: String(h.haul_on||'').slice(0,10), status: String(h.status||'')}))
+    };
+  },
+
+  /** Keep a request we already hold in step with what Retail Yard now says. */
+  absorb(mine, inc){
+    ['product','productRef','productNames','yardProductId','yardBinId','bin','requestedBy',
+     'needBy','note','rank','openVolume','suggestYd','trackerStatus','feed'].forEach(k=>{ mine[k] = inc[k]; });
+    // a volume Kevin chose for an open request stands; otherwise the yard's number does
+    if(!(inc.openVolume && num(mine.yards,0) > 0)){ mine.yards = inc.yards; mine.units = 0; }
+    if(mine.productId && !byId(DB.products, mine.productId)) mine.productId = '';
+
+    const ours = new Set(Object.values(mine.yardHauls||{}).map(x=>x.haulId));
+    const ext = (inc.yardHaulsSeen||[]).filter(h=>!ours.has(h.id));
+    mine.yardSeen = {}; (inc.yardHaulsSeen||[]).forEach(h=>{ mine.yardSeen[h.id] = h.status; });
+    mine.extBookedYd = r1(ext.reduce((a,h)=>a + h.yards, 0));
+
+    const ys = String(inc.trackerStatus||'').toLowerCase();
+    if(ys === 'delivered'){
+      if(mine.status !== 'delivered'){ mine.status = 'delivered'; mine.deliveredAt = mine.deliveredAt || new Date().toISOString(); }
+    } else if(mine.status !== 'declined' && !(mine.hauls||[]).length && ys !== 'cancelled'){
+      // nothing booked from this board: follow a haul booked in Retail Yard itself
+      const want = (ys === 'scheduled' || ys === 'in_progress') ? 'scheduled' : 'open';
+      if(mine.status !== want) mine.status = want;
+      if(want === 'scheduled' && ext[0]){
+        mine.scheduledFor = ext[0].date; mine.scheduledTime = '';
+        mine.scheduledTruck = 'Truck ' + ext[0].truck + ' (booked in Retail Yard)';
+      }
+    }
+  },
+
+  /** Boards set up against Retail Yard's raw tables move to the feed built for them. */
+  upgrade(){
+    const s = DB.settings;
+    if(s.trackerUrl) return;                                   // someone else's tracker: leave it
+    if((s.trackerTable||'') === 'backfill_requests' && ['', 'yard'].includes(s.trackerSchema||'')){
+      s.trackerTable = 'dispatch_requests'; s.trackerSchema = 'yard';
+    }
+    if(s.trackerTable === 'dispatch_requests' && ['', 'bins'].includes(s.trackerBinsTable||''))
+      s.trackerBinsTable = 'dispatch_bins';
+  },
+  get isFeed(){ return !DB.settings.trackerUrl && DB.settings.trackerTable === 'dispatch_requests'; },
+
   async pull(){
+    this.upgrade();
     if(!this.configured) throw new Error('No tracker table configured');
     let res;
     try{
@@ -7563,6 +7640,13 @@ const Tracker = {
       // the tracker closing a request closes it here too
       const closed = ['cancelled','canceled','closed','void'].includes(String(inc.trackerStatus).toLowerCase());
       const mine = DB.requests.find(r=>r.src==='tracker' && r.extId===inc.extId);
+      if(mine && inc.feed){
+        const was = JSON.stringify([mine.status, mine.product, mine.yards, mine.bin, mine.needBy, mine.extBookedYd]);
+        this.absorb(mine, inc);
+        if(closed && mine.status === 'open'){ mine.status='declined'; mine.declinedReason='withdrawn in Retail Yard'; }
+        if(JSON.stringify([mine.status, mine.product, mine.yards, mine.bin, mine.needBy, mine.extBookedYd]) !== was) updated++;
+        continue;
+      }
       if(mine){
         if(closed && mine.status === 'open'){ mine.status='declined'; mine.declinedReason='withdrawn in the tracker'; updated++; continue; }
         if(mine.status !== 'open') continue;                 // Kevin already acted; don't clobber
@@ -7571,10 +7655,21 @@ const Tracker = {
         if(JSON.stringify([mine.product,mine.yards,mine.units,mine.needBy,mine.bin,mine.note]) !== before) updated++;
       } else {
         if(closed){ alreadyClosed++; continue; }
-        DB.requests.push({id:uid('req'), status:'open',
-                          createdAt: row.created_at || new Date().toISOString(), ...inc});
+        const fresh = {id:uid('req'), status:'open',
+                       createdAt: row.created_at || new Date().toISOString(), ...inc};
+        DB.requests.push(fresh);
+        if(inc.feed){ this.absorb(fresh, inc); if(fresh.status !== 'open') continue; }
         added++;
       }
+    }
+    if(this.isFeed){
+      /* The feed is the whole truth about what the yard is asking for. Anything
+       * held here that it no longer lists (a slinger job, an old closed request)
+       * and that never had a trip booked on this board is not Kevin's to see. */
+      const live = new Set(rows.map(row=>String(row.id)));
+      DB.requests = DB.requests.filter(r=>r.src !== 'tracker' || live.has(r.extId)
+        || (r.hauls||[]).length || Object.keys(r.yardHauls||{}).length);
+      DB.requests.forEach(r=>{ if(r.src === 'tracker' && r.pushError && !YardHauls.dirty(r)) r.pushError = null; });
     }
     DB.trackerPulledAt = new Date().toISOString();
     DB.trackerError = noId
@@ -7583,6 +7678,15 @@ const Tracker = {
       : null;
     DB.trackerSeen = rows.length;
     DB.trackerNoId = noId;
+    if(this.isFeed && !rows.length){
+      try{
+        const pr = await fetch(`${this._base()}/rest/v1/profiles?select=role`, {headers:this._headers()});
+        const who = pr.ok ? await pr.json() : null;
+        if(Array.isArray(who) && !who.length)
+          DB.trackerError = 'this sign-in has no Retail Yard account, so Retail Yard shows it nothing —'
+            + ' an admin can add this email in Retail Yard (Setup → People) with the Bulk hauling role';
+      }catch(e){ /* the plain "no rows" note still shows */ }
+    }
     Store.save();
     return {added, updated, seen: rows.length, noId, alreadyClosed};
   },
@@ -7591,6 +7695,7 @@ const Tracker = {
   async push(r){
     if(!this.configured || !DB.settings.trackerWriteBack) return false;
     if(r.src !== 'tracker' || !r.extId) return false;
+    if(YardHauls.on()){ YardHauls.kick(); return true; }
     const body = {
       dispatch_status: r.status,
       scheduled_for:   r.scheduledFor || null,
@@ -7616,13 +7721,141 @@ const Tracker = {
 
   /** Anything whose status never made it back. */
   pending(){
+    if(YardHauls.on()) return YardHauls.pending();
     return (DB.requests||[]).filter(r=>r.src==='tracker' && r.extId &&
       r.status !== 'open' && !r.pushedAt);
   },
   async flush(){
+    if(YardHauls.on()) return YardHauls.flush();
     let n = 0;
     for(const r of this.pending()) if(await this.push(r)) n++;
     return n;
+  }
+};
+
+/* --------------------------------------------- trips -> Retail Yard hauls
+ * Retail Yard tracks a delivery as a "haul" against the request. Each trip
+ * Kevin books here is written there as one, so the yard sees it as scheduled
+ * without anyone entering it twice:
+ *   trip booked            -> haul 'scheduled'
+ *   trip moved or resized  -> old haul cancelled, a new one written (Retail
+ *                             Yard lets dispatch change a haul's status only)
+ *   trip marked delivered  -> haul 'en_route'; the yard confirms the delivery
+ *                             on its side, and that is what fills the bin
+ *   trip cancelled/removed -> haul 'cancelled'
+ */
+const YardHauls = {
+  on(){ return Tracker.configured && !!DB.settings.trackerWriteBack && Tracker.isFeed; },
+  _url(q){ return `${Tracker._base()}/rest/v1/hauls${q||''}`; },
+  truckNo(id){
+    const t = truckById(id);
+    return String((t && t.name) || id || '').replace(/^truck\s*/i,'')
+      .replace(/[^A-Za-z0-9 #/-]/g,'').trim().slice(0,20) || '0';
+  },
+  sig(w){ return [w.truck, w.date, w.yards].join('|'); },
+
+  /** orderId -> what Retail Yard should hold for that trip. */
+  want(r){
+    const out = {};
+    (r.hauls||[]).forEach(h=>{
+      const o = orderById(h.orderId);
+      if(!o || o.status === 'cancelled') return;
+      const yards = r1(num(o.yards, 0)), date = o.schedDate || h.date;
+      if(yards <= 0 || !date) return;
+      out[h.orderId] = {truck: this.truckNo(o.pinTruck || h.truckId), date, yards,
+                        sent: o.status === 'delivered'};
+    });
+    return out;
+  },
+  /** A haul the yard has already confirmed is theirs now; never rewrite it. */
+  _locked(r, have){ return ((r.yardSeen||{})[have.haulId]) === 'delivered'; },
+  dirty(r){
+    if(r.src !== 'tracker' || !r.feed || !r.extId || !r.yardBinId || !r.yardProductId) return false;
+    const w = this.want(r), have = r.yardHauls || {};
+    return Object.keys(w).some(k=>!have[k]
+             || (!this._locked(r, have[k]) && (have[k].sig !== this.sig(w[k]) || (w[k].sent && !have[k].sent))))
+        || Object.keys(have).some(k=>!w[k] && !this._locked(r, have[k]));
+  },
+  /** quiet=true skips requests whose last attempt just failed, so a render never hammers the server. */
+  pending(quiet){
+    const now = Date.now();
+    return (DB.requests||[]).filter(r=>this.dirty(r) && !(quiet && r.pushRetryAt && r.pushRetryAt > now));
+  },
+
+  async _send(method, q, body){
+    const res = await fetch(this._url(q), {method,
+      headers: Tracker._headers({Prefer: method === 'POST' ? 'return=representation' : 'return=minimal'}),
+      body: JSON.stringify(body)});
+    if(!res.ok){
+      let msg = '';
+      try{ msg = (await res.json()).message || ''; }catch(e){}
+      throw new Error(res.status === 401 || res.status === 403
+        ? 'this sign-in is not allowed to schedule hauls in Retail Yard'
+        : (msg || 'Retail Yard answered ' + res.status));
+    }
+    return method === 'POST' ? ((await res.json())[0] || null) : null;
+  },
+  _cancel(haulId){
+    // only a haul still on its way can be cancelled; a confirmed delivery is left alone
+    return this._send('PATCH', `?id=eq.${encodeURIComponent(haulId)}&status=in.(scheduled,en_route)`, {status:'cancelled'});
+  },
+
+  async syncOne(r){
+    const w = this.want(r);
+    r.yardHauls = r.yardHauls || {};
+    for(const k of Object.keys(r.yardHauls)){
+      const have = r.yardHauls[k];
+      if(this._locked(r, have)) continue;
+      if(!w[k] || have.sig !== this.sig(w[k])){
+        await this._cancel(have.haulId);
+        delete r.yardHauls[k]; Store.saveLocal();
+      }
+    }
+    for(const k of Object.keys(w)){
+      let have = r.yardHauls[k];
+      if(!have){
+        const row = await this._send('POST', '', {
+          request_id: r.extId, method: 'bulk', truck_no: w[k].truck, loads: 1,
+          product_id: r.yardProductId, bin_id: r.yardBinId,
+          volume_yd: w[k].yards, haul_on: w[k].date, status: 'scheduled'});
+        if(!row || !row.id) throw new Error('Retail Yard did not confirm the haul');
+        have = r.yardHauls[k] = {haulId: String(row.id), sig: this.sig(w[k])};
+        Store.saveLocal();
+      }
+      if(w[k].sent && !have.sent){
+        await this._send('PATCH', `?id=eq.${encodeURIComponent(have.haulId)}&status=eq.scheduled`, {status:'en_route'});
+        have.sent = true;
+      }
+    }
+  },
+
+  _busy: false, _again: false, _timer: null,
+  async flush(){
+    if(this._busy){ this._again = true; return 0; }
+    this._busy = true;
+    let n = 0;
+    try{
+      for(const r of this.pending()){
+        try{
+          await this.syncOne(r);
+          r.pushError = null; r.pushRetryAt = null; r.pushedAt = new Date().toISOString(); n++;
+        }catch(e){
+          r.pushError = e.message; r.pushRetryAt = Date.now() + 60000;
+          console.warn('Retail Yard haul sync failed', e.message);
+        }
+      }
+      if(n) Store.save(); else Store.saveLocal();
+    }finally{ this._busy = false; }
+    if(this._again){ this._again = false; this.kick(); }
+    return n;
+  },
+  /** Soon, once: several changes in one click become one round of writes. */
+  kick(){
+    clearTimeout(this._timer);
+    this._timer = setTimeout(async ()=>{
+      const n = await this.flush();
+      if(n || this.pending().length){ try{ renderRequests(); }catch(e){} }
+    }, 500);
   }
 };
 
@@ -7735,7 +7968,10 @@ function renderRequests(){
 
   tb.innerHTML = rows.map(r=>{
     const u = reqUrgency(r), p = reqProduct(r), yd = reqYards(r);
-    const st = REQ_STATUS[r.status] || {label:r.status, chip:''};
+    let st = REQ_STATUS[r.status] || {label:r.status, chip:''};
+    // the truck has dropped it; the bin only fills when the yard confirms on its side
+    if(r.feed && r.status==='delivered' && String(r.trackerStatus) !== 'delivered')
+      st = {label:'dropped off — yard to confirm', chip:'warn'};
     const o = r.orderId ? orderById(r.orderId) : null;
     return `<tr data-id="${esc(r.id)}">
       <td class="small">${num(r.rank,0)? `<span class="rankchip">#${num(r.rank)}</span> ` : ''}${
@@ -7744,10 +7980,13 @@ function renderRequests(){
       <td>${p ? esc(p.name) : `<span style="color:var(--crit)">${esc(r.product||'not set')}</span>
             <div class="small muted">not in the catalogue — pick one when you schedule it</div>`}</td>
       <td class="num">${yd? esc(yd)+' yd' : '—'}${
+        r.openVolume && !num(r.yards,0) && r.status==='open'
+          ? `<div class="small muted">no volume asked — your call</div>` : ''}${
         num(r.units,0)? `<div class="small muted">${num(r.units)} unit${num(r.units)>1?'s':''}</div>`:''}${
         reqBooked(r) && reqRemaining(r) > 0.01
           ? `<div class="small" style="color:#8a6100">${esc(reqRemaining(r))} yd still to book</div>`
-          : (reqBooked(r)? `<div class="small muted">${(r.hauls||[]).length} trip${(r.hauls||[]).length>1?'s':''}</div>`:'')}</td>
+          : (reqBooked(r)? `<div class="small muted">${(r.hauls||[]).length
+              ? `${r.hauls.length} trip${r.hauls.length>1?'s':''}` : 'booked in Retail Yard'}</div>`:'')}</td>
       <td class="small">${esc(r.bin||'—')}${binCell(r)}</td>
       <td class="small">${esc(r.requestedBy||'—')}
         ${r.src==='manual'? '<span class="chip">logged here</span>':''}</td>
@@ -7757,7 +7996,8 @@ function renderRequests(){
               r.scheduledTruck? ' · '+esc(r.scheduledTruck):''}</div>` : ''}${
         r.status==='declined' && r.declinedReason
           ? `<div class="small muted">${esc(r.declinedReason)}</div>` : ''}${
-        r.pushError? `<div class="small" style="color:var(--crit)">tracker not updated</div>`:''}</td>
+        r.pushError? `<div class="small" style="color:var(--crit)" title="${esc(r.pushError)}">Retail Yard not updated${
+          Tracker.isFeed? ' — '+esc(r.pushError) : ''}</div>`:''}</td>
       <td style="text-align:right;white-space:nowrap">
         ${r.status==='open'
           ? `<button class="btn sm primary" data-sched>${reqBooked(r)? 'Book the rest':'Schedule'}</button>
