@@ -765,7 +765,7 @@ code{font-family:var(--mono);font-size:12px;background:var(--surface-3);padding:
       <div style="max-height:62vh;overflow:auto">
         <table id="reqTable">
           <thead><tr>
-            <th>Need by</th><th>Product</th><th class="num">Quantity</th><th>Bin</th>
+            <th>#</th><th>Product</th><th class="num">Quantity</th><th>Bin</th>
             <th>Asked by</th><th>Status</th><th></th>
           </tr></thead>
           <tbody></tbody>
@@ -2238,7 +2238,7 @@ function openRequests(){
   return (DB.requests||[]).filter(r=>r.status==='open')
     .sort((a,b)=>reqRank(a) - reqRank(b) ||
                  reqUrgency(a).rank - reqUrgency(b).rank ||
-                 String(a.needBy||'9999').localeCompare(String(b.needBy||'9999')));
+                 String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
 }
 function liveRequests(){
   return (DB.requests||[]).filter(r=>r.status==='open' || r.status==='scheduled');
@@ -2366,8 +2366,8 @@ function binState(r){
 }
 
 function reqUrgency(r){
-  const by = r.needBy;
-  if(!by) return {rank:3, label:'no date', chip:''};
+  const by = null;                                   // "needed by" dates are retired; requests are worked by rank, then age
+  if(!by) return {rank:3, label:'', chip:''};
   const today = todayISO();
   if(by < today)  return {rank:0, label:'overdue', chip:'late'};
   if(by === today) return {rank:1, label:'today', chip:'late'};
@@ -2395,7 +2395,7 @@ function requestToOrder(r){
     yards: reqYards(r),
     forceDepot: r.fromDepot || 'home',      // Coburg Rd loads it
     destDepot:  r.toDepot   || 'reload',    // Hwy 99 receives it
-    earliest: r.needBy || null,
+    earliest: null,
     notes: [r.bin ? `Bin ${r.bin}` : '', r.note || '',
             r.requestedBy ? `Requested by ${r.requestedBy}` : ''].filter(Boolean).join(' · '),
     status:'pending', source:'yard-request', requestId: r.id,
@@ -4441,7 +4441,6 @@ function renderReqQueue(){
   const placing = UI.placeReq ? requestById(UI.placeReq) : null;
   if(UI.placeBack && !backChoice(UI.placeBack)) UI.placeBack = null;
   const placingBack = !placing && UI.placeBack ? backChoice(UI.placeBack) : null;
-  const dated = open.some(r=>r.needBy);          // Retail Yard no longer asks for a date; older requests may carry one
   const grid = $('#sGrid'); if(grid) grid.classList.toggle('placing', !!(placing || placingBack));
   box.innerHTML = `<div class="qhead"><b>Open requests from Retail Yard</b>
       <span class="muted small">${open.length} waiting · Jeff's order</span>
@@ -4456,7 +4455,7 @@ function renderReqQueue(){
         <button class="btn sm" id="qPlaceStop" style="margin-left:auto">Cancel</button></div>` : ''}
     ${open.length ? '' : '<div class="qmore muted">Nothing waiting — every request has a load booked.</div>'}
     <div class="qwrap"${open.length ? '' : ' hidden'}><table>
-      <thead><tr><th>#</th><th>Product</th><th>Bin space</th>${dated? '<th>Needed by</th>' : ''}<th></th></tr></thead>
+      <thead><tr><th>#</th><th>Product</th><th>Bin space</th><th></th></tr></thead>
       <tbody>${open.slice(0, 12).map(r=>{
       const p = reqProduct(r), u = reqUrgency(r), st = binState(r);
       const full = st.known && st.room <= 0.01;
@@ -4472,8 +4471,6 @@ function renderReqQueue(){
               ` <span class="muted">· ${esc(r.bin||'bin')} holds ${st.current}${st.inbound? ' + '+st.inbound+' on the way' : ''} of ${st.capacity}</span>` +
               (fillLeft(r) !== null ? ` <span class="muted">· <b>${fillLeft(r)} yd</b> to the fill level</span>` : '')
             : `<span class="muted">${esc(r.bin || 'no bin')} · level not known</span>`}</td>
-        ${dated ? `<td class="${u.chip==='late'?'qlate':''}">${r.needBy? esc(prettyDate(r.needBy)) +
-          (u.label !== prettyDate(r.needBy)? ` <span class="${u.chip==='late'?'':'muted'}">· ${esc(u.label)}</span>` : '') : '<span class="muted">no date</span>'}</td>` : ''}
         <td style="white-space:nowrap"><button class="btn sm${on?'':' primary'}" data-reqgo="${esc(r.id)}">${on? 'Cancel' : 'Schedule'}</button>
           <button class="btn sm ghost" data-reqdel="${esc(r.id)}" title="Delete this request">Delete</button></td>
       </tr>`;
@@ -8139,7 +8136,7 @@ const Tracker = {
       yards:      num(pick('yards','cubic_yards','qty_yards'), 0),
       units:      num(pick('units','qty_units','quantity'), 0),
       bin:        String(pick('bin','bin_name','bin_id','location') ?? ''),
-      needBy:     String(pick('need_by','needed_by','due_date','requested_for') ?? '').slice(0,10) || null,
+      needBy:     null,                                  // not used any more
       requestedBy:String(pick('requested_by','requester','created_by','user_name') ?? ''),
       note:       String(pick('note','notes','comment') ?? ''),
       // Jeff's running order. 1 is top of the list; blank sorts after everything ranked.
@@ -8667,7 +8664,6 @@ function renderRequests(){
   const sched = (DB.requests||[]).filter(r=>r.status==='scheduled');
   $('#reqTiles').innerHTML = [
     ['Waiting', open.length, open.length? 'asked for, not scheduled' : 'nothing waiting'],
-    ['Due now', late, late? 'overdue or needed today' : 'none pressing'],
     ['Yards to move', yards, open.length? `across ${open.length} request${open.length>1?'s':''}` : '—'],
     ['Scheduled', sched.length, sched.length? 'on the board' : 'nothing booked yet'],
     ['Needs a product', unmatched, unmatched? "the tracker's wording didn't match" : 'all matched'],
@@ -8724,9 +8720,7 @@ function renderRequests(){
       st = {label:'dropped off — Retail Yard to confirm', chip:'warn'};
     const o = r.orderId ? orderById(r.orderId) : null;
     return `<tr data-id="${esc(r.id)}">
-      <td class="small">${num(r.rank,0)? `<span class="rankchip">#${num(r.rank)}</span> ` : ''}${
-        r.needBy? esc(prettyDate(r.needBy)) : '—'}
-        ${r.status==='open' && u.chip? `<span class="chip ${u.chip}">${esc(u.label)}</span>`:''}</td>
+      <td class="small">${num(r.rank,0)? `<span class="rankchip">#${num(r.rank)}</span>` : ''}</td>
       <td>${p ? esc(p.name) : `<span style="color:var(--crit)">${esc(r.product||'not set')}</span>
             <div class="small muted">not in the catalogue — pick one when you schedule it</div>`}</td>
       <td class="num">${yd? esc(yd)+' yd' : '—'}${
@@ -8887,7 +8881,7 @@ function openRequestScheduler(id){
 
   openModal(`Schedule the restock — ${esc(guess? guess.name : (r.product||'product not set'))}`, `
     <div class="small muted">From the ${esc(depotPoints().home.name)} to the
-      ${esc(depotPoints().reload.name)}${r.needBy? ` · wanted by ${esc(prettyDate(r.needBy))}` : ''}${
+      ${esc(depotPoints().reload.name)}${
       r.bin? ` · bin ${esc(r.bin)}` : ''}. Trucks 85, 98 and 65 only.</div>
     ${guess? '' : `<div class="warnbox">The tracker called this
       “${esc(r.product||'')}”, which isn't in the catalogue. Pick the right product.</div>`}
@@ -8946,7 +8940,7 @@ function openDeclineRequest(id){
   openModal('Decline this request', `
     <div class="small muted">Jeff sees this in the tracker, so say what happened.</div>
     <label class="field">Reason<select id="reqWhy">
-      <option>No truck free before it is needed</option>
+      <option>No truck free</option>
       <option>Product is not available to haul</option>
       <option>Quantity is wrong — ask Retail Yard</option>
       <option>Already covered by another haul</option>
@@ -8973,7 +8967,6 @@ function openLogRequest(){
       <label class="field">Yards<input type="number" step="0.5" id="lrYards" value="10"></label>
     </div>
     <div class="two">
-      <label class="field">Needed by<input type="date" id="lrNeed" value="${esc(addDays(todayISO(),2))}"></label>
       <label class="field">Bin<input type="text" id="lrBin" placeholder="optional"></label>
     </div>
     <div class="two">
@@ -8984,7 +8977,7 @@ function openLogRequest(){
     {label:'Log it', cls:'primary', onClick:()=>{
       const pid = $('#lrProd').value;
       logRequest({productId:pid, product:(byId(DB.products,pid)||{}).name||'',
-                  yards:num($('#lrYards').value,0), needBy:$('#lrNeed').value||null,
+                  yards:num($('#lrYards').value,0), needBy:null,
                   bin:$('#lrBin').value.trim(), requestedBy:$('#lrWho').value.trim(),
                   note:$('#lrNote').value.trim()});
       closeModal(); Store.save(); renderRequests(); markTabCounts();
