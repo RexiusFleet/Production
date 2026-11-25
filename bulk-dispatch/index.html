@@ -1546,9 +1546,27 @@ const Auth = {
       if(!res.ok) return false;
       const s = await res.json();
       s.expires_at = num(s.expires_at, Math.floor(Date.now()/1000) + num(s.expires_in, 3600));
+      if(!s.refresh_token) s.refresh_token = this.session.refresh_token;
+      if(!s.user || !s.user.email) s.user = this.session.user;
       this.store(s);
       return true;
     }catch(e){ return false; }
+  },
+
+  /** A sign-in lasts an hour. Renew it before it runs out, for as long as the page stays open,
+   *  so a board left up all day keeps saving. One renewal at a time. */
+  async ensureFresh(marginSec){
+    if(!this.session || !this.session.refresh_token) return !!this.token;
+    const left = num(this.session.expires_at, 0) - Date.now()/1000;
+    if(left > (marginSec || 300)) return true;
+    if(!this._renewing) this._renewing = this.refresh().finally(()=>{ this._renewing = null; });
+    return this._renewing;
+  },
+  keepAlive(){
+    if(this._ka) return;
+    this._ka = setInterval(()=>{ this.ensureFresh(600); }, 60000);
+    const wake = ()=>{ if(!document.hidden) this.ensureFresh(600).then(ok=>{ if(ok && Store._failed){ Store._failed = false; Store.save(); } }); };
+    document.addEventListener('visibilitychange', wake); window.addEventListener('focus', wake); window.addEventListener('online', wake);
   },
 
   async signOut(){
@@ -1748,10 +1766,13 @@ const Store = {
       if(c==='settings'){ data = {...DB.settings}; delete data.sbKey; delete data.mapsKey; }
       return { collection:c, data, updated_at:new Date().toISOString() };
     });
-    const res = await fetch(this._url('?on_conflict=collection'), {
-      method:'POST', headers:this._headers(), body:JSON.stringify(payload)
-    });
-    if(!res.ok) throw new Error('Supabase write '+res.status+' '+(await res.text()).slice(0,180));
+    if(Auth.required) await Auth.ensureFresh(120);
+    const send = ()=>fetch(this._url('?on_conflict=collection'), {
+      method:'POST', headers:this._headers(), body:JSON.stringify(payload)});
+    let res = await send();
+    if(res.status === 401 && Auth.required && await Auth.refresh()) res = await send();     // the sign-in had run out: renew it and send again
+    if(!res.ok){ this._failed = true; throw new Error('Supabase write '+res.status+' '+(await res.text()).slice(0,180)); }
+    this._failed = false;
     return true;
   },
   save(which){
@@ -1760,7 +1781,12 @@ const Store = {
     if(this.configured){
       clearTimeout(this._t);
       this._t = setTimeout(()=>{
-        this.push(which).catch(e=>{ console.warn(e); toast('Supabase sync failed — saved locally'); });
+        this.push(which).catch(e=>{ console.warn(e);
+          if(/ 401 /.test(String(e.message)) && Auth.required){
+            toast('Your sign-in has expired — sign in again. What you just changed is kept on this computer until you do.', 9000);
+          } else toast('Couldn’t save to Supabase — kept on this computer and tried again shortly', 6000);
+          clearTimeout(this._retry); this._retry = setTimeout(()=>{ if(this._failed) this.save(); }, 30000);
+        });
       }, 600);
     }
   }
@@ -10037,6 +10063,7 @@ async function boot(refresh){
     if(Auth.recovery){ renderSetPassword(); return; }
     showApp();
     stampWhoami();
+    Auth.keepAlive();
   }
   if(!DB.settings.workDays) DB.settings.workDays = '1,2,3,4,5';
   if(!DB.drivers || !DB.drivers.length) DB.drivers = deep(DEFAULT_DRIVERS);
