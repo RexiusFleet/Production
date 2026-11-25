@@ -211,6 +211,8 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
   text-transform:uppercase;letter-spacing:.04em}
 .egrid .ehead b{display:block;color:var(--ink-2);font-size:11.5px;font-weight:700;letter-spacing:0}
 .egrid .ehead.wknd{opacity:.45}
+.egrid .emonth{font-size:12.5px;font-weight:700;color:var(--ink);padding:3px 6px;border-left:2px solid var(--ink);background:var(--surface-2);white-space:nowrap;overflow:hidden}
+.egrid .emonth.blank{border-left:0;background:none}
 .egrid .ehead.today b{color:var(--brand)}
 .egrid .ename{font-size:12.5px;padding:0 10px 0 2px;display:flex;align-items:center;gap:7px;
   white-space:nowrap;position:sticky;left:0;background:var(--surface);z-index:2;font-weight:600}
@@ -471,6 +473,10 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .qsec .qtitle .dir{font-size:12px;opacity:.92}
 .qsec .qtitle .btn{margin-left:auto}
 .qsec.back .qplace{background:#8a5a1c}
+.warnbox.nodrv{border-left:5px solid var(--crit);background:var(--crit-bg)}
+.warnbox.nodrv a{color:inherit;font-weight:600}
+.nodrv-list{display:grid;gap:5px;margin-top:10px;justify-items:center}
+.nodrv-list .btn{background:#fff}
 .sgrid .hd.extlane-hd{box-shadow:inset 0 3px 0 #8a5a1c}
 .extlane{background:repeating-linear-gradient(135deg,#faf5ec,#faf5ec 10px,#f5ecdc 10px,#f5ecdc 20px);border-radius:3px;padding:6px;display:flex;flex-direction:column;gap:6px;cursor:pointer;min-height:120px}
 .extcard{background:var(--surface);border-radius:3px;padding:6px 8px;box-shadow:inset 3px 0 0 #8a5a1c, inset 0 0 0 1px rgba(138,90,28,.4);display:grid;gap:3px;font-size:12px}
@@ -637,6 +643,7 @@ code{font-family:var(--mono);font-size:12px;background:var(--surface-3);padding:
     </div>
     <span class="pill" id="storePill"><i class="dot"></i><span>local only</span></span>
     <span class="pill" id="mapsPill"><i class="dot"></i><span>est. drive times</span></span>
+    <button class="btn-bar ghost" id="btnUndo" title="Undo the last change (Ctrl+Z)" disabled>↶ Undo</button>
     <button class="btn-bar ghost" id="btnReload" title="Reload from storage">Refresh</button>
   </div>
   <div class="bar-actions">
@@ -648,6 +655,8 @@ code{font-family:var(--mono);font-size:12px;background:var(--surface-3);padding:
   </div>
   <nav class="tabs" role="tablist">
     <button role="tab" data-tab="schedule" aria-selected="true">Schedule</button>
+    <button role="tab" data-tab="confirm" aria-selected="false">Confirm deliveries
+      <span class="tabcount" id="cfCount" hidden></span></button>
     <button role="tab" data-tab="intake" aria-selected="false">Intake</button>
     <button role="tab" data-tab="requests" aria-selected="false">Retail Yard requests
       <span class="tabcount" id="reqCount" hidden></span></button>
@@ -663,6 +672,7 @@ code{font-family:var(--mono);font-size:12px;background:var(--surface-3);padding:
 <main>
   <!-- ======================= SCHEDULE GRID ======================= -->
   <section class="panel" id="panel-schedule">
+    <div id="sQueue" class="reqqueue" hidden></div>
     <div class="spread" style="margin-bottom:12px">
       <div class="row">
         <button class="icon-btn" id="sPrev" title="Previous day">&larr;</button>
@@ -687,7 +697,6 @@ code{font-family:var(--mono);font-size:12px;background:var(--surface-3);padding:
         <button class="btn primary" id="sCheck">Check the day</button>
       </div>
     </div>
-    <div id="sQueue" class="reqqueue" hidden></div>
     <div id="sIssues" class="grid" style="margin-bottom:12px"></div>
     <div class="sgrid" id="sGrid"></div>
     <details class="help" id="activityPanel" style="margin-top:12px">
@@ -758,6 +767,20 @@ code{font-family:var(--mono);font-size:12px;background:var(--surface-3);padding:
   </section>
 
   <!-- =================== YARD REQUESTS ==================== -->
+  <!-- ======================= CONFIRM ======================= -->
+  <section class="panel" id="panel-confirm" hidden>
+    <div class="spread" style="margin-bottom:12px">
+      <div>
+        <h3 style="margin:0 0 2px">Confirm deliveries and hauls</h3>
+        <div class="muted small">Everything booked before today that has not been closed out. Confirm what happened;
+          anything that didn't can be rescheduled from here.</div>
+      </div>
+      <label class="small muted" style="display:inline-flex;align-items:center;gap:6px">
+        <input type="checkbox" id="cfToday"> Include today</label>
+    </div>
+    <div id="cfBody"></div>
+  </section>
+
   <section class="panel" id="panel-requests" hidden>
     <div class="spread" style="margin-bottom:12px">
       <div>
@@ -861,19 +884,11 @@ code{font-family:var(--mono);font-size:12px;background:var(--surface-3);padding:
     <div class="card" style="margin-bottom:14px">
       <div class="spread" style="margin-bottom:8px">
         <h3 style="margin:0">Who's off, and when</h3>
-        <span class="muted small">Click a day to toggle it off · drag along a row for a stretch ·
+        <span class="muted small">Click a day to mark it off, click it again to undo · drag along a row for a stretch ·
           “Set hours” for a short day</span>
       </div>
       <div style="overflow:auto"><div class="egrid" id="empGrid"></div></div>
       <div class="legend" style="margin-top:10px" id="empLegend"></div>
-    </div>
-
-    <div class="card" style="margin-bottom:14px">
-      <div class="spread" style="margin-bottom:8px">
-        <h3 style="margin:0">Trucks that follow from it</h3>
-        <span class="muted small">A truck runs only when someone qualified is working and free</span>
-      </div>
-      <div style="overflow:auto"><table id="rosterTable"><thead></thead><tbody></tbody></table></div>
     </div>
 
     <div class="spread" style="margin-bottom:10px">
@@ -1715,6 +1730,7 @@ const Store = {
       } else DB[row.collection] = row.data;
     }
     UI.remote = true;
+    try{ Undo.rebase(); }catch(e){}
     this.saveLocal();
     return true;
   },
@@ -1733,6 +1749,7 @@ const Store = {
     return true;
   },
   save(which){
+    try{ Undo.note(); }catch(e){ console.warn('undo', e); }
     this.saveLocal();
     if(this.configured){
       clearTimeout(this._t);
@@ -1740,6 +1757,60 @@ const Store = {
         this.push(which).catch(e=>{ console.warn(e); toast('Supabase sync failed — saved locally'); });
       }, 600);
     }
+  }
+};
+
+/* -------------------------------------------------------------------- undo
+ * One Undo for the whole app. Every save is compared with the save before it;
+ * when something Kevin can edit has changed, the earlier state goes on a stack
+ * (last 20). Undo puts that state back and lets the usual sync carry it to
+ * Supabase and Retail Yard. The links to Retail Yard's own records are kept
+ * as they are now, so the sync cancels or re-creates hauls instead of doubling them. */
+const Undo = {
+  KEYS:['orders','requests','trucks','drivers','products','zones','avail','driverAvail','dayDrivers','settings'],
+  LINKS:['yardHauls','yardSeen','trackerStatus','pushedAt','pushError','pushRetryAt','extBookedYd','suggestYd','hauls'],
+  KEEP_SETTINGS:['backLinks','sbUrl','sbKey','sbTable','mapsKey','lastSeenAt'],
+  stack:[], last:null, lastSig:'', busy:false,
+  _state(){ const o = {}; this.KEYS.forEach(k=>{ o[k] = DB[k]; }); return o; },
+  _sig(st){
+    return JSON.stringify(this.KEYS.map(k=>{
+      if(k === 'requests') return (st.requests||[]).map(r=>{ const c = {...r}; this.LINKS.forEach(f=>{ if(f !== 'hauls') delete c[f]; }); delete c.closedAt; return c; });
+      if(k === 'settings'){ const c = {...(st.settings||{})}; this.KEEP_SETTINGS.forEach(f=>delete c[f]); return c; }
+      return st[k];
+    }));
+  },
+  rebase(){ const st = this._state(); this.last = JSON.stringify(st); this.lastSig = this._sig(st); this.paint(); },
+  note(){
+    if(this.busy) return;
+    const st = this._state(), sig = this._sig(st);
+    if(this.last && sig !== this.lastSig){ this.stack.push(this.last); if(this.stack.length > 20) this.stack.shift(); }
+    this.last = JSON.stringify(st); this.lastSig = sig; this.paint();
+  },
+  paint(){ const b = document.getElementById('btnUndo'); if(b){ b.disabled = !this.stack.length; b.textContent = this.stack.length ? `↶ Undo (${this.stack.length})` : '↶ Undo'; } },
+  run(){
+    if(!this.stack.length){ toast('Nothing to undo'); return; }
+    const prev = JSON.parse(this.stack.pop());
+    const nowReq = {}; (DB.requests||[]).forEach(r=>{ nowReq[r.id] = r; });
+    (prev.requests||[]).forEach(r=>{ const cur = nowReq[r.id]; if(!cur) return;
+      ['yardHauls','yardSeen','trackerStatus','pushedAt','extBookedYd'].forEach(f=>{ if(cur[f] !== undefined) r[f] = cur[f]; else delete r[f]; }); });
+    const keep = {}; this.KEEP_SETTINGS.forEach(f=>{ if(DB.settings[f] !== undefined) keep[f] = DB.settings[f]; });
+    // an outside haul Retail Yard already has as hauled stays hauled
+    const doneNow = {}; ((DB.settings||{}).extHauls||[]).forEach(x=>{ if(x.done) doneNow[x.eventId] = true; });
+    this.busy = true;
+    try{
+      this.KEYS.forEach(k=>{ if(prev[k] !== undefined) DB[k] = prev[k]; });
+      Object.assign(DB.settings, keep);
+      (DB.settings.extHauls||[]).forEach(x=>{ if(doneNow[x.eventId]) x.done = true; });
+      DB.plans = {};
+      UI.placeReq = null; UI.placeBack = null;
+      try{ closeModal(); }catch(e){}
+      Store.save();
+    } finally { this.busy = false; }
+    this.rebase();
+    try{ runDay(UI.date); }catch(e){}
+    renderAll(); showTab(UI.tab); markTabCounts();
+    try{ BackSync.kick(); Promise.resolve(Tracker.flush()).catch(()=>{}); }catch(e){}
+    toast(`Undone${this.stack.length ? ` — ${this.stack.length} more step${this.stack.length>1?'s':''} can be undone` : ''}`, 3500);
   }
 };
 
@@ -2189,6 +2260,16 @@ function loadsWithOwnDriver(iso, truckId){
 function driverChoices(iso, truckId){
   return (DB.drivers||[]).filter(d=>d.active !== false &&
     (d.truckIds||[]).includes(truckId) && driverWorking(iso, d));
+}
+/** A booked order with nobody to drive it: no driver on its truck that day, and none named on the order. */
+function orderNoDriver(o){
+  if(!o || !o.schedDate || !o.pinTruck || o.status === 'cancelled' || o.status === 'delivered') return false;
+  if(o.driverId && byId(DB.drivers, o.driverId)) return false;
+  return !driverFor(o.schedDate, o.pinTruck);
+}
+function noDriverOrders(fromISO){
+  return (DB.orders||[]).filter(o=>orderNoDriver(o) && o.schedDate >= fromISO)
+    .sort((a,b)=>(a.schedDate + (a.slotTime||'')).localeCompare(b.schedDate + (b.slotTime||'')));
 }
 /** A truck runs on a date only when someone is in it. */
 function truckRunsOn(iso, truckId){ return !!assignDrivers(iso)[truckId]; }
@@ -4033,7 +4114,10 @@ function renderSchedule(){
       html += `<div class="scell blocked" style="grid-column:${i+2};grid-row:2 / span ${ticks};
                  align-items:center;justify-content:center;text-align:center">
         <div><b>No driver</b><div style="margin-top:4px;opacity:.8">${who.length
-          ? esc(who.join(' / ')) + ' not working' : 'nobody is qualified on this truck'}</div></div></div>`;
+          ? esc(who.join(' / ')) + ' not working' : 'nobody is qualified on this truck'}</div>${(()=>{
+            const stuck = (DB.orders||[]).filter(o=>o.schedDate === iso && o.pinTruck === t.id && orderNoDriver(o));
+            return stuck.length ? `<div class="nodrv-list"><b>⚠ ${stuck.length} booked on this truck</b>${stuck.map(o=>
+              `<button class="btn sm" data-book="${esc(o.id)}" data-bookday="${esc(iso)}">${o.slotTime ? min2hm(hm2min(o.slotTime)) + ' · ' : ''}${esc(jobLabel(o))}</button>`).join('')}</div>` : ''; })()}</div></div>`;
       return;
     }
     if(isWindowTruck(t)){
@@ -4071,7 +4155,7 @@ function renderSchedule(){
                  title="Delivered" onclick="event.stopPropagation()">
           <div class="cust">${esc(jobLabel(o))}</div>
           <div class="sub">${esc(inter? jobRoute(o) : cityOf(o))}${prod? ' · '+esc(prod.name):''}</div>
-          <div class="chips">${inter? `<span class="chip kind">${esc(JOB_KINDS[jobKind(o)].short)}</span>`:''}${
+          <div class="chips">${orderNoDriver(o)? '<span class="chip late" title="Nobody is assigned to this truck or this order">⚠ no driver</span>':''}${inter? `<span class="chip kind">${esc(JOB_KINDS[jobKind(o)].short)}</span>`:''}${
             o.back && jobKind(o) !== 'debris' ? `<span class="chip kind" title="Brings this back to Coburg on the same trip">↩ ${esc(o.back.label)} ${esc(uTxt(o.back.yards))}</span>` : ''}${
             isNewOrder(o)? '<span class="chip new">new</span>':''}${
             num(o.slotSpan,1) > 1? `<span class="chip">${num(o.slotSpan)} slots</span>`:''}${
@@ -4462,6 +4546,7 @@ if(!window.__nowLineTimer) window.__nowLineTimer = setInterval(()=>{ try{ paintN
 
 function renderReqQueue(){
   try{ paintNowLine(); }catch(e){}
+  try{ const c = $('#cfCount'); if(c){ const k = closeoutItems(false).length; c.textContent = k; c.hidden = !k; } }catch(e){}
   const box = $('#sQueue');
   if(!box) return;
   // keep requests, and Retail Yard's hauls, in step with what just changed on the board
@@ -4522,7 +4607,7 @@ function renderReqQueue(){
       <tbody>${loads.map(l=>`<tr data-load="${esc(l.orderId)}" data-loadday="${esc(l.date||'')}" tabindex="0" title="Click to open this load">
         <td>${l.date ? esc(prettyDate(l.date)) : '<span class="muted">no date</span>'}${
           l.when ? ` <span class="muted">· ${esc(l.when)}</span>` : ''}</td>
-        <td>${esc(l.truck)}</td>
+        <td>${esc(l.truck)}${orderNoDriver(orderById(l.orderId)) ? ' <span class="chip late">⚠ no driver</span>' : ''}</td>
         <td class="qname">${esc(l.product)}${l.fill ? ' <span class="chip kind">fill</span>' : ''}</td>
         <td class="num">${l.units ? esc(uTxt(l.yards)) : l.yards + ' yd'}</td>
         <td>${esc(l.bin || '—')}</td>
@@ -5014,8 +5099,200 @@ function extHaulFinish(id, to){
       try{ await BackSync._send('PATCH', `?id=eq.${encodeURIComponent(x.eventId)}&status=eq.scheduled`, {status: done ? 'done' : 'cancelled'}); }
       catch(e){ $('#exHint').textContent = 'Not saved — ' + e.message; btn.disabled = false; return; }
       if(done) x.done = true; else DB.settings.extHauls = extHauls().filter(e=>e.id !== id);
-      Store.save(); closeModal(); renderSchedule(); Piles.refresh();
+      Store.save(); closeModal(); renderSchedule(); try{ renderConfirm(); }catch(e){} Piles.refresh();
       toast(done ? `${x.hauler}: ${uTxt(x.yards)} hauled` : 'Outside haul cancelled', 4500);
+    }}
+  ]);
+}
+
+/* --------------------------------------------- confirm deliveries and hauls
+ * The close-out list: every booked delivery, Retail Yard haul, haul back and
+ * outside haul from before today that nobody has marked done. Kevin confirms
+ * what happened, or reschedules what didn't. */
+function closeoutItems(withToday){
+  const today = todayISO(), past = d=>d && (withToday ? d <= today : d < today);
+  const out = [];
+  (DB.orders||[]).forEach(o=>{
+    if(!past(o.schedDate) || o.status === 'delivered' || o.status === 'cancelled') return;
+    const t = truckById(o.pinTruck), prod = productOf(o), k = jobKind(o);
+    out.push({type:'order', id:o.id, date:o.schedDate,
+      when: o.slotTime ? min2hm(hm2min(o.slotTime)) : (o.waveDate ? WINDOWS[orderWindow(o)].label + ' wave' : ''),
+      sort: o.schedDate + ' ' + (o.slotTime || (orderWindow(o) === 'pm' ? '12:00' : '00:00')),
+      truck: (t && t.name) || 'no truck',
+      kind: k === 'delivery' ? 'Customer delivery' : (k === 'yard-haul' ? 'Retail Yard delivery' : 'Haul back'),
+      chip: k === 'delivery' ? '' : 'kind',
+      what: k === 'delivery' ? (o.customer || '—') + (cityOf(o) ? ' · ' + cityOf(o) : '') : jobLabel(o),
+      load: k === 'debris' && o.back ? uTxt(o.yards) + ' ' + o.back.label : `${num(o.yards)} yd${prod ? ' ' + prod.name : ''}`,
+      back: k !== 'debris' && o.back ? o.back : null});
+  });
+  extOpen().forEach(x=>{
+    if(!past(x.date)) return;
+    out.push({type:'ext', id:x.id, date:x.date, when:x.time ? min2hm(hm2min(x.time)) : '', sort:x.date + ' ' + (x.time || '23:59'),
+      truck:x.hauler, kind:'Outside haul', chip:'kind', what:'Ground Debris from Retail Yard' + (x.note ? ' · ' + x.note : ''),
+      load:uTxt(x.yards), back:null});
+  });
+  return out.sort((a,b)=>b.date.localeCompare(a.date) || a.sort.localeCompare(b.sort));
+}
+function renderConfirm(){
+  const box = $('#cfBody'); if(!box) return;
+  const withToday = !!($('#cfToday') && $('#cfToday').checked);
+  const items = closeoutItems(withToday), today = todayISO();
+  markTabCounts();
+  if(!items.length){
+    box.innerHTML = `<div class="card"><div class="empty">Nothing to close out — every delivery and haul ${withToday ? 'through today' : 'before today'} has been confirmed.</div></div>`;
+    return;
+  }
+  const days = [...new Set(items.map(i=>i.date))];
+  box.innerHTML = days.map(d=>{
+    const list = items.filter(i=>i.date === d), orders = list.filter(i=>i.type === 'order');
+    const age = Math.round((new Date(today+'T12:00:00') - new Date(d+'T12:00:00'))/86400000);
+    return `<div class="card" style="padding:0;overflow:hidden;margin-bottom:12px">
+      <div class="spread" style="padding:9px 12px;background:var(--surface-2);border-bottom:1px solid var(--rule)">
+        <div><b>${esc(prettyDate(d))}</b> <span class="muted small">· ${age === 0 ? 'today' : age === 1 ? 'yesterday' : age + ' days ago'} · ${list.length} to close out</span>
+          ${age > 1 ? '<span class="chip late">overdue</span>' : ''}</div>
+        ${orders.length > 1 ? `<button class="btn sm primary" data-cfall="${esc(d)}">Confirm all ${orders.length} delivered</button>` : ''}
+      </div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>Time</th><th>Truck</th><th>Type</th><th>Job</th><th>Load</th><th>Coming back</th><th></th></tr></thead>
+        <tbody>${list.map(i=>`<tr data-cf="${esc(i.type)}|${esc(i.id)}">
+          <td style="white-space:nowrap">${esc(i.when || '—')}</td>
+          <td style="white-space:nowrap">${esc(i.truck)}</td>
+          <td><span class="chip ${i.chip}">${esc(i.kind)}</span></td>
+          <td>${esc(i.what)}</td>
+          <td style="white-space:nowrap">${esc(i.load)}</td>
+          <td>${i.back ? `<label style="display:inline-flex;gap:6px;align-items:center;white-space:nowrap" title="Untick if the truck came back empty">
+              <input type="checkbox" data-cfback checked> ${esc(uTxt(i.back.yards))} ${esc(i.back.label)}</label>` : '<span class="muted">—</span>'}</td>
+          <td style="text-align:right;white-space:nowrap">
+            <button class="btn sm primary" data-cfyes>${i.type === 'ext' || i.kind === 'Haul back' ? 'Hauled' : 'Delivered'}</button>
+            <button class="btn sm" data-cfno>Didn’t happen…</button></td>
+        </tr>`).join('')}</tbody></table></div></div>`;
+  }).join('');
+  $$('#cfBody tr[data-cf]').forEach(tr=>{
+    const [type, id] = tr.dataset.cf.split('|');
+    tr.querySelector('[data-cfyes]').onclick = ()=>{
+      if(type === 'ext'){ extHaulFinish(id, 'done'); return; }
+      const cb = tr.querySelector('[data-cfback]');
+      confirmDelivered(orderById(id), cb ? cb.checked : true); afterCloseout();
+    };
+    tr.querySelector('[data-cfno]').onclick = ()=> type === 'ext' ? openExtMissed(id) : openDidntHappen(id);
+  });
+  $$('#cfBody [data-cfall]').forEach(b=>b.onclick = ()=>{
+    const d = b.dataset.cfall;
+    const rows = $$('#cfBody tr[data-cf^="order|"]').filter(tr=>{ const o = orderById(tr.dataset.cf.split('|')[1]); return o && o.schedDate === d; });
+    openModal(`Confirm all for ${prettyDate(d)}?`, `<p style="margin:0">Marks <b>${rows.length}</b> deliveries and hauls as done, with the hauls back as ticked.
+        Outside hauls are confirmed one at a time.</p>`, [
+      {label:'Cancel', cls:'ghost', onClick:closeModal},
+      {label:`Confirm ${rows.length}`, cls:'primary', onClick:()=>{
+        rows.forEach(tr=>{ const cb = tr.querySelector('[data-cfback]'); confirmDelivered(orderById(tr.dataset.cf.split('|')[1]), cb ? cb.checked : true); });
+        closeModal(); afterCloseout(); toast(`${rows.length} confirmed for ${prettyDate(d)}`);
+      }}]);
+  });
+}
+function confirmDelivered(o, backCame){
+  if(!o || o.status === 'delivered' || o.status === 'cancelled') return;
+  if(o.back && jobKind(o) !== 'debris' && !backCame){ logActivity('edited', o, `came back empty (${o.back.label} not hauled)`); delete o.back; }
+  o.status = 'delivered'; o.deliveredAt = new Date().toISOString(); o.confirmedAt = o.deliveredAt;
+  logActivity('delivered', o, `confirmed for ${prettyDate(o.schedDate)}`);
+}
+function afterCloseout(){
+  Store.save(); renderRequests(); renderOrders(); renderSchedule(); renderConfirm(); BackSync.kick();
+}
+/** Open slots an order could move to, from a day on. Uses the route-aware list when the order has an
+ *  address on the map; otherwise every free, unblocked slot on a truck with a driver that can carry it. */
+function openSlotsFor(o, fromISO, days){
+  let list = [];
+  try{ list = suggestSlots({...o, pinTruck:null, earliest:null}, {from:fromISO, days}); }catch(e){ list = []; }
+  if(list.length) return list;
+  const prod = productOf(o), now = new Date(), nowMin = now.getHours()*60 + now.getMinutes();
+  for(let i = 0; i < clamp(num(days,14), 1, 60) && list.length < 80; i++){
+    const iso = addDays(fromISO, i);
+    for(const t of runningTrucks(iso)){
+      if(isWindowTruck(t)) continue;
+      if(isInternal(o) && !isYardTruck(t)) continue;
+      if(prod){ const cap = effCapacity(t, prod, {internal:isInternal(o)}).cap; if(cap <= 0.01 || num(o.yards,0) > cap + 0.01) continue; }
+      for(const time of truckSlotTimes(t)){
+        if(iso === todayISO() && hm2min(time) < nowMin) continue;
+        if(isBlocked(iso, t.id, time) || bookingCovering(iso, t.id, time, o.id)) continue;
+        list.push({date:iso, truckId:t.id, time, added:0});
+      }
+    }
+  }
+  return list;
+}
+/** A booked delivery or haul that did not happen: move it, put it back in the waiting list, or cancel it. */
+function openDidntHappen(orderId){
+  const o = orderById(orderId); if(!o) return;
+  const old = o.schedDate, wave = isWaveBooking(o), t = truckById(o.pinTruck);
+  const done = msg=>{ if(old) try{ runDay(old); }catch(e){} closeModal(); afterCloseout(); toast(msg, 5000); };
+  let body;
+  if(wave){
+    body = `<div class="two">
+        <label class="field">New day<input type="date" id="dhDate" min="${esc(todayISO())}" value="${esc(todayISO())}"></label>
+        <label class="field">Wave<select id="dhWin">${Object.keys(WINDOWS).map(w=>`<option value="${esc(w)}" ${w === orderWindow(o) ? 'selected' : ''}>${esc(WINDOWS[w].label)}</option>`).join('')}</select></label>
+      </div><button class="btn primary" id="dhWave" style="margin-top:8px">Reschedule</button>`;
+  } else {
+    const opts = openSlotsFor(o, todayISO(), num(DB.settings.horizon,30));
+    const same = opts.filter(x=>x.truckId === o.pinTruck), rest = opts.filter(x=>x.truckId !== o.pinTruck);
+    const pick = same.slice(0,12).concat(rest.slice(0,12)).sort((a,b)=>(a.date + a.time).localeCompare(b.date + b.time)).slice(0,20);
+    body = `<div class="small muted">Open slots from today on${t ? ` — ${esc(t.name)} first where it is free` : ''}.</div>
+      <div class="slotlist">${pick.map(x=>`<div class="slotopt" data-dhmove="${esc(x.date)}|${esc(x.truckId)}|${esc(x.time)}">
+        <div><div>${esc(prettyDate(x.date))} · ${min2hm(hm2min(x.time))}</div>
+          <div class="small muted">${esc((truckById(x.truckId)||{}).name||'')}</div></div><div class="added">pick</div></div>`).join('')
+        || '<div class="empty">No open slots found — put it back in the waiting list and book it from the Schedule.</div>'}</div>`;
+  }
+  openModal(`Didn’t happen — ${jobLabel(o)}`, `
+    <p style="margin:0 0 10px">Was booked ${esc(prettyDate(old))}${o.slotTime ? ' · ' + min2hm(hm2min(o.slotTime)) : ''}${t ? ' on ' + esc(t.name) : ''}
+      — ${num(o.yards)} yd${productOf(o) ? ' ' + esc(productOf(o).name) : ''}${o.back && jobKind(o) !== 'debris' ? `, with ${esc(uTxt(o.back.yards))} ${esc(o.back.label)} coming back` : ''}.</p>
+    <h4 style="margin:0 0 6px">Reschedule it</h4>${body}
+    <div class="small" id="dhHint" style="color:var(--crit);min-height:1.2em;margin-top:8px"></div>`, [
+    {label:'Close', cls:'ghost', onClick:closeModal},
+    {label:'Back to the waiting list', onClick:()=>{
+      logActivity('unbooked', o, `did not happen ${prettyDate(old)}`);
+      if(wave) unbookWave(o); else unbookOrder(o);
+      done('Back in the waiting list — book it again from the Schedule');
+    }},
+    {label:'Cancel the order…', cls:'danger', onClick:()=>{
+      openModal('Cancel this order?', `<p style="margin:0"><b>${esc(jobLabel(o))}</b> — ${num(o.yards)} yd. It comes off the schedule for good${
+        jobKind(o) === 'yard-haul' ? '; the Retail Yard request goes back to waiting' : ''}.</p>`, [
+        {label:'Keep it', cls:'ghost', onClick:()=>{ closeModal(); openDidntHappen(orderId); }},
+        {label:'Yes, cancel it', cls:'primary', onClick:()=>{ o.status = 'cancelled'; logActivity('cancelled', o, `did not happen ${prettyDate(old)}`); done('Order cancelled'); }}]);
+    }}
+  ]);
+  $$('#modal [data-dhmove]').forEach(el=>el.onclick = ()=>{
+    const [d, tid, time] = el.dataset.dhmove.split('|');
+    bookOrder(o, d, tid, time); logActivity('moved', o, `did not happen ${prettyDate(old)} — rescheduled`);
+    try{ runDay(d); }catch(e){}
+    done(`Rescheduled to ${prettyDate(d)} ${min2hm(hm2min(time))} on ${(truckById(tid)||{}).name || ''}`);
+  });
+  const wb = $('#dhWave'); if(wb) wb.onclick = ()=>{
+    const d = $('#dhDate').value, w = $('#dhWin').value;
+    if(!d || d < todayISO()){ $('#dhHint').textContent = 'Pick today or a later day.'; return; }
+    bookWave(o, d, w, {pinTruck:o.pinTruck, commit:o.commit}); logActivity('moved', o, `did not happen ${prettyDate(old)} — rescheduled`);
+    try{ runDay(d); }catch(e){}
+    done(`Rescheduled to ${prettyDate(d)}, ${WINDOWS[w].label} wave`);
+  };
+}
+/** An outside haul that did not happen: give it a new day, or cancel it. */
+function openExtMissed(id){
+  const x = extHauls().find(e=>e.id === id); if(!x) return;
+  openModal(`Didn’t happen — ${x.hauler}`, `
+    <p style="margin:0 0 10px">${esc(uTxt(x.yards))} of Ground Debris was booked for ${esc(prettyDate(x.date))}.</p>
+    <label class="field" style="max-width:220px">New day<input type="date" id="emDate" min="${esc(todayISO())}" value="${esc(todayISO())}"></label>
+    <div class="small" id="exHint" style="color:var(--crit);min-height:1.2em;margin-top:8px"></div>`, [
+    {label:'Close', cls:'ghost', onClick:closeModal},
+    {label:'Cancel the haul', onClick:()=>{ closeModal(); extHaulFinish(id, 'cancelled'); }},
+    {label:'Reschedule', cls:'primary', onClick: async m=>{
+      const d = $('#emDate').value, hint = $('#exHint');
+      if(!d || d < todayISO()){ hint.textContent = 'Pick today or a later day.'; return; }
+      const btn = m.querySelector('footer .btn.primary'); btn.disabled = true;
+      try{   // Retail Yard only lets a haul's status change, so the old one is cancelled and a new one written
+        const row = await BackSync._send('POST', '', {kind:'removal', bin_id:x.pileId, qty_yd:x.yards, hauler:String(x.hauler).slice(0,60), loads:1,
+          happened_on:d, status:'scheduled', notes:['Outside hauler (Bulk Dispatch)', x.note].filter(Boolean).join(' — ')});
+        if(!row || !row.id) throw new Error('Retail Yard did not confirm the haul');
+        const oldEvent = x.eventId; x.eventId = String(row.id); x.date = d; Store.save();
+        await BackSync._send('PATCH', `?id=eq.${encodeURIComponent(oldEvent)}&status=eq.scheduled`, {status:'cancelled'});
+      }catch(e){ hint.textContent = 'Not finished — ' + e.message; btn.disabled = false; Piles.refresh(); return; }
+      closeModal(); afterCloseout(); Piles.refresh(); toast(`${x.hauler} rescheduled to ${prettyDate(d)}`, 4500);
     }}
   ]);
 }
@@ -5080,9 +5357,25 @@ document.addEventListener('keydown', e=>{
   if(e.key === 'Escape' && (UI.placeReq || UI.placeBack) && $('#scrim').hidden){ UI.placeReq = null; UI.placeBack = null; renderReqQueue(); }
 });
 
+function noDriverBanner(iso){
+  const all = noDriverOrders(todayISO() < iso ? todayISO() : iso);
+  if(!all.length) return '';
+  const here = all.filter(o=>o.schedDate === iso), other = all.filter(o=>o.schedDate !== iso);
+  const days = [...new Set(other.map(o=>o.schedDate))];
+  return `<div class="warnbox nodrv"><b>⚠ No driver assigned — ${all.length} order${all.length>1?'s':''}</b>
+    <div class="issue">${here.map(o=>`<span><a href="#" data-nodrv="${esc(o.id)}|${esc(iso)}">${esc((truckById(o.pinTruck)||{}).name||'truck')}${
+        o.slotTime ? ' ' + min2hm(hm2min(o.slotTime)) : (o.waveDate ? ' ' + WINDOWS[orderWindow(o)].label : '')} — ${esc(jobLabel(o))}</a>: nobody is on this truck ${iso === todayISO() ? 'today' : 'that day'}, and no driver is named on the order.</span>`).join('')}${
+      days.length ? `<span>${here.length ? 'Also on' : 'On'} other days: ${days.map(d=>`<a href="#" data-nodrvday="${esc(d)}">${esc(prettyDate(d))} (${other.filter(o=>o.schedDate === d).length})</a>`).join(' · ')}</span>` : ''}
+      <span class="muted">Put a driver on the truck for the day (the ▾ beside the truck name), or name one on the order.</span></div></div>`;
+}
+function wireNoDriver(){
+  $$('#sIssues [data-nodrv]').forEach(a=>a.onclick = e=>{ e.preventDefault(); const [id, d] = a.dataset.nodrv.split('|'); openBookingDetail(id, d); });
+  $$('#sIssues [data-nodrvday]').forEach(a=>a.onclick = e=>{ e.preventDefault(); UI.date = a.dataset.nodrvday; UI.view = 'day'; renderSchedule(); });
+  $$('#sGrid .nodrv-list [data-book]').forEach(b=>b.onclick = e=>{ e.stopPropagation(); openBookingDetail(b.dataset.book, b.dataset.bookday); });
+}
 function renderScheduleIssues(plan, iso){
   const box = $('#sIssues');
-  if(!plan){ box.innerHTML = ''; return; }
+  if(!plan){ box.innerHTML = noDriverBanner(iso); wireNoDriver(); return; }
   const groups = {};
   plan.issues.forEach(i=>{ (groups[i.kind] = groups[i.kind] || []).push(i); });
   const label = {late:'Running late', overrun:'Past the end of the shift',
@@ -5091,7 +5384,7 @@ function renderScheduleIssues(plan, iso){
                  stock:'Not stocked', capacity:'Didn’t fit the day'};
   const out = [];
   for(const [kind, list] of Object.entries(groups)){
-    if(kind === 'late') continue;                 // no "Running late" box; each card still shows its own time
+    if(kind === 'late' || kind === 'driver') continue;                 // no "Running late" box; each card still shows its own time
     out.push(`<div class="warnbox"><b>${esc(label[kind]||kind)} — ${list.length}</b>
       <div class="issue">${list.slice(0,6).map(i=>{
         const o = i.orderId? orderById(i.orderId) : null;
@@ -5120,7 +5413,7 @@ function renderScheduleIssues(plan, iso){
               : ' · <span class="muted">nothing in the next three weeks fits it</span>'}</span>`;
       }).join('')}</div></div>`);
   }
-  box.innerHTML = out.join('');
+  box.innerHTML = noDriverBanner(iso) + out.join('');
   $$('#sIssues [data-rehome]').forEach(el=>el.onclick=()=>{
     const o = orderById(el.dataset.rehome); if(!o) return;
     const next = nextWaveDay(o, iso, 21);
@@ -5134,6 +5427,7 @@ function renderScheduleIssues(plan, iso){
     toast(`${jobLabel(o)} moved to ${prettyDate(next.date)} ${
       WINDOWS[next.window].label.toLowerCase()} — the customer needs a call`, 5000);
   });
+  wireNoDriver();
 }
 
 /* ------------------------------------------------------------- grid wiring */
@@ -7296,7 +7590,11 @@ function renderEmpGrid(){
   if(!emps.length){ grid.innerHTML = `<div class="empty">Add an employee to get started.</div>`; return; }
 
   grid.style.gridTemplateColumns = `150px repeat(${days.length}, minmax(26px,1fr))`;
-  let html = `<div class="ehead"></div>` + days.map(iso=>{
+  const months = [];
+  days.forEach(iso=>{ const k = iso.slice(0,7); const m = months[months.length-1]; if(m && m.k === k) m.n++; else months.push({k, n:1, iso}); });
+  let html = `<div class="emonth blank"></div>` + months.map(m=>`<div class="emonth" style="grid-column:span ${m.n}">${
+      esc(new Date(m.iso + 'T12:00:00').toLocaleDateString([], m.n >= 5 ? {month:'long', year:'numeric'} : {month:'short'}))}</div>`).join('');
+  html += `<div class="ehead"></div>` + days.map(iso=>{
     const dow = dowOf(iso);
     const wknd = dow===0 || dow===6;
     return `<div class="ehead ${wknd?'wknd':''} ${iso===todayISO()?'today':''}">
@@ -7338,31 +7636,46 @@ function renderEmpGrid(){
   wireEmpGrid();
 }
 
+/** Mark a day off, or put it back to how it was before anyone touched it. */
+function setEmpOff(iso, id, turnOff){
+  if(turnOff){ setDriverDay(iso, id, {off:true, reason:'off'}); return; }
+  setDriverDay(iso, id, null);                                   // drop the hand-set day off
+  const d = byId(DB.drivers, id);
+  if(d && driverDay(iso, d).off) setDriverDay(iso, id, {off:false, reason:'off'});   // normally off that day: mark it worked
+}
 function wireEmpGrid(){
   $$('#empGrid .eday').forEach(el=>{
     const id = el.dataset.emp, iso = el.dataset.day;
     const d = byId(DB.drivers, id);
     el.onclick = ()=>{
+      if(UI.empSkipClick){ UI.empSkipClick = false; return; }      // the end of a drag, not a click
       if(UI.empMode === 'hours'){ openHoursDialog(d, iso); return; }
-      const dd = driverDay(iso, d);
-      setDriverDay(iso, id, {off: !dd.off, reason: dd.off? 'off' : 'off'});
+      setEmpOff(iso, id, !driverDay(iso, d).off);
       afterEmpChange();
     };
     el.onmousedown = e=>{
-      if(UI.empMode !== 'off') return;
+      if(UI.empMode !== 'off' || e.button !== 0) return;
       e.preventDefault();
-      UI.empDrag = {id, turnOff: !driverDay(iso, d).off};
+      UI.empDrag = {id, iso, el, turnOff: !driverDay(iso, d).off, moved:false};
     };
     el.onmouseenter = ()=>{
-      if(!UI.empDrag || UI.empDrag.id !== id) return;
-      setDriverDay(iso, id, {off: UI.empDrag.turnOff, reason:'off'});
-      el.className = 'eday ' + (UI.empDrag.turnOff? 'off':'on') + ' explicit';
-      el.textContent = UI.empDrag.turnOff? 'OFF' : '';
+      const g = UI.empDrag;
+      if(!g || g.id !== id || g.iso === iso && !g.moved) return;
+      const paint = (cell, day)=>{ setEmpOff(day, id, g.turnOff);
+        cell.className = 'eday ' + (g.turnOff? 'off':'on') + ' explicit'; cell.textContent = g.turnOff? 'OFF' : ''; };
+      if(!g.moved){ g.moved = true; paint(g.el, g.iso); }           // the cell the drag started on counts too
+      paint(el, iso);
     };
   });
-  document.addEventListener('mouseup', ()=>{
-    if(UI.empDrag){ UI.empDrag = null; afterEmpChange(); }
-  }, {once:true});
+  if(!UI.empUpWired){
+    UI.empUpWired = true;
+    document.addEventListener('mouseup', ()=>{
+      const g = UI.empDrag; UI.empDrag = null;
+      if(!g || !g.moved) return;                                    // a plain click: the click handler does the work
+      UI.empSkipClick = true; setTimeout(()=>{ UI.empSkipClick = false; }, 0);
+      afterEmpChange();
+    });
+  }
 }
 
 function afterEmpChange(){
@@ -8943,6 +9256,7 @@ function binCell(r){
 }
 
 function markTabCounts(){
+  try{ const c = $('#cfCount'); if(c){ const k = closeoutItems(false).length; c.textContent = k; c.hidden = !k; } }catch(e){}
   const el = $('#reqCount'); if(!el) return;
   const n = openRequests().length;
   el.textContent = n; el.hidden = !n;
@@ -9494,6 +9808,7 @@ function showTab(name){
   if(sb) sb.style.color = name==='settings' ? '#fff' : '';
   $$('main .panel').forEach(p=>p.hidden = p.id !== 'panel-'+name);
   if(name==='requests') renderRequests();
+  if(name==='confirm') renderConfirm();
   if(name==='orders') renderOrders();
   if(name==='intake') renderIntake();
   if(name==='fleet') renderFleet();
@@ -9514,6 +9829,7 @@ function renderAll(){
 function wire(){
   $$('nav.tabs button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
   $('.bar-actions [data-tab="settings"]').onclick = ()=>showTab('settings');
+  { const ct = $('#cfToday'); if(ct) ct.onchange = ()=>renderConfirm(); }
   $('#barNewOrder').onclick = ()=>editOrder(null);
   $('#barTimeOff').onclick  = ()=>{ showTab('drivers'); openTimeOffDialog(); };
   $('#barImport').onclick   = openImport;
@@ -9549,6 +9865,10 @@ function wire(){
 
   $('#btnAddOrder2').onclick = ()=>editOrder(null);
   $('#btnReload').onclick = ()=>boot(true);
+  $('#btnUndo').onclick = ()=>Undo.run();
+  document.addEventListener('keydown', e=>{
+    if((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !e.target.closest('input,textarea,select,[contenteditable]')){ e.preventDefault(); Undo.run(); }
+  });
 
   $('#orderSearch').oninput = renderOrders;
   $('#orderStatusFilter').onchange = renderOrders;
@@ -9708,6 +10028,7 @@ async function boot(refresh){
     setTimeout(()=>toast(`Fleet brought up to date — ${moved.join(', ')}`, 6000), 600);
   }
   if(!refresh) UI.date = todayISO();
+  try{ Undo.stack = []; Undo.rebase(); }catch(e){}
   renderAll();
   showTab(UI.tab);
   if(Tracker.configured){
