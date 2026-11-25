@@ -147,6 +147,11 @@ input[type=text],input[type=number],input[type=date],input[type=time],input[type
   background:var(--surface);border:1px solid #cfcfc8;border-radius:var(--r-sm);
   padding:7px 9px;width:100%;color:var(--ink)
 }
+label.field > input:not([type=checkbox]):not([type=radio]), label.field > select, div.field > input, div.field > select{
+  height:36px;box-sizing:border-box;line-height:20px}
+label.field > select, div.field > select{-webkit-appearance:none;appearance:none;padding-right:28px;text-overflow:ellipsis;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23555' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center}
 input:focus,select:focus,textarea:focus{outline:2px solid var(--brand);outline-offset:-1px;border-color:var(--brand)}
 /* address typeahead */
 div.field{display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--ink-muted);
@@ -2767,6 +2772,29 @@ function sinceLabel(ts){
 
 function activeTrucks(){ return DB.trucks.filter(t=>t.active!==false); }
 function productOf(o){ return byId(DB.products, o.productId); }
+/* Products are grouped in every picker so a rep finds the right one fast. A product keeps the
+ * category set on it in the Products tab; one with none is sorted by its name. */
+const PRODUCT_CATS = ['Bark & Mulch', 'Soil & Planting Mixes', 'Compost & Amendments', 'Rock, Gravel & Sand', 'Other'];
+function productCategory(p){
+  if(!p) return 'Other';
+  if(p.category && PRODUCT_CATS.includes(p.category)) return p.category;
+  const n = String(p.name||'').toLowerCase();
+  if(p.internalOnly || /debris/.test(n)) return 'Other';
+  if(/rock|quarry|gravel|sand\b|crushed|cobble|boulder/.test(n) && !/sandy loam/.test(n)) return 'Rock, Gravel & Sand';
+  if(/compost|steer|manure|flower-n-garden|amend|castings only/.test(n) && !/potting/.test(n)) return 'Compost & Amendments';
+  if(/bark|mulch|nugget|chips?\b|sawdust|fiberex|hog fuel/.test(n)) return 'Bark & Mulch';
+  if(/soil|loam|turf|mix|opus|potting|bio-tope|planting/.test(n)) return 'Soil & Planting Mixes';
+  return 'Other';
+}
+/** <option>s for a product picker, grouped by category and A–Z inside each. */
+function productOptions(selId, filter){
+  const list = (DB.products||[]).filter(p=>(!filter || filter(p)) || p.id === selId);
+  return PRODUCT_CATS.map(cat=>{
+    const inCat = list.filter(p=>productCategory(p) === cat).sort((a,b)=>String(a.name).localeCompare(String(b.name), undefined, {numeric:true}));
+    return inCat.length ? `<optgroup label="${esc(cat)}">${inCat.map(p=>
+      `<option value="${esc(p.id)}" ${p.id === selId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</optgroup>` : '';
+  }).join('');
+}
 
 /** Biggest single drop a truck can make, and which limit bound it. */
 function effCapacity(t, prod, opts){
@@ -3377,7 +3405,7 @@ function bookingCheck(o, iso, windowId, opts){
 
   if(!yd) return {ok:false, hard:true, why:'no quantity on the order'};
   if(!prod) return {ok:false, hard:true, why:'no product on the order'};
-  if(!orderPoint(o)) return {ok:false, hard:true, why:'no address or zone, so it cannot be routed'};
+  if(!orderPoint(o)) return {ok:false, hard:true, fix:'address', why:'there is no delivery address on the order (or it is outside every zone), so a truck can’t be routed to it'};
 
   const live = windowTrucks(iso).filter(t=>truckRunsOn(iso, t.id))
     .filter(t=>!opts.pinTruck || t.id === opts.pinTruck);
@@ -3412,7 +3440,7 @@ function bookingCheck(o, iso, windowId, opts){
 
 /** One line of plain English for a failed check, with what to do instead. */
 function bookingCheckAdvice(chk, iso){
-  if(!chk || chk.ok) return '';
+  if(!chk || chk.ok || chk.hard) return '';        // something is missing on the order: no day will take it until that is fixed
   const bits = [];
   if(chk.alt && chk.alt.sameDayOtherWindow)
     bits.push(`the ${WINDOWS[chk.alt.sameDayOtherWindow].label.toLowerCase()} that same day is open`);
@@ -6381,7 +6409,7 @@ function val(m,n){ const el=m.querySelector(`[name="${n}"]`); if(!el) return '';
 /* ------------------------------------------------------------ order editor */
 function editOrder(id, prefill){
   const o = id ? orderById(id) : Object.assign({
-    id:null, customer:'', phone:'', address:'', productId:(DB.products[0]||{}).id, yards:'',
+    id:null, customer:'', phone:'', address:'', productId:'', yards:'',
     window:'any', firmTime:'10:00', earliest:'', schedDate:null, pinTruck:null, slotTime:null,
     status:'pending', notes:'', lat:'', lng:'', source:'manual'
   }, prefill||{});
@@ -6389,8 +6417,7 @@ function editOrder(id, prefill){
   const dp = depotPoints();
   const depotOpts = (sel)=>['home','reload'].map(id=>
     `<option value="${id}" ${sel===id?'selected':''}>${esc(dp[id].name)}</option>`).join('');
-  const prodOpts = DB.products.filter(p=>p.active!==false)
-    .map(p=>`<option value="${esc(p.id)}" ${p.id===o.productId?'selected':''}>${esc(p.name)}</option>`).join('');
+  const prodOpts = (o.productId ? '' : '<option value="" selected disabled>Choose a product…</option>') + productOptions(o.productId, p=>p.active!==false);
   const truckOpts = `<option value="">— optimizer decides —</option>` + DB.trucks
     .map(t=>`<option value="${esc(t.id)}" ${t.id===o.pinTruck?'selected':''}>${esc(t.name)}</option>`).join('');
   /* A load can name its own driver; blank means whoever has the truck that day. */
@@ -6487,6 +6514,10 @@ function editOrder(id, prefill){
     {label:'Cancel', cls:'ghost', onClick:closeModal},
     {label: id? 'Save' : 'Add order', cls:'primary', onClick:(m)=>{
       const k = val(m,'kind') || 'delivery';
+      if(!val(m,'productId')){
+        const ps = m.querySelector('[name="productId"]'); ps.style.borderColor = 'var(--crit)'; ps.focus();
+        toast('Choose a product first'); return;
+      }
       const rec = {
         // keep everything the form does not show — wave booking, commitment,
         // seniority, the yard-request link, channel, delivery timestamps
@@ -7912,6 +7943,8 @@ function editProduct(id){
   const dp = depotPoints();
   const body = `
     <label class="field">Name<input type="text" name="name" value="${esc(p.name)}"></label>
+    <label class="field">Category <span class="muted">(how it is grouped when picking a product)</span>
+      <select name="category">${PRODUCT_CATS.map(c=>`<option ${productCategory(p) === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
     <div class="two">
       <label class="field">Pounds per yard<input type="number" name="lbsPerYard" value="${esc(p.lbsPerYard)}"></label>
       <label class="field">Largest order the store sells (0 = truck limit)<input type="number" step="0.5" name="maxYardsPerLoad" value="${esc(p.maxYardsPerLoad)}"></label>
@@ -7935,7 +7968,7 @@ function editProduct(id){
     {label:'Cancel',cls:'ghost',onClick:closeModal},
     {label:'Save',cls:'primary',onClick:m=>{
       const depots=[]; if(val(m,'d_home')) depots.push('home'); if(val(m,'d_reload')) depots.push('reload');
-      const rec={id:p.id||uid('p'), name:val(m,'name')||'Product', lbsPerYard:num(val(m,'lbsPerYard')),
+      const rec={id:p.id||uid('p'), name:val(m,'name')||'Product', category:val(m,'category')||undefined, lbsPerYard:num(val(m,'lbsPerYard')),
         maxYardsPerLoad:num(val(m,'maxYardsPerLoad')), depots, active:val(m,'active'),
         sizes: String(val(m,'sizes')||'').split(',').map(x=>num(x,0)).filter(x=>x>0).sort((a,b)=>a-b),
         needsReview: val(m,'needsReview'), maxSource: p.maxSource};
@@ -9456,8 +9489,7 @@ function shortTime(iso){
 function openRequestScheduler(id){
   const r = requestById(id); if(!r) return;
   const guess = reqProduct(r);
-  const prodOpts = (DB.products||[]).map(p=>
-    `<option value="${esc(p.id)}" ${guess && p.id===guess.id?'selected':''}>${esc(p.name)}</option>`).join('');
+  const prodOpts = productOptions(guess ? guess.id : null);
 
   const draw = ()=>{
     const prodId = ($('#reqProd')||{}).value || (guess? guess.id : '');
@@ -9595,9 +9627,11 @@ function confirmBooking(o, iso, windowId, chk, onForce){
   if(!chk.hard)
     buttons.push({label:'Book it anyway', cls:'primary', onClick:()=>{ closeModal(); onForce(); }});
 
-  openModal(`That ${esc(WINDOWS[windowId].label.toLowerCase())} is full`, `
+  if(chk.hard && o.id && orderById(o.id)) buttons.push({label:'Edit the order', cls:'primary', onClick:()=>{ closeModal(); editOrder(o.id); }});
+  openModal(chk.hard ? 'This order can’t be booked yet' : `That ${esc(WINDOWS[windowId].label.toLowerCase())} is full`, `
     <div class="warnbox"><b>${esc(o.customer)} — ${num(o.yards)} yd</b>
-      <span>${esc(chk.why)}.</span>
+      <span>${esc(chk.why.charAt(0).toUpperCase() + chk.why.slice(1))}.</span>
+      ${chk.hard ? `<span>${chk.fix === 'address' ? 'Add the address to the order, then book it again.' : 'Fix that on the order, then book it again.'}</span>` : ''}
       ${advice? `<span>What does work: ${esc(advice)}.</span>`:''}</div>
     ${chk.hard ? '' : `<div class="small muted">You can still book it — the order will show on the board
       as not fitting, and something on that day will need moving. It is recorded as an override so it
@@ -9627,7 +9661,7 @@ function openDeclineRequest(id){
 }
 
 function openLogRequest(){
-  const prodOpts = (DB.products||[]).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+  const prodOpts = productOptions(null, p=>p.active!==false);
   openModal('Log a Retail Yard request', `
     <div class="small muted">For a request that came by radio or in person. It behaves exactly
       like one from the tracker, but nothing is sent back.</div>
