@@ -560,6 +560,10 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .moreopts > *:not(summary){margin-top:9px}
 #fitLine:empty{display:none}
 /* the schedule picker inside the order form */
+.pkbest{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:8px;padding:8px 10px;border:1px solid var(--rule);border-left:4px solid var(--brand);border-radius:var(--r-sm);background:var(--surface-2);font-size:12.5px}
+.pkbest .btn{text-transform:none;letter-spacing:0;font-weight:400;white-space:normal;text-align:left}
+.pkbest .pkbest-tag{font-weight:700;text-transform:uppercase;font-size:10.5px;letter-spacing:.05em;margin-right:4px}
+.pkbest .btn.took{outline:2px solid var(--ink);outline-offset:1px}
 .pkwrap{max-height:300px;overflow:auto;border:1px solid var(--rule);border-radius:var(--r-sm)}
 .pktable{width:100%;border-collapse:collapse;font-size:12px}
 .pktable thead th{position:sticky;top:0;z-index:1;background:var(--surface-2);
@@ -6727,6 +6731,24 @@ function editOrder(id, prefill){
    is all the store sells at a time. Those become linked orders.
    ============================================================ */
 
+/** Today only: a window is no longer worth offering once too little of it is left to load, drive and unload. */
+function windowPassed(iso, wid){
+  if(iso !== todayISO()) return iso < todayISO();
+  const n = new Date(), nowMin = n.getHours()*60 + n.getMinutes();
+  return nowMin > windowBounds(wid).end - num(DB.settings.sameDayCutoffMin, 90);
+}
+/** The closest delivery already booked that matches `pick`, measured from a point. {mi, order} or null. */
+function nearestBooked(pt, pick){
+  if(!pt || pt.lat == null) return null;
+  let best = null;
+  (DB.orders||[]).forEach(x=>{
+    if(x.status === 'cancelled' || x.status === 'delivered' || jobKind(x) !== 'delivery' || !pick(x)) return;
+    const q = orderPoint(x); if(!q || q.lat == null) return;
+    const mi = haversineMi(pt, q); if(mi == null) return;
+    if(!best || mi < best.mi) best = {mi, order:x};
+  });
+  return best;
+}
 /** Biggest single delivery for this order, across the trucks that could take it. */
 function oneDropMax(o){
   const prod = productOf(o);
@@ -6844,7 +6866,7 @@ function pickerProbe(m){
     productId: val(m,'productId'),
     yards: yd,
     address: val(m,'address'),
-    zip: zipOf(val(m,'address')),
+    zip: zipOf(val(m,'address')) || val(m,'zip') || '',
     lat: val(m,'lat')==='' ? null : num(val(m,'lat')),
     lng: val(m,'lng')==='' ? null : num(val(m,'lng')),
     destDepot: val(m,'destDepot') || null,
@@ -7005,9 +7027,14 @@ function renderSlotPicker(m){
   const waveT = activeTrucks().filter(isWindowTruck);
   const slotT = activeTrucks().filter(t=>!isWindowTruck(t));
 
+  const cands = [];                      // every open choice, for "Best to offer"
+  const here = orderPoint(probe);
+  const nowD = new Date(), nowMin = nowD.getHours()*60 + nowD.getMinutes();
   const cell = (iso, wid)=>{
     if(closedDaySet().has(dowOf(iso)))
       return `<td class="pk off"><span>closed</span></td>`;
+    if(windowPassed(iso, wid))
+      return `<td class="pk off" title="Too little of this window is left today"><span>too late today</span></td>`;
     const live = waveT.filter(t=>truckRunsOn(iso, t.id));
     if(!live.length)
       return `<td class="pk off"><span>no driver</span></td>`;
@@ -7017,6 +7044,8 @@ function renderSlotPicker(m){
       const why = perTruck[0].room.why || 'no room';
       return `<td class="pk no" title="${esc(why)}"><span>${esc(shortWhy(why))}</span></td>`;
     }
+    cands.push({type:'wave', iso, wid, key:`${iso}|${wid}`, startMin: windowBounds(wid).start,
+      near: nearestBooked(here, x=>x.waveDate === iso && orderWindow(x) === wid)});
     return `<td class="pk yes" data-pick="${esc(iso)}|${wid}" title="Book the ${
       esc(WINDOWS[wid].label.toLowerCase())} of ${esc(prettyDate(iso))}">
       <span class="pk-open">open</span>
@@ -7030,7 +7059,8 @@ function renderSlotPicker(m){
     if(!slotT.length) return '';
     if(closedDaySet().has(dowOf(iso))) return `<td class="pk off"></td>`;
     const best = suggestSlots(probe, {from: iso, days: 1})
-      .filter(x=>slotT.some(t=>t.id === x.truckId))[0];
+      .filter(x=>slotT.some(t=>t.id === x.truckId))
+      .filter(x=>iso !== todayISO() || hm2min(x.time) >= nowMin + 30)[0];      // not a slot that has already gone by
     if(!best){
       // say WHY, because "—" next to "Truck 85 (2 loads)" on the fit line looks
       // like a contradiction: the hourly trucks take one drop per load
@@ -7041,6 +7071,9 @@ function renderSlotPicker(m){
                 : (yd > cap + 0.01 ? `needs ${Math.ceil(yd/Math.max(1,cap))} loads` : 'no slot left');
       return `<td class="pk no" title="${esc(why)}"><span>${esc(why)}</span></td>`;
     }
+    cands.push({type:'slot', iso:best.date, truckId:best.truckId, time:best.time, key:`${best.date}|${best.truckId}|${best.time}`,
+      startMin: hm2min(best.time),
+      near: nearestBooked(here, x=>x.schedDate === best.date && x.pinTruck === best.truckId && !!x.slotTime)});
     return `<td class="pk yes" data-slot="${esc(best.date)}|${esc(best.truckId)}|${esc(best.time)}">
       <span class="pk-open">${esc(min2hm(hm2min(best.time)))}</span>
       <span class="pk-trucks"><b>${esc((truckById(best.truckId)||{}).name||'')
@@ -7063,7 +7096,35 @@ function renderSlotPicker(m){
       for this order.</b> <span>${esc(why)}.</span></div>`;
   })();
 
-  box.innerHTML = `${blocker}
+  /* Best to offer: the soonest it can go, and the day a truck is already headed that way.
+     Two different kinds of "best", so the rep can offer speed or suggest the efficient day. */
+  const bestHtml = (()=>{
+    if(!cands.length) return '';
+    const today = todayISO(), dayNo = c=>Math.round((new Date(c.iso+'T12:00:00') - new Date(today+'T12:00:00'))/86400000);
+    const order = (a,b)=>a.iso.localeCompare(b.iso) || a.startMin - b.startMin;
+    const sorted = cands.slice().sort(order);
+    const NEAR = num(DB.settings.nearbyMiles, 3);
+    const label = c=>`${c.iso === today ? 'Today' : (dayNo(c) === 1 ? 'Tomorrow' : prettyDate(c.iso))} ${
+      c.type === 'wave' ? WINDOWS[c.wid].label.toLowerCase() : 'at ' + min2hm(c.startMin) + ' (' + ((truckById(c.truckId)||{}).name||'') + ')'}`;
+    const nearTxt = c=>c.near && c.near.mi <= NEAR
+      ? `a truck is already going ${c.near.mi < 0.15 ? 'next door' : (Math.round(c.near.mi*10)/10) + ' mi away'}${c.near.order.customer ? ' (' + c.near.order.customer + ')' : ''}` : '';
+    const picks = [];
+    const soonest = sorted[0];
+    picks.push({c:soonest, tag:'Soonest', why: nearTxt(soonest)});
+    const eff = sorted.filter(c=>c !== soonest && dayNo(c) <= 10 && c.near && c.near.mi <= NEAR)
+      .sort((a,b)=>(a.near.mi + 0.4*dayNo(a)) - (b.near.mi + 0.4*dayNo(b)))[0];
+    if(eff) picks.push({c:eff, tag:'Best fit', why: nearTxt(eff)});
+    const next = sorted.find(c=>!picks.some(p=>p.c === c) && !picks.some(p=>p.c.iso === c.iso));
+    if(next && picks.length < 3) picks.push({c:next, tag:'Next', why: nearTxt(next)});
+    const note = !here ? 'Add the address to see which days a truck is already headed that way.'
+      : (picks.some(p=>p.why) ? '' : `No truck is booked within ${NEAR} miles of this address in the next 10 days, so these are simply the soonest.`);
+    return `<div class="pkbest"><b>Best to offer</b>
+      ${picks.map(p=>`<button type="button" class="btn sm${p.tag === 'Best fit' || (p.tag === 'Soonest' && p.why) ? ' primary' : ''}" data-best="${esc(p.c.type)}|${esc(p.c.key)}">
+        <span class="pkbest-tag">${esc(p.tag)}</span> ${esc(label(p.c))}${p.why ? `<span class="pkbest-why"> — ${esc(p.why)}</span>` : ''}</button>`).join('')}
+      ${note ? `<span class="small muted" style="flex-basis:100%">${esc(note)}</span>` : ''}</div>`;
+  })();
+
+  box.innerHTML = `${blocker}${bestHtml}
     <div class="small muted" style="margin-bottom:6px">Where <b>${esc(probe.customer)}</b>
       (${yd} yd) can actually go. Click a window to take it; click a truck number to put it on that
       truck instead of letting the optimiser choose.</div>
@@ -7095,6 +7156,12 @@ function renderSlotPicker(m){
     markPicked(m, iso, wid);
   };
 
+  $$('#schedPicker [data-best]').forEach(b=>b.onclick = ()=>{
+    const [type, ...rest] = b.dataset.best.split('|'), key = rest.join('|');
+    const td = box.querySelector(type === 'wave' ? `td[data-pick="${key}"]` : `td[data-slot="${key}"]`);
+    if(td){ td.click(); td.scrollIntoView({block:'nearest'}); }
+    $$('#schedPicker [data-best]').forEach(x=>x.classList.toggle('took', x === b));
+  });
   const more = m.querySelector('#pkMore');
   if(more && !more.disabled) more.onclick = ()=>{
     box.dataset.days = Math.min(120, span + 21);
