@@ -478,6 +478,13 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .reqqueue .qlate{color:var(--crit);font-weight:600}
 .reqqueue .qmore{padding:6px 11px;border-top:1px solid var(--rule);font-size:11.5px}
 .reqqueue .qhead2{border-top:1px solid var(--rule)}
+.pilebox{display:grid;gap:7px;padding:10px 11px;font-size:12.5px}
+.pilebox.over{background:var(--crit-bg)}
+.pilebar{position:relative;height:10px;border-radius:5px;background:var(--surface-2);border:1px solid var(--rule);max-width:520px}
+.pilebar i{position:absolute;inset:0 auto 0 0;border-radius:5px 0 0 5px;background:var(--brand)}
+.pilebox.over .pilebar i{background:var(--crit)}
+.pilebar u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink)}
+.pilenote{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .reqqueue tr.placing td{background:var(--brand-bg, rgba(45,106,67,.10));box-shadow:inset 0 2px 0 var(--brand), inset 0 -2px 0 var(--brand)}
 .reqqueue .qplace{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 11px;
   border-bottom:1px solid var(--rule);background:var(--brand);color:#fff;font-size:12.5px}
@@ -2554,6 +2561,7 @@ function syncRequestsFromOrders(){
     }
   });
   if(YardHauls.on() && YardHauls.pending(true).length) YardHauls.kick();
+  if(BackSync.on() && Date.now() > BackSync._retryAt && BackSync.dirty()) BackSync.kick();
   return changed;
 }
 
@@ -2569,7 +2577,7 @@ function jobLabel(o){
   if(k === 'delivery') return o.customer || '—';
   const dp = depotPoints();
   if(k === 'yard-haul') return `Retail Yard restock`;
-  return `Debris return`;
+  return o.back && o.back.label ? `${o.back.label} return` : `Debris return`;
 }
 function jobRoute(o){
   const dp = depotPoints();
@@ -4044,6 +4052,7 @@ function renderSchedule(){
           <div class="cust">${esc(jobLabel(o))}</div>
           <div class="sub">${esc(inter? jobRoute(o) : cityOf(o))}${prod? ' · '+esc(prod.name):''}</div>
           <div class="chips">${inter? `<span class="chip kind">${esc(JOB_KINDS[jobKind(o)].short)}</span>`:''}${
+            o.back && jobKind(o) !== 'debris' ? `<span class="chip kind" title="Brings this back to Coburg on the same trip">↩ ${esc(o.back.label)} ${num(o.back.yards)} yd</span>` : ''}${
             isNewOrder(o)? '<span class="chip new">new</span>':''}${
             num(o.slotSpan,1) > 1? `<span class="chip">${num(o.slotSpan)} slots</span>`:''}${
             num(o.yards)? `<span class="chip">${num(o.yards)} yd</span>`:''}${
@@ -4425,12 +4434,15 @@ function renderReqQueue(){
   if(syncRequestsFromOrders()) Store.save();
   const open = openRequests();
   const loads = yardLoadsOpen();
-  if(!open.length && !loads.length){ box.hidden = true; box.innerHTML = ''; UI.placeReq = null; return; }
+  const piles = groundPiles();
+  if(!open.length && !loads.length && !piles.length){ box.hidden = true; box.innerHTML = ''; UI.placeReq = null; UI.placeBack = null; return; }
   box.hidden = false;
   if(UI.placeReq && !open.some(r=>r.id === UI.placeReq)) UI.placeReq = null;
   const placing = UI.placeReq ? requestById(UI.placeReq) : null;
+  if(UI.placeBack && !backChoice(UI.placeBack)) UI.placeBack = null;
+  const placingBack = !placing && UI.placeBack ? backChoice(UI.placeBack) : null;
   const dated = open.some(r=>r.needBy);          // Retail Yard no longer asks for a date; older requests may carry one
-  const grid = $('#sGrid'); if(grid) grid.classList.toggle('placing', !!placing);
+  const grid = $('#sGrid'); if(grid) grid.classList.toggle('placing', !!(placing || placingBack));
   box.innerHTML = `<div class="qhead"><b>Open requests from Retail Yard</b>
       <span class="muted small">${open.length} waiting · Jeff's order</span>
       <button class="btn sm ghost" id="qAll" style="margin-left:auto">Open the queue</button></div>
@@ -4439,6 +4451,9 @@ function renderReqQueue(){
         placing.bin? ' for bin '+esc(placing.bin) : ''} — click an open slot on any truck below.</span>
         <button class="btn sm" id="qPlaceList">Pick from a list instead</button>
         <button class="btn sm" id="qPlaceStop" style="margin-left:auto">Cancel</button></div>`; })() : ''}
+    ${placingBack ? `<div class="qplace" role="status"><span>Scheduling a haul of <b>${esc(placingBack.label)}</b> back to ${esc(depotPoints().home.name)}
+        — click an open slot on truck 85, 98 or 65 below.</span>
+        <button class="btn sm" id="qPlaceStop" style="margin-left:auto">Cancel</button></div>` : ''}
     ${open.length ? '' : '<div class="qmore muted">Nothing waiting — every request has a load booked.</div>'}
     <div class="qwrap"${open.length ? '' : ' hidden'}><table>
       <thead><tr><th>#</th><th>Product</th><th>Bin space</th>${dated? '<th>Needed by</th>' : ''}<th></th></tr></thead>
@@ -4459,7 +4474,8 @@ function renderReqQueue(){
             : `<span class="muted">${esc(r.bin || 'no bin')} · level not known</span>`}</td>
         ${dated ? `<td class="${u.chip==='late'?'qlate':''}">${r.needBy? esc(prettyDate(r.needBy)) +
           (u.label !== prettyDate(r.needBy)? ` <span class="${u.chip==='late'?'':'muted'}">· ${esc(u.label)}</span>` : '') : '<span class="muted">no date</span>'}</td>` : ''}
-        <td><button class="btn sm${on?'':' primary'}" data-reqgo="${esc(r.id)}">${on? 'Cancel' : 'Schedule'}</button></td>
+        <td style="white-space:nowrap"><button class="btn sm${on?'':' primary'}" data-reqgo="${esc(r.id)}">${on? 'Cancel' : 'Schedule'}</button>
+          <button class="btn sm ghost" data-reqdel="${esc(r.id)}" title="Delete this request">Delete</button></td>
       </tr>`;
     }).join('')}</tbody></table></div>${
       open.length > 12 ? `<div class="qmore muted">…and ${open.length-12} more — open the queue to see them all.</div>` : ''}
@@ -4467,7 +4483,7 @@ function renderReqQueue(){
       <span class="muted small">${loads.length ? `${loads.length} load${loads.length>1?'s':''} · ${r1(loads.reduce((a,l)=>a+l.yards,0))} yd · each stays here until Retail Yard confirms the delivery`
                                               : 'none booked'}</span></div>
     ${loads.length ? `<div class="qwrap"><table>
-      <thead><tr><th>When</th><th>Truck</th><th>Product</th><th class="num">Load</th><th>Bin</th><th>Status</th></tr></thead>
+      <thead><tr><th>When</th><th>Truck</th><th>Product</th><th class="num">Load</th><th>Bin</th><th>Status</th><th></th></tr></thead>
       <tbody>${loads.map(l=>`<tr data-load="${esc(l.orderId)}" data-loadday="${esc(l.date||'')}" tabindex="0" title="Click to open this load">
         <td>${l.date ? esc(prettyDate(l.date)) : '<span class="muted">no date</span>'}${
           l.when ? ` <span class="muted">· ${esc(l.when)}</span>` : ''}</td>
@@ -4477,18 +4493,44 @@ function renderReqQueue(){
         <td>${esc(l.bin || '—')}</td>
         <td><span class="chip ${l.chip}">${esc(l.label)}</span>${
           l.error ? ` <span class="small" style="color:var(--crit)" title="${esc(l.error)}">Retail Yard not updated</span>` : ''}</td>
-      </tr>`).join('')}</tbody></table></div>` : ''}`;
+        <td style="text-align:right;white-space:nowrap">${l.reqId
+          ? `<button class="btn sm ghost" data-reqdel="${esc(l.reqId)}" title="Delete the request this load is for">Delete request</button>` : ''}</td>
+      </tr>`).join('')}</tbody></table></div>` : ''}
+    ${piles.map(pl=>{
+      const booked = pileBooked(pl.id), left = r1(pl.onHand - booked);
+      const over = pl.alert > 0 && left > pl.alert;
+      const pct = pl.capacity > 0 ? Math.max(0, Math.min(100, pl.onHand / pl.capacity * 100)) : 0;
+      const mark = pl.capacity > 0 && pl.alert > 0 ? Math.min(100, pl.alert / pl.capacity * 100) : null;
+      const on = UI.placeBack === 'pile:' + pl.id;
+      return `<div class="qhead qhead2"><b>${esc(pl.name)} at Retail Yard</b>
+          <span class="muted small">live from Retail Yard${DB.debrisPulledAt ? ' · as of ' + esc(new Date(DB.debrisPulledAt).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})) : ''}</span></div>
+        <div class="pilebox${over ? ' over' : ''}">
+          <div class="pilebar" title="${esc(pl.onHand)} of ${esc(pl.capacity)} yd"><i style="width:${pct}%"></i>${
+            mark !== null ? `<u style="left:${mark}%" title="Alert level ${esc(pl.alert)} yd"></u>` : ''}</div>
+          <div class="piletext"><b>${esc(pl.onHand)} yd</b> on the pile${pl.capacity ? ` <span class="muted">of ${esc(pl.capacity)}</span>` : ''}${
+            pl.alert ? ` <span class="muted">· alert level ${esc(pl.alert)} yd</span>` : ''}${
+            booked ? ` · <b>${booked} yd</b> booked to come back` : ''}</div>
+          ${over ? `<div class="pilenote"><span class="chip late">Needs hauling</span> The pile is over its alert level${
+              booked ? ' even after what is booked' : ''} — schedule a haul to bring it back to ${esc(depotPoints().home.name)}.</div>` : ''}
+          ${DB.backError ? `<div class="small" style="color:var(--crit)">Retail Yard not updated — ${esc(DB.backError)}</div>` : ''}
+          <div><button class="btn sm${on ? '' : (over ? ' primary' : '')}" data-pileback="pile:${esc(pl.id)}">${on ? 'Cancel' : 'Schedule a haul back'}</button></div>
+        </div>`;
+    }).join('')}`;
   $$('#sQueue tr[data-load]').forEach(el=>{
     const go = ()=>openBookingDetail(el.dataset.load, el.dataset.loadday || UI.date);
-    el.onclick = go;
-    el.onkeydown = e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); go(); } };
+    el.onclick = e=>{ if(e.target.closest('[data-reqdel]')) return; go(); };
+    el.onkeydown = e=>{ if(e.target.closest('[data-reqdel]')) return; if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); go(); } };
   });
   $$('#sQueue tr[data-req]').forEach(el=>{
-    const go = ()=>{ UI.placeReq = (UI.placeReq === el.dataset.req) ? null : el.dataset.req; renderReqQueue(); };
-    el.onclick = go;
+    const go = ()=>{ UI.placeBack = null; UI.placeReq = (UI.placeReq === el.dataset.req) ? null : el.dataset.req; renderReqQueue(); };
+    el.onclick = e=>{ if(e.target.closest('[data-reqdel]')) return; go(); };
     el.onkeydown = e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); go(); } };
   });
-  const stop = $('#qPlaceStop'); if(stop) stop.onclick = ()=>{ UI.placeReq = null; renderReqQueue(); };
+  const stop = $('#qPlaceStop'); if(stop) stop.onclick = ()=>{ UI.placeReq = null; UI.placeBack = null; renderReqQueue(); };
+  $$('#sQueue [data-reqdel]').forEach(el=>{ el.onclick = e=>{ e.stopPropagation(); deleteRequestAsk(el.dataset.reqdel); }; });
+  $$('#sQueue [data-pileback]').forEach(el=>{
+    el.onclick = ()=>{ UI.placeReq = null; UI.placeBack = UI.placeBack === el.dataset.pileback ? null : el.dataset.pileback; renderReqQueue(); };
+  });
   const list = $('#qPlaceList'); if(list) list.onclick = ()=>{ const id = UI.placeReq; UI.placeReq = null; renderReqQueue(); openRequestScheduler(id); };
   const all = $('#qAll');
   if(all) all.onclick = ()=>showTab('requests');
@@ -4517,7 +4559,7 @@ function yardLoadsOpen(){
       const t = truckById(o.pinTruck || h.truckId);
       const dropped = o.status === 'delivered';
       out.push({
-        orderId: o.id, date: o.schedDate || h.date || '',
+        orderId: o.id, reqId: r.id, date: o.schedDate || h.date || '',
         when: o.slotTime ? min2hm(hm2min(o.slotTime)) : (o.windowId && WINDOWS[o.windowId] ? WINDOWS[o.windowId].label : ''),
         sort: (o.schedDate || h.date || '9999') + ' ' + (o.slotTime || (o.windowId === 'pm' ? '12:00' : '00:00')),
         truck: (t && t.name) || h.truckId || '—',
@@ -4529,7 +4571,59 @@ function yardLoadsOpen(){
       });
     });
   });
+  // a load out that also brings something back says so
+  out.forEach(l=>{ const o = orderById(l.orderId); if(o && o.back) l.product += ` + ↩ ${o.back.label} ${num(o.back.yards)} yd back`; });
+  // trips that only bring something back from Retail Yard; they leave once the truck has done the run
+  (DB.orders||[]).forEach(o=>{
+    if(o.kind !== 'debris' || !o.back || o.status === 'cancelled' || o.status === 'delivered') return;
+    const t = truckById(o.pinTruck);
+    out.push({orderId:o.id, date:o.schedDate || '', when:o.slotTime ? min2hm(hm2min(o.slotTime)) : '',
+      sort:(o.schedDate || '9999') + ' ' + (o.slotTime || '00:00'), truck:(t && t.name) || '—',
+      product:`↩ ${o.back.label} back to ${depotPoints().home.name}`, yards:r1(num(o.yards,0)), bin:'', fill:false,
+      label: o.schedDate && o.schedDate < todayISO() ? 'past due — not marked done' : 'scheduled',
+      chip: o.schedDate && o.schedDate < todayISO() ? 'late' : 'ok', error:''});
+  });
   return out.sort((a,b)=>a.sort.localeCompare(b.sort));
+}
+
+/* ----------------------------------------------------- hauls back from Retail Yard
+ * A big truck that runs product out to Retail Yard can bring something back
+ * to Coburg on the same trip — ground debris, food waste — or run out empty
+ * just to fetch it. What can come back: the Yard Debris piles Retail Yard
+ * tracks (the feed gives their live level) plus the extras named in Settings. */
+function debrisPiles(){ return DB.debrisPiles || []; }
+function groundPiles(){ return debrisPiles().filter(p=>p.role === 'ground'); }
+function backChoices(){
+  const piles = debrisPiles().slice().sort((a,b)=>(a.role === 'ground' ? 0 : 1) - (b.role === 'ground' ? 0 : 1) || a.name.localeCompare(b.name));
+  // A pile recorded below zero is a records problem at the yard, not an empty pile — treat its level as unknown.
+  const out = piles.map(p=>({key:'pile:' + p.id, label:p.name, pileId:p.id, onHand:p.onHand < 0 ? null : p.onHand}));
+  String(DB.settings.backhaulExtras == null ? 'Food waste' : DB.settings.backhaulExtras).split(',').map(x=>x.trim()).filter(Boolean)
+    .forEach(x=>out.push({key:'x:' + x, label:x, pileId:null, onHand:null}));
+  return out;
+}
+function backChoice(key){ return backChoices().find(c=>c.key === key) || null; }
+/** Yards booked to come back off a pile that the truck has not hauled yet. */
+function pileBooked(pileId, skipOrderId){
+  return r1((DB.orders||[]).reduce((a,o)=>a + (o.back && o.back.pileId === pileId && o.id !== skipOrderId &&
+    o.status !== 'cancelled' && o.status !== 'delivered' ? num(o.back.yards, 0) : 0), 0));
+}
+/** Most a truck brings back in one run of this, and what is actually there to take. */
+function backDefault(t, choice){
+  const max = t ? Math.floor(num(effCapacity(t, byId(DB.products, 'pdebris') || null, {internal:true}).cap, 0) * 10 + 1e-6) / 10 : 0;
+  const pile = choice && choice.pileId ? debrisPiles().find(p=>p.id === choice.pileId) : null;
+  const there = pile && pile.onHand >= 0 ? Math.max(0, r1(pile.onHand - pileBooked(pile.id))) : null;
+  return {max, there, take: there === null ? max : Math.min(max, there)};
+}
+function backhaulOrder(back){
+  return {
+    id: uid(), kind:'debris', customer:'Debris return',
+    productId: byId(DB.products, 'pdebris') ? 'pdebris' : '',
+    yards: back.yards, back,
+    forceDepot: DB.settings.retailDepot || 'reload',     // Retail Yard loads it
+    destDepot: 'home',                                    // Coburg Rd receives it
+    notes: `${back.label} back from Retail Yard`,
+    status:'pending', source:'backhaul', createdAt: new Date().toISOString()
+  };
 }
 
 /* --------------------------------------------- place a yard request on the board
@@ -4549,61 +4643,183 @@ function placeDefault(r, t){
   }
   return {max: Math.floor(max*10 + 1e-6)/10, room, take: Math.floor(take*10 + 1e-6)/10, why, st};
 }
-function openPlaceConfirm(id, truckId, time, iso, windowId){
-  const r = requestById(id), t = truckById(truckId);
-  if(!r || !t) return;
-  const p = reqProduct(r);
-  if(!p){ UI.placeReq = null; renderReqQueue(); openRequestScheduler(id); toast('Pick the product for this request first'); return; }
-  const d = placeDefault(r, t);
+function openPlaceConfirm(id, truckId, time, iso, windowId, backKey){
+  const r = id ? requestById(id) : null, t = truckById(truckId);
+  if(!t) return;
+  const p = r ? reqProduct(r) : null;
+  if(r && !p){ UI.placeReq = null; renderReqQueue(); openRequestScheduler(id); toast('Pick the product for this request first'); return; }
+  const canBack = !windowId && !isWindowTruck(t);            // the hourly trucks: 85, 98, 65
+  const choices = canBack ? backChoices() : [];
+  const d = r ? placeDefault(r, t) : null;
   const when = windowId ? WINDOWS[windowId].label.toLowerCase() + ' wave' : min2hm(hm2min(time));
-  if(d.take <= 0.01){
+  if(r && d.take <= 0.01 && !backKey){
     toast(d.why === 'bin' ? `Bin ${r.bin||''} is full — nothing can go in until it draws down`
                           : `${t.name} has no load size for ${p.name}`, 5000);
     return;
   }
-  const ceiling = d.room === null ? d.max : Math.min(d.max, d.room);
-  const lim = haulCapacity(t, p).limit;
-  openModal(`${p.name} → ${t.name}`, `
-    <div class="small muted">${esc(prettyDate(iso))} · ${esc(when)}${r.bin? ' · bin '+esc(r.bin) : ''}${
-      r.needBy? ' · needed by '+esc(prettyDate(r.needBy)) : ''}</div>
-    <label class="field" style="margin-top:12px;max-width:220px">Yards on this load
-      <input id="placeYd" type="number" inputmode="decimal" min="0.5" step="0.5" max="${ceiling}" value="${d.take}"></label>
-    <div class="small" style="margin-top:8px;display:grid;gap:3px">
-      <span>${esc(t.name)} carries up to <b>${d.max} yd</b> of this <span class="muted">(${esc(lim)})</span>.</span>
-      ${d.st.known ? `<span>Bin ${esc(r.bin||'')} has room for <b>${d.room} yd</b>
-          <span class="muted">(${d.st.current}${d.st.inbound? ' + '+d.st.inbound+' on the way' : ''} of ${d.st.capacity})</span>.</span>`
-        : `<span class="muted">The bin's level isn't known, so the truck's full load is used.</span>`}
-      ${d.why === 'bin' ? `<span style="color:#8a6100">The bin can't take a full load, so this one is cut to ${d.take} yd.</span>` : ''}
-      ${d.why === 'request' ? `<span class="muted">Only ${d.take} yd is still owed on this request.</span>` : ''}
+  if(!r && !canBack){ toast('Hauls back from Retail Yard go on truck 85, 98 or 65'); return; }
+  const outOk = r && d.take > 0.01;
+  const ceiling = r ? (d.room === null ? d.max : Math.min(d.max, d.room)) : 0;
+  const lim = r ? haulCapacity(t, p).limit : '';
+  const others = !r ? openRequests().filter(x=>reqProduct(x) && placeDefault(x, t).take > 0.01) : [];
+  const dp = depotPoints();
+
+  openModal(r ? `${p.name} → ${t.name}` : `${t.name} — run to Retail Yard`, `
+    <div class="small muted">${esc(prettyDate(iso))} · ${esc(when)}</div>
+
+    <h4 style="margin:14px 0 6px">Out to Retail Yard</h4>
+    ${r ? (outOk ? `
+      <label class="field" style="max-width:220px">Yards of ${esc(p.name)}
+        <input id="placeYd" type="number" inputmode="decimal" min="0.5" step="0.5" max="${ceiling}" value="${d.take}"></label>
+      <div class="small" style="margin-top:6px;display:grid;gap:3px">
+        <span>${esc(t.name)} carries up to <b>${d.max} yd</b> of this <span class="muted">(${esc(lim)})</span>.</span>
+        ${d.st.known ? `<span>Bin ${esc(r.bin||'')} has room for <b>${d.room} yd</b>
+            <span class="muted">(${d.st.current}${d.st.inbound? ' + '+d.st.inbound+' on the way' : ''} of ${d.st.capacity})</span>.</span>`
+          : `<span class="muted">The bin's level isn't known, so the truck's full load is used.</span>`}
+        ${d.why === 'bin' ? `<span style="color:#8a6100">The bin can't take a full load, so this one is cut to ${d.take} yd.</span>` : ''}
+        ${d.why === 'request' ? `<span class="muted">Only ${d.take} yd is still owed on this request.</span>` : ''}
+      </div>` : `<div class="small" style="color:#8a6100">Bin ${esc(r.bin||'')} is full, so nothing goes out for this request.</div>`)
+    : `<label class="field" style="max-width:420px">Take out
+        <select id="placeOut"><option value="">Nothing — going out empty</option>${others.map(x=>
+          `<option value="${esc(x.id)}">${esc(reqProduct(x).name)}${x.bin? ' → bin '+esc(x.bin) : ''} (up to ${placeDefault(x, t).take} yd)</option>`).join('')}</select></label>`}
+
+    ${canBack ? `
+    <h4 style="margin:16px 0 6px">Back to ${esc(dp.home.name)}</h4>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <label class="field" style="min-width:240px;flex:1">Bring back
+        <select id="placeBack"><option value="">Nothing — coming back empty</option>${choices.map(c=>
+          `<option value="${esc(c.key)}" ${c.key === backKey ? 'selected' : ''}>${esc(c.label)}${
+            c.onHand !== null ? ` — ${esc(c.onHand)} yd on the pile` : ''}</option>`).join('')}</select></label>
+      <label class="field" style="width:130px" id="placeBackYdWrap" hidden>Yards back
+        <input id="placeBackYd" type="number" inputmode="decimal" min="0.5" step="0.5"></label>
     </div>
-    <div class="small" id="placeHint" style="color:var(--crit);min-height:1.2em;margin-top:6px"></div>`, [
+    <div class="small muted" id="placeBackNote" style="margin-top:6px"></div>` : ''}
+    <div class="small" id="placeHint" style="color:var(--crit);min-height:1.2em;margin-top:8px"></div>`, [
     {label:'Cancel', cls:'ghost', onClick:closeModal},
     {label:'Place it', cls:'primary', onClick:()=>{
-      const yd = num($('#placeYd').value, 0);
-      if(!(yd > 0)){ $('#placeHint').textContent = 'Enter the yards for this load.'; return; }
-      if(yd > ceiling + 0.01){
-        $('#placeHint').textContent = d.room !== null && d.room < d.max
-          ? `The bin only has room for ${d.room} yd.` : `${t.name} carries ${d.max} yd of this at most.`;
-        return;
+      const hint = $('#placeHint');
+      const outSel = $('#placeOut');
+      if(outSel && outSel.value){ closeModal(); openPlaceConfirm(outSel.value, truckId, time, iso, windowId, ($('#placeBack')||{}).value || null); return; }
+      let yd = 0;
+      if(outOk){
+        yd = num($('#placeYd').value, 0);
+        if(!(yd > 0)){ hint.textContent = 'Enter the yards going out.'; return; }
+        if(yd > ceiling + 0.01){
+          hint.textContent = d.room !== null && d.room < d.max
+            ? `The bin only has room for ${d.room} yd.` : `${t.name} carries ${d.max} yd of this at most.`;
+          return;
+        }
       }
-      r.productId = p.id;
-      if(r.goal !== 'fill' && r.openVolume && !(num(r.yards,0) > 0)){ r.yards = yd; r.units = 0; }
-      const o = scheduleRequest(r.id, iso, truckId, time, yd, windowId);
-      if(!o){ $('#placeHint').textContent = 'That load could not be booked.'; return; }
+      let back = null;
+      const bsel = $('#placeBack');
+      if(bsel && bsel.value){
+        const c = backChoice(bsel.value), bd = backDefault(t, c), byd = num($('#placeBackYd').value, 0);
+        if(!(byd > 0)){ hint.textContent = 'Enter the yards coming back.'; return; }
+        if(byd > bd.max + 0.01){ hint.textContent = `${t.name} brings back ${bd.max} yd at most.`; return; }
+        if(bd.there !== null && byd > bd.there + 0.01){ hint.textContent = `Only ${bd.there} yd of ${c.label} is there to take.`; return; }
+        back = {key:c.key, label:c.label, pileId:c.pileId, yards:r1(byd)};
+      }
+      if(!outOk && !back){ hint.textContent = 'Choose something to take out or bring back.'; return; }
+
+      let o;
+      if(outOk){
+        r.productId = p.id;
+        if(r.goal !== 'fill' && r.openVolume && !(num(r.yards,0) > 0)){ r.yards = yd; r.units = 0; }
+        o = scheduleRequest(r.id, iso, truckId, time, yd, windowId);
+        if(!o){ hint.textContent = 'That load could not be booked.'; return; }
+        if(back) o.back = back;
+      } else {
+        o = backhaulOrder(back);
+        DB.orders.push(o);
+        bookOrder(o, iso, truckId, time);
+        logActivity('added', o, `${back.label} back from Retail Yard — ${prettyDate(iso)} ${min2hm(hm2min(time))}`);
+      }
       closeModal();
-      const rest = r.status === 'open' ? reqRemaining(r) : 0;
+      const rest = outOk && r.status === 'open' ? reqRemaining(r) : 0;
       if(rest <= 0.01) UI.placeReq = null;
+      UI.placeBack = null;
       try{ runDay(iso); }catch(e){ console.warn(e); }
       Store.save(); renderRequests(); renderOrders(); renderSchedule();
-      toast(rest > 0.01
-        ? `${yd} yd placed on ${t.name} — ${rest} yd still ${r.goal === 'fill' ? 'to reach the fill level' : 'to place'}. Click another slot, or Cancel to leave the rest for later.`
-        : `${yd} yd of ${p.name} placed on ${t.name}, ${prettyDate(iso)}`, 5000);
+      BackSync.kick();
+      const said = [outOk ? `${yd} yd of ${p.name} out` : 'out empty', back ? `${back.yards} yd of ${back.label} back` : 'back empty'].join(', ');
+      toast(`${t.name}, ${prettyDate(iso)}: ${said}${rest > 0.01
+        ? ` — ${rest} yd still ${r.goal === 'fill' ? 'to reach the fill level' : 'to place'}. Click another slot, or Cancel.` : ''}`, 6000);
     }}
   ]);
+  const bsel = $('#placeBack'), byd = $('#placeBackYd'), wrap = $('#placeBackYdWrap'), note = $('#placeBackNote');
+  const syncBack = ()=>{
+    if(!bsel) return;
+    const c = bsel.value ? backChoice(bsel.value) : null;
+    wrap.hidden = !c;
+    if(!c){ note.textContent = r ? '' : 'Pick what the truck brings back.'; return; }
+    const bd = backDefault(t, c);
+    byd.max = bd.there === null ? bd.max : Math.min(bd.max, bd.there);
+    byd.value = bd.take > 0 ? bd.take : '';
+    note.textContent = `${t.name} brings back up to ${bd.max} yd a run` +
+      (bd.there !== null ? ` · ${bd.there} yd of ${c.label} is there to take` : (c.pileId ? ` · Retail Yard's level for ${c.label} is below zero, so it isn't used as a limit` : ` · ${c.label} is not a pile Retail Yard tracks, so no level is known`)) + '.';
+  };
+  if(bsel){ bsel.onchange = syncBack; syncBack(); }
   const inp = $('#placeYd'); if(inp) inp.select();
 }
+
+/* --------------------------------------------- delete a request (asked twice)
+ * Removes the request here, cancels any loads booked for it, and — when it
+ * came from Retail Yard — cancels it there too. Two separate confirmations. */
+function deleteRequestAsk(id){
+  const r = requestById(id); if(!r) return;
+  const p = reqProduct(r), name = p ? p.name : (r.product || 'this request');
+  const trips = (r.hauls||[]).map(h=>orderById(h.orderId)).filter(o=>o && o.status !== 'cancelled' && o.status !== 'delivered');
+  const linked = r.src === 'tracker' && r.extId && Tracker.isFeed;
+  const backs = trips.filter(o=>o.back).map(o=>`${num(o.back.yards)} yd of ${o.back.label}`);
+  openModal('Delete this request?', `
+    <p style="margin:0"><b>${esc(name)}</b>${r.bin? ' for bin '+esc(r.bin) : ''}${r.requestedBy? ' — asked by '+esc(r.requestedBy) : ''}.</p>
+    <p class="small muted" style="margin:8px 0 0">${trips.length ? `${trips.length} load${trips.length>1?'s':''} booked for it will come off the schedule. ` : ''}${
+      backs.length ? `That includes the ${esc(backs.join(' and '))} coming back on ${backs.length>1?'those trucks':'that truck'} — book it again if it still needs hauling. ` : ''}${
+      linked ? 'It will be removed from Retail Yard as well.' : ''}</p>`, [
+    {label:'Keep it', cls:'ghost', onClick:closeModal},
+    {label:'Delete…', onClick:()=>{
+      openModal('Are you sure?', `
+        <p style="margin:0">This deletes the request for <b>${esc(name)}</b>${trips.length ? ` and takes ${trips.length} booked load${trips.length>1?'s':''} off the schedule` : ''}${
+          linked ? ', here and in Retail Yard' : ''}. It can't be undone.</p>
+        <div class="small" id="delHint" style="color:var(--crit);min-height:1.2em;margin-top:8px"></div>`, [
+        {label:'No, keep it', cls:'ghost', onClick:closeModal},
+        {label:'Yes, delete it', cls:'primary', onClick: async m=>{
+          const btn = m.querySelector('footer .btn.primary'); btn.disabled = true;
+          try{
+            if(linked){
+              const res = await fetch(`${Tracker._base()}/rest/v1/rpc/delete_request`, {method:'POST',
+                headers: Tracker._headers({'Content-Type':'application/json'}), body: JSON.stringify({p_id: r.extId})});
+              if(!res.ok){
+                let msg = ''; try{ msg = (await res.json()).message || ''; }catch(e){}
+                throw new Error(msg || 'Retail Yard answered ' + res.status);
+              }
+            }
+          }catch(e){ $('#delHint').textContent = 'Not deleted — ' + e.message; btn.disabled = false; return; }
+          dropRequest(r, 'deleted');
+          closeModal();
+          toast(`Request for ${name} deleted${trips.length ? ` — ${trips.length} load${trips.length>1?'s':''} taken off the schedule` : ''}`, 5000);
+        }}
+      ]);
+    }}
+  ]);
+}
+/** Take a request, and the loads booked for it that have not been delivered, off this board. */
+function dropRequest(r, why){
+  const days = new Set();
+  (r.hauls||[]).forEach(h=>{
+    const o = orderById(h.orderId);
+    if(!o || o.status === 'cancelled' || o.status === 'delivered') return;
+    if(o.schedDate) days.add(o.schedDate);
+    o.status = 'cancelled';
+    logActivity('cancelled', o, `request ${why}`);
+  });
+  if(UI.placeReq === r.id) UI.placeReq = null;
+  DB.requests = (DB.requests||[]).filter(x=>x.id !== r.id);
+  days.forEach(d=>{ try{ runDay(d); }catch(e){} });
+  Store.save(); renderRequests(); renderOrders(); renderSchedule();
+}
 document.addEventListener('keydown', e=>{
-  if(e.key === 'Escape' && UI.placeReq && $('#scrim').hidden){ UI.placeReq = null; renderReqQueue(); }
+  if(e.key === 'Escape' && (UI.placeReq || UI.placeBack) && $('#scrim').hidden){ UI.placeReq = null; UI.placeBack = null; renderReqQueue(); }
 });
 
 function renderScheduleIssues(plan, iso){
@@ -4668,9 +4884,9 @@ function wireGrid(){
     const iso = el.dataset.slotday || UI.date;
     el.onclick = ()=>{
       if(UI.dragJustFinished) return;
-      if(UI.placeReq && UI.gridMode!=='avail'){
+      if((UI.placeReq || UI.placeBack) && UI.gridMode!=='avail'){
         if(isBlocked(iso, truckId, time)) toast('That slot is blocked — pick an open one');
-        else openPlaceConfirm(UI.placeReq, truckId, time, iso);
+        else openPlaceConfirm(UI.placeReq, truckId, time, iso, null, UI.placeReq ? null : UI.placeBack);
         return;
       }
       if(UI.gridMode==='avail'){
@@ -4685,7 +4901,7 @@ function wireGrid(){
     // drag across a column to block or open a run of slots
     el.onmousedown = e=>{
       e.preventDefault();
-      if(UI.placeReq && UI.gridMode!=='avail') return;      // placing a yard request: a click, not a drag
+      if((UI.placeReq || UI.placeBack) && UI.gridMode!=='avail') return;      // placing: a click, not a drag
       if(UI.gridMode==='avail'){
         const turnOn = !isBlocked(iso, truckId, time);
         UI.dragBlock = {truckId, turnOn, iso};
@@ -4742,12 +4958,13 @@ function wireGrid(){
     if(el.dataset.wave) el.onclick = ()=>{
       if(UI.dragJustFinished) return;
       if(UI.gridMode === 'avail'){ toast('Wave trucks are scheduled by window, not by slot'); return; }
+      if(UI.placeBack){ toast('Hauls back from Retail Yard go on truck 85, 98 or 65 — pick one of their slots'); return; }
       if(UI.placeReq){ openPlaceConfirm(UI.placeReq, truckId, null, iso, windowId); return; }
       openWaveBooking(truckId, windowId, iso);
     };
     el.onmousedown = e=>{
       if(UI.gridMode === 'avail') return;
-      if(UI.placeReq) return;
+      if(UI.placeReq || UI.placeBack) return;
       if(e.target.closest('.wstop')) return;        // clicking a stop opens that order
       e.preventDefault();
       UI.dragWave = {truckId, iso, wins:[windowId], moved:false};
@@ -4763,7 +4980,7 @@ function wireGrid(){
   $$('#sGrid [data-book]').forEach(el=>{
     el.onclick = ()=>{ if(UI.dragJustFinished) return; openBookingDetail(el.dataset.book, el.dataset.bookday || UI.date); };
     el.onmousedown = e=>{
-      if(e.button !== 0 || UI.gridMode === 'avail' || UI.placeReq) return;
+      if(e.button !== 0 || UI.gridMode === 'avail' || UI.placeReq || UI.placeBack) return;
       if(e.target.closest('input,button,select,a')) return;        // the delivered tick, etc.
       e.stopPropagation();                                           // not a wave drag, not a new-job drag
       UI.dragMove = {orderId: el.dataset.book, x: e.clientX, y: e.clientY, started:false, src: el};
@@ -8024,6 +8241,7 @@ const Tracker = {
     DB.trackerColumns = rows[0] ? Object.keys(rows[0]) : [];
     DB.requests = DB.requests || [];
     let added = 0, updated = 0, noId = 0, alreadyClosed = 0;
+    const gone = [];                       // requests Retail Yard has deleted
     for(const row of rows){
       const inc = this.adopt(row);
       // a row whose id column we do not recognise would vanish without trace
@@ -8034,6 +8252,9 @@ const Tracker = {
       if(mine && inc.feed){
         const was = JSON.stringify([mine.status, mine.product, mine.yards, mine.bin, mine.needBy, mine.extBookedYd]);
         this.absorb(mine, inc);
+        if(String(inc.trackerStatus||'').toLowerCase() === 'cancelled' && mine.status !== 'delivered'){
+          gone.push(mine); updated++; continue;
+        }
         if(closed && mine.status === 'open'){ mine.status='declined'; mine.declinedReason='withdrawn in Retail Yard'; }
         if(JSON.stringify([mine.status, mine.product, mine.yards, mine.bin, mine.needBy, mine.extBookedYd]) !== was) updated++;
         continue;
@@ -8062,6 +8283,7 @@ const Tracker = {
         || (r.hauls||[]).length || Object.keys(r.yardHauls||{}).length);
       DB.requests.forEach(r=>{ if(r.src === 'tracker' && r.pushError && !YardHauls.dirty(r)) r.pushError = null; });
     }
+    gone.forEach(r=>dropRequest(r, 'deleted in Retail Yard'));
     DB.trackerPulledAt = new Date().toISOString();
     DB.trackerError = noId
       ? `${noId} tracker row${noId>1?'s were':' was'} skipped — no id column this app recognises`
@@ -8170,6 +8392,97 @@ const YardCaps = {
     if(fixed.length){ Store.save(); try{ renderAll(); }catch(e){} toast(`Box size updated from Retail Yard — ${fixed.join(', ')}`, 6000); }
     else Store.saveLocal();
     return {rows: rows.length, trucks: Object.keys(loads).length};
+  }
+};
+
+const Piles = {
+  get configured(){ return Tracker.configured && Tracker.isFeed; },
+  async pull(){
+    if(!this.configured) return {rows:0};
+    const res = await fetch(`${Tracker._base()}/rest/v1/dispatch_debris?select=*`, {headers:Tracker._headers()});
+    if(!res.ok) throw new Error('debris piles read ' + res.status);
+    const rows = await res.json();
+    DB.debrisPiles = rows.map(x=>({id:String(x.id), code:String(x.code||''), name:String(x.product||x.code||'Pile'),
+      role:String(x.debris_role||''), capacity:num(x.capacity_yd,0), alert:num(x.alert_over_yd,0),
+      onHand:r1(num(x.on_hand_yd,0)), bookedOut:r1(num(x.booked_out_yd,0))}));
+    DB.debrisPulledAt = new Date().toISOString();
+    Store.saveLocal();
+    return {rows: rows.length};
+  }
+};
+
+/* Hauls back that come off a pile Retail Yard tracks are written there as a
+ * scheduled removal, so the yard sees it coming; when Kevin marks the run
+ * delivered the removal is confirmed and the pile goes down. Changing the
+ * truck, day or yards replaces the removal; cancelling the run cancels it. */
+const BackSync = {
+  on(){ return Tracker.configured && Tracker.isFeed && !!DB.settings.trackerWriteBack; },
+  links(){ return (DB.settings.backLinks = DB.settings.backLinks || {}); },
+  sig(w){ return [w.pile, w.truck, w.date, w.yards].join('|'); },
+  want(){
+    const out = {};
+    (DB.orders||[]).forEach(o=>{
+      if(!o.back || !o.back.pileId || o.status === 'cancelled') return;
+      const yards = r1(num(o.back.yards, 0));
+      if(!o.schedDate || yards <= 0) return;
+      out[o.id] = {pile:o.back.pileId, truck:YardHauls.truckNo(o.pinTruck), date:o.schedDate, yards, done:o.status === 'delivered'};
+    });
+    return out;
+  },
+  dirty(){
+    const w = this.want(), have = this.links();
+    return Object.keys(w).some(k=>!have[k] || have[k].sig !== this.sig(w[k]) || !!have[k].done !== !!w[k].done)
+        || Object.keys(have).some(k=>!w[k]);
+  },
+  async _send(method, q, body){
+    const res = await fetch(`${Tracker._base()}/rest/v1/debris_events${q||''}`, {method,
+      headers: Tracker._headers({Prefer: method === 'POST' ? 'return=representation' : 'return=minimal'}),
+      body: JSON.stringify(body)});
+    if(!res.ok){
+      let msg = ''; try{ msg = (await res.json()).message || ''; }catch(e){}
+      throw new Error(res.status === 401 || res.status === 403
+        ? 'this sign-in is not allowed to schedule debris hauls in Retail Yard' : (msg || 'Retail Yard answered ' + res.status));
+    }
+    return method === 'POST' ? ((await res.json())[0] || null) : null;
+  },
+  async flush(){
+    if(!this.on() || this._busy) return 0;
+    this._busy = true;
+    let n = 0;
+    try{
+      const w = this.want(), have = this.links();
+      for(const k of Object.keys(have)){
+        const stale = !w[k] || have[k].sig !== this.sig(w[k]) || (have[k].done && !w[k].done);
+        if(!stale) continue;
+        await this._send('PATCH', `?id=eq.${encodeURIComponent(have[k].eventId)}&status=in.(scheduled,done)`, {status:'cancelled'});
+        delete have[k]; n++; Store.saveLocal();
+      }
+      for(const k of Object.keys(w)){
+        let link = have[k];
+        if(!link){
+          const row = await this._send('POST', '', {kind:'removal', bin_id:w[k].pile, qty_yd:w[k].yards, hauler:w[k].truck,
+            loads:1, happened_on:w[k].date, status:'scheduled', notes:'Hauled back to Coburg (Bulk Dispatch)'});
+          if(!row || !row.id) throw new Error('Retail Yard did not confirm the debris haul');
+          link = have[k] = {eventId:String(row.id), sig:this.sig(w[k]), done:false}; n++; Store.saveLocal();
+        }
+        if(w[k].done && !link.done){
+          await this._send('PATCH', `?id=eq.${encodeURIComponent(link.eventId)}&status=eq.scheduled`, {status:'done'});
+          link.done = true; n++;
+        }
+      }
+      DB.backError = null; this._retryAt = 0;
+      if(n){ Store.save(); try{ await Piles.pull(); }catch(e){} }
+    }catch(e){
+      DB.backError = e.message; this._retryAt = Date.now() + 60000;
+      console.warn('Retail Yard debris haul sync failed', e.message);
+    }finally{ this._busy = false; }
+    return n;
+  },
+  _busy:false, _timer:null, _retryAt:0,
+  kick(){
+    if(!this.on()) return;
+    clearTimeout(this._timer);
+    this._timer = setTimeout(async ()=>{ const n = await this.flush(); if(n || DB.backError){ try{ renderReqQueue(); }catch(e){} } }, 500);
   }
 };
 
@@ -8303,6 +8616,7 @@ function startTrackerPolling(){
       // bin levels move on their own, so refresh them on the same beat
       if(Bins.configured) try{ await Bins.pull(); }catch(e){ DB.binsError = e.message; }
       if(YardCaps.configured) try{ await YardCaps.pull(); }catch(e){ console.warn(e.message); }
+      if(Piles.configured) try{ await Piles.pull(); await BackSync.flush(); }catch(e){ console.warn(e.message); }
       if(Catalog.configured) try{ await Catalog.pull(); }catch(e){ DB.catalogError = e.message; }
       renderRequests(); markTabCounts();
       if(r.added) toast(`${r.added} new Retail Yard request${r.added>1?'s':''} from the tracker`, 4000);
@@ -8441,6 +8755,8 @@ function renderRequests(){
              <button class="btn sm" data-decline>Decline</button>`
           : (o? `<button class="btn sm" data-open>Open the haul${(r.hauls||[]).length>1?'s':''}</button>` : '')}
         ${r.status==='declined'? `<button class="btn sm" data-reopen>Reopen</button>`:''}
+        ${!/deliver|done|complete/.test(String(r.status)) && String(r.trackerStatus) !== 'delivered'
+          ? `<button class="btn sm ghost" data-reqdel title="Delete this request">Delete</button>` : ''}
       </td></tr>`;
   }).join('') || `<tr><td colspan="7" class="muted" style="text-align:center;padding:22px">
       Nothing from Retail Yard yet.${Tracker.configured? '' : ' Link the tracker in Settings, or log a request here.'}
@@ -8452,6 +8768,8 @@ function renderRequests(){
     const r = requestById(e.target.closest('tr').dataset.id);
     if(r && r.orderId) editOrder(r.orderId);
   });
+  $$('#reqTable [data-reqdel]').forEach(b=>b.onclick=e=>
+    deleteRequestAsk(e.target.closest('tr').dataset.id));
   $$('#reqTable [data-decline]').forEach(b=>b.onclick=e=>
     openDeclineRequest(e.target.closest('tr').dataset.id));
   $$('#reqTable [data-reopen]').forEach(b=>b.onclick=e=>{
@@ -8842,6 +9160,7 @@ async function pullTrackerNow(){
     const r = await Tracker.pull();
     const sent = await Tracker.flush();
     if(YardCaps.configured) try{ await YardCaps.pull(); }catch(e){ console.warn(e.message); }
+    if(Piles.configured) try{ await Piles.pull(); await BackSync.flush(); }catch(e){ console.warn(e.message); }
     let binNote = '';
     if(Bins.configured){
       try{
@@ -9105,6 +9424,7 @@ async function boot(refresh){
       const r = await Tracker.pull();
       await Tracker.flush();
       if(YardCaps.configured) try{ await YardCaps.pull(); }catch(e){ console.warn(e.message); }
+      if(Piles.configured) try{ await Piles.pull(); await BackSync.flush(); }catch(e){ console.warn(e.message); }
       renderRequests();
       if(r.added) toast(`${r.added} Retail Yard request${r.added>1?'s':''} waiting`, 4500);
     }catch(e){ console.warn('tracker pull failed', e.message); }

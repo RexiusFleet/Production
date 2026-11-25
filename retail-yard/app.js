@@ -230,6 +230,8 @@ function withValidation(adapter){
       return adapter.update(t,id,validateWrite(t,'update',patch));
     },
     async setSetting(k,v){ return adapter.setSetting(k,validateSetting(k,v)); },
+    // Delete a product order (kept on file as cancelled; trucks still booked for it are cancelled too).
+    async deleteRequest(id){ if(!isId(id)) throw new ValidationError('Invalid record.'); return adapter.deleteRequest(id); },
     // Correct a recorded grind (pile, amounts, date, notes). The piles are corrected with it.
     async editGrind(id,p){
       if(!isId(id)||!isId(p?.bin_id)) throw new ValidationError('Invalid record.');
@@ -519,6 +521,14 @@ function DemoAdapter(){
       if(t==='hauls') syncReqVolume(r.request_id);
       save();
     },
+    async deleteRequest(id){
+      // Mirrors yard.delete_request() in the database
+      const r=db.backfill_requests.find(x=>x.id===id); if(!r) throw new Error('That order was not found');
+      if(r.status==='delivered') throw new Error('A delivered order can’t be deleted');
+      r.status='cancelled';
+      db.hauls.forEach(h=>{ if(h.request_id===id&&['scheduled','en_route'].includes(h.status)) h.status='cancelled'; });
+      save();
+    },
     async editGrind(id,p){
       // Mirrors yard.edit_grind() in the database
       const r=db.debris_events.find(x=>x.id===id);
@@ -613,6 +623,7 @@ function LiveAdapter(cfg){
     },
     async insert(t,row){ const clean={...row}; delete clean.created_by_name; return q(sb.from(t).insert(clean).select().single()); },
     async update(t,id,patch){ return q(sb.from(t).update(patch).eq('id',id)); },
+    async deleteRequest(id){ return q(sb.rpc('delete_request',{p_id:id})); },
     async editGrind(id,p){ return q(sb.rpc('edit_grind',{p_id:id,p_bin_id:p.bin_id,p_qty_yd:p.qty_yd,p_to_qty_yd:p.to_qty_yd,p_happened_on:p.happened_on,p_notes:p.notes})); },
     async setSetting(k,v){ return q(sb.from('settings').upsert({key:k,value:v})); },
     async updateMany(t,ids,patch){ return q(sb.from(t).update(patch).in('id',ids)); },
@@ -1401,6 +1412,19 @@ function priorityList(){
 }
 const prioRank=()=>{ const m={}; priorityList().forEach((r,i)=>m[r.id]=i+1); return m; };
 
+/* Deleting an order is asked twice, on purpose. Jeff and admins can delete any open order;
+   Kevin can delete bulk orders (the same thing he can do from Bulk Dispatch). */
+const canDeleteReq=r=>can.request()||(r.method==='bulk'&&has('hauling'));
+function deleteReqRow(r,hs){
+  const step=UI.delReq&&UI.delReq.id===r.id?UI.delReq.step:0;
+  const open=hs.filter(h=>['scheduled','en_route'].includes(h.status)).length;
+  if(!step) return `<div class="form-actions"><button class="btn sm cancel" data-act="delReq" data-id="${r.id}">Delete order</button></div>`;
+  return `<div class="alert" style="--c:var(--bad);margin:0"><p>${step===1
+      ?`<b>Delete this order?</b>${open?` ${open} truck${open>1?'s':''} booked for it will be cancelled too.`:''}`
+      :`<b>Are you sure?</b> This removes the order for everyone, here and in Bulk Dispatch. It can’t be undone.`}</p>
+    <div class="btns"><button class="btn sm ghost" data-act="delReqNo">Keep it</button>
+      <button class="btn sm cancel" data-act="delReq" data-id="${r.id}">${step===1?'Delete…':'Yes, delete it'}</button></div></div>`;
+}
 function reqCard(r){
   const hs=S.hauls.filter(h=>h.request_id===r.id&&h.status!=='cancelled');
   const del=hs.filter(h=>h.status==='delivered').reduce((s,h)=>s+Number(h.volume_yd),0);
@@ -1431,12 +1455,11 @@ function reqCard(r){
         <label class="field"><span>Date</span><input name="haul_on" type="date" value="${dayDiff(r.needed_by)>=0?r.needed_by:isoDay()}"></label>
         ${(()=>{ const room=binRoom(r.bin_id), b=D.bin[r.bin_id]; return room==null?'':`<div class="hint full" data-room="${room}">Bin ${esc(b.code)} has room for ${fmtN(room)} yd³ (${fmtUnits(room)}).</div>`; })()}
         <div class="form-actions full"><button class="btn primary sm">Schedule haul</button><button type="button" class="btn sm ghost" data-act="haulClose">Close</button></div></form>`
-      :hs.length?'':`<div class="form-actions"><button class="btn sm primary" data-act="haulOpen" data-id="${r.id}">Schedule truck</button>
-        ${r.status==='requested'&&can.request()?confirmBtn('cancelReq','Cancel request',`data-id="${r.id}"`,'cancel'):''}</div>`):''}
-    ${bulkD?`<div class="form-actions"><a class="btn sm primary" style="text-decoration:none" href="../bulk-dispatch/">${hs.length?'Manage in Bulk Dispatch':'Schedule in Bulk Dispatch'}</a>
-        ${!hs.length&&r.status==='requested'&&can.request()?confirmBtn('cancelReq','Cancel request',`data-id="${r.id}"`,'cancel'):''}</div>`:''}
+      :hs.length?'':`<div class="form-actions"><button class="btn sm primary" data-act="haulOpen" data-id="${r.id}">Schedule truck</button></div>`):''}
+    ${bulkD?`<div class="form-actions"><a class="btn sm primary" style="text-decoration:none" href="../bulk-dispatch/">${hs.length?'Manage in Bulk Dispatch':'Schedule in Bulk Dispatch'}</a></div>`:''}
     ${r.method==='bulk'&&!bulkD&&r.status==='requested'?`<div class="meta">Kevin schedules the truck in Bulk Dispatch.</div>`:''}
     ${fill&&can.request()?`<div class="form-actions">${confirmBtn('enoughReq','That’s enough',`data-id="${r.id}"`,'ghost')}<span class="hint">Stops the fill. Trucks already booked still come.</span></div>`:''}
+    ${OPEN_REQ.includes(r.status)&&canDeleteReq(r)?deleteReqRow(r,hs):''}
     <div class="meta">Requested by ${esc(r.created_by_name||'—')}</div>
   </article>`;
 }
@@ -1757,6 +1780,13 @@ const ACT={
   },
   undoIO(d){ run(()=>A.update('internal_orders',d.id,{status:'cancelled'}),'Order undone. Volume returned to the bin.'); },
   cancelReq(d){ run(()=>A.update('backfill_requests',d.id,{status:'cancelled'}),'Request cancelled.'); },
+  delReq(d){
+    const cur=UI.delReq&&UI.delReq.id===d.id?UI.delReq.step:0;
+    if(cur<2){ UI.delReq={id:d.id,step:cur+1}; render(); return; }
+    UI.delReq=null;
+    run(()=>A.deleteRequest(d.id),'Order deleted. Any trucks booked for it were cancelled.');
+  },
+  delReqNo(){ UI.delReq=null; render(); },
   enoughReq(d){ run(()=>A.update('backfill_requests',d.id,{goal:'load'}),'Fill stopped. The order closes once the trucks already booked are confirmed.'); },
   haulStatus(d){ run(()=>A.update('hauls',d.id,{status:d.v}), d.v==='delivered'?'Delivery confirmed. Volume added to the bin.':'Marked en route.'); },
   haulCancel(d){ run(()=>A.update('hauls',d.id,{status:'cancelled'}),'Haul cancelled.'); },
