@@ -462,8 +462,15 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .signbox p{margin:2px 0 16px}
 #signEmail,#signPass,#newPass,#newPass2{font-size:14px;padding:9px 10px}
 /* Jeff's queue above the board */
-.reqqueue{margin-bottom:12px;border:1px solid var(--rule);border-radius:var(--r);
-  background:var(--surface);overflow:hidden}
+.reqqueue{margin-bottom:12px;display:grid;gap:12px}
+.qsec{border:1px solid var(--rule);border-radius:var(--r);background:var(--surface);overflow:hidden;border-left:6px solid var(--brand)}
+.qsec.back{border-left-color:#8a5a1c}
+.qsec .qtitle{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;background:var(--brand);color:#fff}
+.qsec.back .qtitle{background:#8a5a1c}
+.qsec .qtitle b{font-size:13.5px;letter-spacing:.05em;text-transform:uppercase}
+.qsec .qtitle .dir{font-size:12px;opacity:.92}
+.qsec .qtitle .btn{margin-left:auto}
+.qsec.back .qplace{background:#8a5a1c}
 .reqqueue .qhead{display:flex;align-items:center;gap:8px;padding:8px 11px;
   border-bottom:1px solid var(--rule);background:var(--surface-2);font-size:12px}
 .reqqueue .qwrap{overflow-x:auto;max-height:262px;overflow-y:auto}
@@ -4436,27 +4443,30 @@ function renderReqQueue(){
   // keep requests, and Retail Yard's hauls, in step with what just changed on the board
   if(syncRequestsFromOrders()) Store.save();
   const open = openRequests();
-  const loads = yardLoadsOpen();
+  const allLoads = yardLoadsOpen();
   const piles = groundPiles();
+  const groundIds = piles.map(p=>p.id);
+  const loads = allLoads.filter(l=>!l.units);                       // product going out
+  const otherBack = allLoads.filter(l=>l.units && !groundIds.includes(l.pileId));   // e.g. food waste: back, but not off the ground pile
   const pileGap = Piles.configured && !piles.length;      // linked to Retail Yard, but no pile read yet
-  if(!open.length && !loads.length && !piles.length && !pileGap){ box.hidden = true; box.innerHTML = ''; UI.placeReq = null; UI.placeBack = null; return; }
+  if(!open.length && !allLoads.length && !piles.length && !pileGap){ box.hidden = true; box.innerHTML = ''; UI.placeReq = null; UI.placeBack = null; return; }
   box.hidden = false;
   if(UI.placeReq && !open.some(r=>r.id === UI.placeReq)) UI.placeReq = null;
   const placing = UI.placeReq ? requestById(UI.placeReq) : null;
   if(UI.placeBack && !backChoice(UI.placeBack)) UI.placeBack = null;
   const placingBack = !placing && UI.placeBack ? backChoice(UI.placeBack) : null;
   const grid = $('#sGrid'); if(grid) grid.classList.toggle('placing', !!(placing || placingBack));
-  box.innerHTML = `<div class="qhead"><b>Open requests from Retail Yard</b>
-      <span class="muted small">${open.length} waiting · Jeff's order</span>
-      <button class="btn sm ghost" id="qAll" style="margin-left:auto">Open the queue</button></div>
+  const dpn = depotPoints();
+  box.innerHTML = `<section class="qsec out">
+    <div class="qtitle"><b>Product requests</b><span class="dir">→ going out to Retail Yard</span>
+      <button class="btn sm" id="qAll">Open the queue</button></div>
+    <div class="qhead"><b>Open requests</b>
+      <span class="muted small">${open.length} waiting · Jeff's order</span></div>
     ${placing ? (()=>{ const pp = reqProduct(placing);
       return `<div class="qplace" role="status"><span>Placing <b>${esc(pp? pp.name : (placing.product||'this request'))}</b>${
         placing.bin? ' for bin '+esc(placing.bin) : ''} — click an open slot on any truck below.</span>
         <button class="btn sm" id="qPlaceList">Pick from a list instead</button>
         <button class="btn sm" id="qPlaceStop" style="margin-left:auto">Cancel</button></div>`; })() : ''}
-    ${placingBack ? `<div class="qplace" role="status"><span>Scheduling a haul of <b>${esc(placingBack.label)}</b> back to ${esc(depotPoints().home.name)}
-        — click an open slot on truck 85, 98 or 65 below, or click a Retail Yard delivery already on one of them to bring it back on that trip.</span>
-        <button class="btn sm" id="qPlaceStop" style="margin-left:auto">Cancel</button></div>` : ''}
     ${open.length ? '' : '<div class="qmore muted">Nothing waiting — every request has a load booked.</div>'}
     <div class="qwrap"${open.length ? '' : ' hidden'}><table>
       <thead><tr><th>#</th><th>Product</th><th>Bin space</th><th></th></tr></thead>
@@ -4498,6 +4508,13 @@ function renderReqQueue(){
           ? `<button class="btn sm${l.hasBack ? ' ghost' : ''}" data-tagback="${esc(l.orderId)}" title="Bring debris or food waste back on this truck's return">${l.hasBack ? 'Change haul back' : '+ Haul back'}</button> ` : ''}${l.reqId
           ? `<button class="btn sm ghost" data-reqdel="${esc(l.reqId)}" title="Delete the request this load is for">Delete request</button>` : ''}</td>
       </tr>`).join('')}</tbody></table></div>` : ''}
+    </section>
+    ${Piles.configured || otherBack.length ? `<section class="qsec back">
+    <div class="qtitle"><b>Debris backhauls</b><span class="dir">← coming back from Retail Yard to ${esc(dpn.home.name)}</span></div>
+    ` : ''}
+    ${placingBack ? `<div class="qplace" role="status"><span>Scheduling a haul of <b>${esc(placingBack.label)}</b> back to ${esc(depotPoints().home.name)}
+        — click an open slot on truck 85, 98 or 65 below, or click a Retail Yard delivery already on one of them to bring it back on that trip.</span>
+        <button class="btn sm" id="qPlaceStop" style="margin-left:auto">Cancel</button></div>` : ''}
     ${pileGap ? `<div class="qhead"><b>Ground Debris at Retail Yard</b>
         <span class="small${DB.pilesError ? '' : ' muted'}"${DB.pilesError ? ' style="color:var(--crit)"' : ''}>${DB.pilesError
           ? 'couldn’t be read — ' + esc(DB.pilesError) : 'checking Retail Yard…'}</span>
@@ -4520,23 +4537,36 @@ function renderReqQueue(){
           ${over ? `<div class="pilenote"><span class="chip late">Needs hauling</span> The pile is over its alert level${
               booked ? ' even after what is booked' : ''} — schedule a haul to bring it back to ${esc(depotPoints().home.name)}.</div>` : ''}
           ${DB.backError ? `<div class="small" style="color:var(--crit)">Retail Yard not updated — ${esc(DB.backError)}</div>` : ''}
-          <div><button class="btn sm${on ? '' : (over ? ' primary' : '')}" data-pileback="pile:${esc(pl.id)}">${on ? 'Cancel' : 'Schedule a haul back'}</button></div>
+          <div><button class="btn sm${on ? '' : (over ? ' primary' : '')}" data-pileback="pile:${esc(pl.id)}">${on ? 'Cancel' : 'Schedule a haul back'}</button>
+            <button class="btn sm" data-extnew="${esc(pl.id)}" title="A hauler that is not one of our trucks">Outside hauler…</button></div>
         </div>
         <div class="qhead qhead2"><b>Hauls back scheduled</b>
           <span class="muted small">${log.rows.length ? `${log.rows.length} haul${log.rows.length>1?'s':''} · ${uTxt(log.rows.reduce((a,x)=>a+x.yards,0))} · pile after the last one: ${uTxt(log.end)}` : 'none booked'}</span></div>
         ${log.rows.length || log.other > 0.01 ? `<div class="qwrap"><table>
-          <thead><tr><th>When</th><th>Truck</th><th>Trip</th><th class="num">Volume back</th><th class="num">Pile after this haul</th></tr></thead>
+          <thead><tr><th>When</th><th>Truck</th><th>Trip</th><th class="num">Volume back</th><th class="num">Pile after this haul</th><th></th></tr></thead>
           <tbody>${log.other > 0.01 ? `<tr><td class="muted" colspan="3">Booked in Retail Yard, not on this schedule</td>
-              <td class="num">${esc(uTxt(log.other))}</td><td class="num">${esc(uTxt(r1(pl.onHand - log.other)))}</td></tr>` : ''}
+              <td class="num">${esc(uTxt(log.other))}</td><td class="num">${esc(uTxt(r1(pl.onHand - log.other)))}</td><td></td></tr>` : ''}
           ${log.rows.map(x=>{ const stillOver = pl.alert > 0 && x.after > pl.alert;
-            return `<tr data-load="${esc(x.orderId)}" data-loadday="${esc(x.date)}" tabindex="0" title="Click to open this load">
-              <td>${x.date ? esc(prettyDate(x.date)) : '<span class="muted">no date</span>'}${x.time ? ` <span class="muted">· ${esc(min2hm(hm2min(x.time)))}</span>` : ''}</td>
+            const tail = `<td class="num">${esc(uTxt(x.yards))}</td>
+              <td class="num"><b>${esc(uTxt(x.after))}</b>${stillOver ? ' <span class="chip late">over alert</span>' : (pl.alert > 0 ? ' <span class="chip ok">under alert</span>' : '')}</td>`;
+            const when = `<td>${x.date ? esc(prettyDate(x.date)) : '<span class="muted">no date</span>'}${x.time ? ` <span class="muted">· ${esc(min2hm(hm2min(x.time)))}</span>` : ''}${
+              x.ext && x.date && x.date < todayISO() ? ' <span class="chip late">past due</span>' : ''}</td>`;
+            if(x.ext) return `<tr style="cursor:default">${when}
+              <td><span class="chip kind">outside hauler</span> ${esc(x.truck)}</td><td>${esc(x.note || 'outside haul')}</td>${tail}
+              <td style="text-align:right;white-space:nowrap"><button class="btn sm" data-extdone="${esc(x.extId)}">Mark hauled</button>
+                <button class="btn sm ghost" data-extcancel="${esc(x.extId)}">Cancel</button></td></tr>`;
+            return `<tr data-load="${esc(x.orderId)}" data-loadday="${esc(x.date)}" tabindex="0" title="Click to open this load">${when}
               <td>${esc(x.truck)}</td>
-              <td>${x.withLoad ? `return leg of the ${esc(x.withLoad)} delivery` : 'haul back only'}</td>
-              <td class="num">${esc(uTxt(x.yards))}</td>
-              <td class="num"><b>${esc(uTxt(x.after))}</b>${stillOver ? ' <span class="chip late">over alert</span>' : (pl.alert > 0 ? ' <span class="chip ok">under alert</span>' : '')}</td>
+              <td>${x.withLoad ? `return leg of the ${esc(x.withLoad)} delivery` : 'haul back only'}</td>${tail}<td></td>
             </tr>`; }).join('')}</tbody></table></div>` : ''}`;
-    }).join('')}`;
+    }).join('')}
+    ${otherBack.length ? `<div class="qhead qhead2"><b>Other hauls back</b><span class="muted small">not off the Ground Debris pile</span></div>
+      <div class="qwrap"><table><thead><tr><th>When</th><th>Truck</th><th>What</th><th class="num">Volume back</th><th>Status</th></tr></thead>
+      <tbody>${otherBack.map(l=>`<tr data-load="${esc(l.orderId)}" data-loadday="${esc(l.date||'')}" tabindex="0" title="Click to open this load">
+        <td>${l.date ? esc(prettyDate(l.date)) : '<span class="muted">no date</span>'}${l.when ? ` <span class="muted">· ${esc(l.when)}</span>` : ''}</td>
+        <td>${esc(l.truck)}</td><td class="qname">${esc(l.product)}</td><td class="num">${esc(uTxt(l.yards))}</td>
+        <td><span class="chip ${l.chip}">${esc(l.label)}</span></td></tr>`).join('')}</tbody></table></div>` : ''}
+    ${Piles.configured || otherBack.length ? '</section>' : ''}`;
   $$('#sQueue tr[data-load]').forEach(el=>{
     const go = ()=>openBookingDetail(el.dataset.load, el.dataset.loadday || UI.date);
     el.onclick = e=>{ if(e.target.closest('[data-reqdel],[data-tagback]')) return; go(); };
@@ -4549,6 +4579,9 @@ function renderReqQueue(){
   });
   const stop = $('#qPlaceStop'); if(stop) stop.onclick = ()=>{ UI.placeReq = null; UI.placeBack = null; renderReqQueue(); };
   $$('#sQueue [data-reqdel]').forEach(el=>{ el.onclick = e=>{ e.stopPropagation(); deleteRequestAsk(el.dataset.reqdel); }; });
+  $$('#sQueue [data-extnew]').forEach(el=>{ el.onclick = ()=>openExtHaul(el.dataset.extnew); });
+  $$('#sQueue [data-extdone]').forEach(el=>{ el.onclick = ()=>extHaulFinish(el.dataset.extdone, 'done'); });
+  $$('#sQueue [data-extcancel]').forEach(el=>{ el.onclick = ()=>extHaulFinish(el.dataset.extcancel, 'cancelled'); });
   const retry = $('#qPileRetry'); if(retry) retry.onclick = ()=>{ DB.pilesError = null; renderReqQueue(); Piles.refresh(); };
   $$('#sQueue [data-tagback]').forEach(el=>{ el.onclick = e=>{ e.stopPropagation(); openTagBack(el.dataset.tagback); }; });
   $$('#sQueue [data-pileback]').forEach(el=>{
@@ -4602,7 +4635,7 @@ function yardLoadsOpen(){
     const t = truckById(o.pinTruck);
     out.push({orderId:o.id, date:o.schedDate || '', when:o.slotTime ? min2hm(hm2min(o.slotTime)) : '',
       sort:(o.schedDate || '9999') + ' ' + (o.slotTime || '00:00'), truck:(t && t.name) || '—',
-      product:`↩ ${o.back.label} back to ${depotPoints().home.name}`, yards:r1(num(o.yards,0)), units:true, bin:'', fill:false,
+      product:`↩ ${o.back.label} back to ${depotPoints().home.name}`, yards:r1(num(o.yards,0)), units:true, pileId:o.back.pileId || null, bin:'', fill:false,
       label: o.schedDate && o.schedDate < todayISO() ? 'past due — not marked done' : 'scheduled',
       chip: o.schedDate && o.schedDate < todayISO() ? 'late' : 'ok', error:''});
   });
@@ -4638,8 +4671,9 @@ function canTagBack(o){
   return !!(t && o.schedDate && !o.waveDate && !isWindowTruck(t));
 }
 /** Yards booked to come back off a pile that the truck has not hauled yet. */
+function extHauls(){ return (DB.settings.extHauls = DB.settings.extHauls || []); }
 function pileBooked(pileId, skipOrderId){   // yards
-  return r1((DB.orders||[]).reduce((a,o)=>a + (o.back && o.back.pileId === pileId && o.id !== skipOrderId &&
+  return r1(extHauls().reduce((a,x)=>a + (x.pileId === pileId ? num(x.yards,0) : 0), 0) + (DB.orders||[]).reduce((a,o)=>a + (o.back && o.back.pileId === pileId && o.id !== skipOrderId &&
     o.status !== 'cancelled' && o.status !== 'delivered' ? num(o.back.yards, 0) : 0), 0));
 }
 /** Hauls back booked off a pile, soonest first, each with what the pile should hold once it is done.
@@ -4651,8 +4685,10 @@ function pileLog(pl){
       return {orderId:o.id, date:o.schedDate || '', time:o.slotTime || '', truck:(t && t.name) || '—', yards:r1(num(o.back.yards,0)),
         withLoad: jobKind(o) !== 'debris' ? ((productOf(o)||{}).name || 'product') : '',
         sort:(o.schedDate || '9999') + ' ' + (o.slotTime || '00:00')}; })
+    .concat(extHauls().filter(x=>x.pileId === pl.id).map(x=>({ext:true, extId:x.id, date:x.date || '', time:'', truck:x.hauler,
+        note:x.note || '', yards:r1(num(x.yards,0)), sort:(x.date || '9999') + ' 00:00'})))
     .sort((a,b)=>a.sort.localeCompare(b.sort));
-  const mine = rows.reduce((a,x)=>a + (links[x.orderId] && !links[x.orderId].done ? x.yards : 0), 0);
+  const mine = extHauls().reduce((a,x)=>a + (x.pileId === pl.id ? num(x.yards,0) : 0), 0) + rows.reduce((a,x)=>a + (!x.ext && links[x.orderId] && !links[x.orderId].done ? x.yards : 0), 0);
   const other = Math.max(0, r1(pl.bookedOut - mine));
   let level = pl.onHand - other;
   rows.forEach(x=>{ level -= x.yards; x.after = r1(level); });
@@ -4861,6 +4897,81 @@ function openTagBack(orderId, backKey){
     ${backFieldsHtml(pre)}
     <div class="small" id="placeHint" style="color:var(--crit);min-height:1.2em;margin-top:8px"></div>`, btns);
   wireBackFields(t, {skipOrderId:o.id, yards: had ? had.yards : 0, emptyNote:'Pick what the truck brings back.'});
+}
+
+/* --------------------------------------------- hauls by an outside hauler
+ * Not one of our trucks, so it never goes on the board. It is written straight
+ * to Retail Yard as a removal off the pile: "scheduled" if it is still to come,
+ * or recorded as done if it has already happened. */
+function openExtHaul(pileId){
+  const pl = debrisPiles().find(p=>p.id === pileId); if(!pl) return;
+  if(!BackSync.on()){ toast('Turn on “send updates to Retail Yard” in Settings to record outside hauls', 6000); return; }
+  const there = pl.onHand >= 0 ? Math.max(0, r1(pl.onHand - pileBooked(pl.id))) : null;
+  openModal(`${pl.name} — outside hauler`, `
+    <div class="small muted">For a hauler that is not one of our trucks. It goes on Retail Yard's records and in the list below — not on the truck board.</div>
+    <div class="two" style="margin-top:10px">
+      <label class="field">Hauler<input type="text" id="exWho" maxlength="60" placeholder="company or driver" value="${esc(DB.settings.lastExtHauler || '')}"></label>
+      <label class="field">Date<input type="date" id="exDate" value="${esc(todayISO())}"></label>
+    </div>
+    <div class="two">
+      <label class="field">Units<input type="number" inputmode="decimal" id="exUnits" min="0.25" step="0.25"></label>
+      <label class="field">Note<input type="text" id="exNote" maxlength="120" placeholder="optional"></label>
+    </div>
+    <div class="small muted">One unit is ${unitYd()} yd${there !== null ? ` · ${uTxt(there)} on the pile not already booked` : ''}.</div>
+    <div style="display:grid;gap:6px;margin-top:12px">
+      <label><input type="radio" name="exMode" value="scheduled" checked> <b>Schedule it</b> — still to come; the pile goes down when it is marked hauled</label>
+      <label><input type="radio" name="exMode" value="done"> <b>Record it</b> — already hauled; the pile goes down now</label>
+    </div>
+    <div class="small" id="exHint" style="color:var(--crit);min-height:1.2em;margin-top:8px"></div>`, [
+    {label:'Cancel', cls:'ghost', onClick:closeModal},
+    {label:'Save', cls:'primary', onClick: async m=>{
+      const hint = $('#exHint'), who = $('#exWho').value.trim(), date = $('#exDate').value, units = num($('#exUnits').value, 0);
+      const mode = (document.querySelector('input[name=exMode]:checked')||{}).value || 'scheduled', note = $('#exNote').value.trim();
+      const yards = r1(u2yd(units));
+      if(!who){ hint.textContent = 'Enter who is hauling it.'; return; }
+      if(!date){ hint.textContent = 'Pick the date.'; return; }
+      if(!(units > 0)){ hint.textContent = 'Enter the units.'; return; }
+      if(there !== null && yards > there + 0.05){ hint.textContent = `Only ${uTxt(there)} ${yd2u(there) === 1 ? 'is' : 'are'} on the pile and not already booked.`; return; }
+      if(mode === 'done' && date > todayISO()){ hint.textContent = 'A haul that is already done can’t be dated in the future — use “Schedule it”.'; return; }
+      const btn = m.querySelector('footer .btn.primary'); btn.disabled = true;
+      let row = null;
+      try{
+        row = await BackSync._send('POST', '', {kind:'removal', bin_id:pl.id, qty_yd:yards, hauler:who.slice(0,60), loads:1,
+          happened_on:date, status:'scheduled', notes:['Outside hauler (Bulk Dispatch)', note].filter(Boolean).join(' — ')});
+        if(!row || !row.id) throw new Error('Retail Yard did not confirm the haul');
+        if(mode === 'done') await BackSync._send('PATCH', `?id=eq.${encodeURIComponent(row.id)}&status=eq.scheduled`, {status:'done'});
+      }catch(e){
+        if(row && row.id){        // written but not finished: keep it on the list so it is not lost
+          extHauls().push({id:uid(), pileId:pl.id, hauler:who, date, yards, note, eventId:String(row.id)}); Store.save(); closeModal(); Piles.refresh();
+          toast('Saved as scheduled, but it could not be marked hauled — use “Mark hauled” in the list', 7000); return;
+        }
+        hint.textContent = 'Not saved — ' + e.message; btn.disabled = false; return;
+      }
+      DB.settings.lastExtHauler = who;
+      if(mode === 'scheduled') extHauls().push({id:uid(), pileId:pl.id, hauler:who, date, yards, note, eventId:String(row.id)});
+      Store.save(); closeModal(); renderReqQueue(); Piles.refresh();
+      toast(mode === 'done' ? `Recorded: ${who} hauled ${uTxt(yards)} of ${pl.name}` : `${who} scheduled for ${uTxt(yards)} of ${pl.name}, ${prettyDate(date)}`, 5000);
+    }}
+  ]);
+}
+/** Mark an outside haul hauled, or cancel it. */
+function extHaulFinish(id, to){
+  const x = extHauls().find(e=>e.id === id); if(!x) return;
+  const done = to === 'done';
+  openModal(done ? 'Mark this haul as hauled?' : 'Cancel this outside haul?', `
+    <p style="margin:0"><b>${esc(x.hauler)}</b> — ${esc(uTxt(x.yards))}${x.date ? ', ' + esc(prettyDate(x.date)) : ''}.</p>
+    <p class="small muted" style="margin:8px 0 0">${done ? 'The pile at Retail Yard goes down by that much.' : 'It comes off this list and off Retail Yard’s schedule. The pile is not changed.'}</p>
+    <div class="small" id="exHint" style="color:var(--crit);min-height:1.2em;margin-top:8px"></div>`, [
+    {label:'Back', cls:'ghost', onClick:closeModal},
+    {label: done ? 'Mark hauled' : 'Cancel the haul', cls:'primary', onClick: async m=>{
+      const btn = m.querySelector('footer .btn.primary'); btn.disabled = true;
+      try{ await BackSync._send('PATCH', `?id=eq.${encodeURIComponent(x.eventId)}&status=eq.scheduled`, {status: done ? 'done' : 'cancelled'}); }
+      catch(e){ $('#exHint').textContent = 'Not saved — ' + e.message; btn.disabled = false; return; }
+      DB.settings.extHauls = extHauls().filter(e=>e.id !== id);
+      Store.save(); closeModal(); renderReqQueue(); Piles.refresh();
+      toast(done ? `${x.hauler}: ${uTxt(x.yards)} hauled` : 'Outside haul cancelled', 4500);
+    }}
+  ]);
 }
 
 /* --------------------------------------------- delete a request (asked twice)
@@ -8527,6 +8638,15 @@ const Piles = {
       role:String(x.debris_role||''), capacity:num(x.capacity_yd,0), alert:num(x.alert_over_yd,0),
       onHand:r1(num(x.on_hand_yd,0)), bookedOut:r1(num(x.booked_out_yd,0))}));
     DB.debrisPulledAt = new Date().toISOString();
+    const ext = (DB.settings.extHauls || []).filter(x=>x.eventId);
+    if(ext.length) try{
+      const r2 = await fetch(`${Tracker._base()}/rest/v1/debris_events?select=id,status&id=in.(${ext.map(x=>encodeURIComponent(x.eventId)).join(',')})`, {headers:Tracker._headers()});
+      if(r2.ok){
+        const live = {}; (await r2.json()).forEach(e=>{ live[String(e.id)] = e.status; });
+        const keep = DB.settings.extHauls.filter(x=>!x.eventId || !live[x.eventId] || live[x.eventId] === 'scheduled');   // only drop what Retail Yard says is finished or cancelled
+        if(keep.length !== DB.settings.extHauls.length){ DB.settings.extHauls = keep; Store.save(); }
+      }
+    }catch(e){ console.warn('outside hauls check', e.message); }
     Store.saveLocal();
     return {rows: rows.length};
   }
