@@ -6050,6 +6050,16 @@ function openWaveBooking(truckId, windowId, iso, opts){
   });
 }
 
+/** The planner's arrival for a booked order, in plain words: when, and how that sits against what was promised. */
+function arrivalText(o, s){
+  if(!s) return 'Not worked out yet — press “Check the day”';
+  const promise = o.slotTime ? `the ${min2hm(hm2min(o.slotTime))} slot`
+    : (o.waveDate || o.windowId ? `the ${WINDOWS[orderWindow(o)].label.toLowerCase()} window` : 'what was promised');
+  const d = Math.round(num(s.drift, 0)), mins = n=>`${n} minute${n === 1 ? '' : 's'}`;
+  const verdict = Math.abs(d) <= 10 ? `on time for ${promise}`
+    : (d > 0 ? `<b style="color:var(--crit)">${mins(d)} later than ${promise}</b>` : `${mins(-d)} earlier than ${promise}`);
+  return `Arrives about <b>${min2hm(s.arriveMin)}</b> — ${verdict}${s.estimated ? ' <span class="muted">(drive time is an estimate)</span>' : ''}`;
+}
 function openBookingDetail(orderId, iso){
   const o = orderById(orderId); if(!o) return;
   iso = iso || o.schedDate || UI.date;
@@ -6075,7 +6085,7 @@ function openBookingDetail(orderId, iso){
       <tr><td class="muted">Driver</td><td>${(()=>{ const d = loadDriver({...o, schedDate:iso, truckId:o.pinTruck});
         return d ? esc(d.name) + (loadDriverIsOverride({...o, schedDate:iso, truckId:o.pinTruck})
           ? ' <span class="chip">this load only</span>' : '') : '—'; })()}</td></tr>
-      <tr><td class="muted">Route says</td><td>${s? `${min2hm(s.arriveMin)} (${s.drift>0?'+':''}${s.drift||0} min)` : 'run “Check the day”'}</td></tr>
+      <tr><td class="muted">Expected arrival</td><td>${arrivalText(o, s)}</td></tr>
       ${o.notes? `<tr><td class="muted">Notes</td><td>${esc(o.notes)}</td></tr>`:''}
       <tr><td class="muted">Added</td><td>${o.createdAt? esc(new Date(o.createdAt).toLocaleString()) + ' · ' + esc(sinceLabel(o.createdAt)) : '—'}</td></tr>
     </table>`, [
