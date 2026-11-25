@@ -2247,7 +2247,25 @@ function reqProduct(r){
       || list.find(p=>String(p.sku||'').toLowerCase() === String(r.product||'').toLowerCase())
       || null;
 }
+/** A "fill the bin" request: yards still wanted to bring the bin up to its fill level.
+ *  Counts what is in the bin, what is booked and on its way, and anything a truck has
+ *  dropped that the yard has not confirmed yet. null = the bin's level is not known. */
+function fillLeft(r){
+  if(!r || r.goal !== 'fill') return null;
+  const st = binState(r);
+  if(!st.known) return null;
+  let dropped = 0;
+  (r.hauls||[]).forEach(h=>{
+    const o = orderById(h.orderId);
+    if(!o || o.status !== 'delivered') return;
+    const y = (r.yardHauls||{})[h.orderId];
+    if(!y || (r.yardSeen||{})[y.haulId] !== 'delivered') dropped += num(o.yards, 0);
+  });
+  return r1(Math.max(0, st.capacity * num(r.fillPct, 0.9) - st.current - st.inbound - dropped));
+}
 function reqYards(r){
+  const fl = fillLeft(r);
+  if(fl !== null) return r1(reqBooked(r) + fl);
   if(num(r.yards,0) > 0) return r1(num(r.yards));
   if(num(r.units,0) > 0) return r1(num(r.units) * num(DB.settings.yardsPerUnit, 7.5));
   if(r.openVolume) return reqSuggested(r);
@@ -2506,6 +2524,7 @@ function syncRequestsFromOrders(){
       if([r.scheduledFor, r.scheduledTime, r.scheduledTruck].join('|') !== was){ changed = true; trackerPush(r); }
     }
 
+    if(r.feed && String(r.trackerStatus) === 'delivered') return;   // the yard has closed it
     const done = orders.length && orders.every(o=>o.status === 'delivered');
     const covered = reqRemaining(r) <= 0.01;
     const want = done && covered ? 'delivered' : (covered ? 'scheduled' : 'open');
@@ -4372,10 +4391,12 @@ function renderReqQueue(){
           title="Click, then click a slot on the board to place it">
         <td>${num(r.rank,0)? `<span class="rankchip">#${num(r.rank)}</span>` : ''}</td>
         <td class="qname">${esc(p? p.name : (r.product||'product not set'))}${
+          r.goal === 'fill' ? ` <span class="chip kind">fill to ${Math.round(num(r.fillPct,0.9)*100)}%</span>` : ''}${
           reqBooked(r)? ` <span class="muted small">· ${reqBooked(r)} yd already booked</span>` : ''}</td>
         <td>${st.known
             ? (full ? '<span class="qlate">Full</span>' : `<b>${st.room} yd</b>`) +
-              ` <span class="muted">· ${esc(r.bin||'bin')} holds ${st.current}${st.inbound? ' + '+st.inbound+' on the way' : ''} of ${st.capacity}</span>`
+              ` <span class="muted">· ${esc(r.bin||'bin')} holds ${st.current}${st.inbound? ' + '+st.inbound+' on the way' : ''} of ${st.capacity}</span>` +
+              (fillLeft(r) !== null ? ` <span class="muted">· <b>${fillLeft(r)} yd</b> to the fill level</span>` : '')
             : `<span class="muted">${esc(r.bin || 'no bin')} · level not known</span>`}</td>
         <td class="${u.chip==='late'?'qlate':''}">${r.needBy? esc(prettyDate(r.needBy)) +
           (u.label !== prettyDate(r.needBy)? ` <span class="${u.chip==='late'?'':'muted'}">· ${esc(u.label)}</span>` : '') : '<span class="muted">no date</span>'}</td>
@@ -4449,7 +4470,7 @@ function openPlaceConfirm(id, truckId, time, iso, windowId){
         return;
       }
       r.productId = p.id;
-      if(r.openVolume && !(num(r.yards,0) > 0)){ r.yards = yd; r.units = 0; }
+      if(r.goal !== 'fill' && r.openVolume && !(num(r.yards,0) > 0)){ r.yards = yd; r.units = 0; }
       const o = scheduleRequest(r.id, iso, truckId, time, yd, windowId);
       if(!o){ $('#placeHint').textContent = 'That load could not be booked.'; return; }
       closeModal();
@@ -4458,7 +4479,7 @@ function openPlaceConfirm(id, truckId, time, iso, windowId){
       try{ runDay(iso); }catch(e){ console.warn(e); }
       Store.save(); renderRequests(); renderOrders(); renderSchedule();
       toast(rest > 0.01
-        ? `${yd} yd placed on ${t.name} — ${rest} yd still to place. Click another slot, or Cancel.`
+        ? `${yd} yd placed on ${t.name} — ${rest} yd still ${r.goal === 'fill' ? 'to reach the fill level' : 'to place'}. Click another slot, or Cancel to leave the rest for later.`
         : `${yd} yd of ${p.name} placed on ${t.name}, ${prettyDate(iso)}`, 5000);
     }}
   ]);
@@ -7684,6 +7705,8 @@ const Tracker = {
       yardBinId: String(row.bin_id || ''),
       yards: num(row.qty_yd, 0), units: 0,
       openVolume: !!row.volume_by_dispatch,          // no volume asked for: Kevin decides
+      goal: row.goal === 'fill' ? 'fill' : 'load',   // one load, or keep going until the bin is at its fill level
+      fillPct: num(row.fill_pct, 0.9),
       suggestYd: cap > 0 ? r1(Math.max(0, cap - cur)) : 0,
       yardHaulsSeen: row.hauls.map(h=>({
         id: String(h.id), truck: String(h.truck_no||''), yards: num(h.volume_yd,0),
@@ -7694,7 +7717,7 @@ const Tracker = {
   /** Keep a request we already hold in step with what Retail Yard now says. */
   absorb(mine, inc){
     ['product','productRef','productNames','yardProductId','yardBinId','bin','requestedBy',
-     'needBy','note','rank','openVolume','suggestYd','trackerStatus','feed'].forEach(k=>{ mine[k] = inc[k]; });
+     'needBy','note','rank','openVolume','suggestYd','trackerStatus','feed','goal','fillPct'].forEach(k=>{ mine[k] = inc[k]; });
     // a volume Kevin chose for an open request stands; otherwise the yard's number does
     if(!(inc.openVolume && num(mine.yards,0) > 0)){ mine.yards = inc.yards; mine.units = 0; }
     if(mine.productId && !byId(DB.products, mine.productId)) mine.productId = '';
@@ -7709,7 +7732,10 @@ const Tracker = {
       if(mine.status !== 'delivered'){ mine.status = 'delivered'; mine.deliveredAt = mine.deliveredAt || new Date().toISOString(); }
     } else if(mine.status !== 'declined' && !(mine.hauls||[]).length && ys !== 'cancelled'){
       // nothing booked from this board: follow a haul booked in Retail Yard itself
-      const want = (ys === 'scheduled' || ys === 'in_progress') ? 'scheduled' : 'open';
+      // a fill request stays in the queue for as long as the bin is short of its fill level
+      const short = mine.goal === 'fill' && fillLeft(mine) !== null ? fillLeft(mine) > 0.01 : null;
+      const want = short !== null ? (short ? 'open' : 'scheduled')
+                 : ((ys === 'scheduled' || ys === 'in_progress') ? 'scheduled' : 'open');
       if(mine.status !== want) mine.status = want;
       if(want === 'scheduled' && ext[0]){
         mine.scheduledFor = ext[0].date; mine.scheduledTime = '';
@@ -8151,8 +8177,9 @@ function renderRequests(){
       <td>${p ? esc(p.name) : `<span style="color:var(--crit)">${esc(r.product||'not set')}</span>
             <div class="small muted">not in the catalogue — pick one when you schedule it</div>`}</td>
       <td class="num">${yd? esc(yd)+' yd' : '—'}${
-        r.openVolume && !num(r.yards,0) && r.status==='open'
-          ? `<div class="small muted">no volume asked — your call</div>` : ''}${
+        r.goal === 'fill' ? `<div class="small muted">fill the bin to ${Math.round(num(r.fillPct,0.9)*100)}%</div>`
+        : r.openVolume && !num(r.yards,0) && r.status==='open'
+          ? `<div class="small muted">one load — your call on volume</div>` : ''}${
         num(r.units,0)? `<div class="small muted">${num(r.units)} unit${num(r.units)>1?'s':''}</div>`:''}${
         reqBooked(r) && reqRemaining(r) > 0.01
           ? `<div class="small" style="color:#8a6100">${esc(reqRemaining(r))} yd still to book</div>`

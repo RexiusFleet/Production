@@ -101,8 +101,10 @@ const WRITE_SCHEMAS={
   'backfill_requests.insert':{
     product_id:V.id({req:true}), bin_id:V.id({req:true}), qty_yd:V.num(0.01,2000,{null:true,label:'Volume'}),   // null: Kevin picks the truck and volume
     needed_by:V.date(31,366,{null:true,label:'Needed by'}), method:V.oneOf(['bulk','slinger'],{req:true}),
-    status:V.oneOf(['requested'],{req:true}), notes:V.str(500,{null:true,label:'Notes'}) },
-  'backfill_requests.update':{ status:V.oneOf(['cancelled']), priority:V.int(1,999,{null:true,label:'Priority'}) },
+    status:V.oneOf(['requested'],{req:true}), notes:V.str(500,{null:true,label:'Notes'}),
+    goal:V.oneOf(['load','fill']) },               // one load, or keep hauling until the bin is at the fill level
+  'backfill_requests.update':{ status:V.oneOf(['cancelled']), priority:V.int(1,999,{null:true,label:'Priority'}),
+    goal:V.oneOf(['load']) },                       // "That's enough" turns a fill order back into a plain one
   'hauls.insert':{
     request_id:V.id({null:true}), method:V.oneOf(['bulk','slinger'],{req:true}),
     truck_no:V.str(20,{req:true,pattern:TRUCK_NO_RE,label:'Truck number'}), loads:V.int(1,50,{label:'Loads'}),
@@ -1150,12 +1152,18 @@ function drawFormFields(bin){
         <label class="field full"><span>Notes</span><input id="io-notes" name="notes" maxlength="500"></label>
 `;
 }
+/* A "fill the bin" order aims for this share of the bin's capacity. The database holds the
+   real figure (yard.fill_target_pct()); this one is only for what the screens say. */
+const FILL_PCT=0.9;
 function orderFormFields(bin,qty=''){
   const product = bin
     ? `<input type="hidden" id="rq-bin" name="product_id" value="${esc(bin.product_id)}" data-hint="rq-hint" data-hint-bin="${esc(bin.id)}"><input type="hidden" name="bin_id" value="${esc(bin.id)}">`
     : `<label class="field"><span>Product</span><select id="rq-bin" name="product_id" required data-hint="rq-hint" data-hint-product="1" data-act-change="orderProduct">${productOptions(UI.prefillBin&&D.bin[UI.prefillBin]?.product_id,p=>p.hauled_by==='bulk')}</select></label>`;
-  // No volume: Jeff ranks what he needs, Kevin picks the truck and volume when he schedules it.
+  // No volume: Jeff says one load or fill the bin; Kevin picks the trucks and volumes when he schedules it.
   return `        ${product}
+        <div class="field"><span>How much</span><div class="seg">
+          <label><input type="radio" name="goal" value="load" checked> One load</label>
+          <label><input type="radio" name="goal" value="fill"> Fill the bin (to ${Math.round(FILL_PCT*100)}%)</label></div></div>
         <label class="field"><span>Needed by</span><input id="rq-date" name="needed_by" type="date" value="${isoDay(1)}"></label>
         <input type="hidden" name="method" value="bulk">
         <label class="field full"><span>Notes for Kevin</span><input id="rq-notes" name="notes" maxlength="500"></label>
@@ -1361,10 +1369,15 @@ function reqCard(r){
   // Bulk trucks are scheduled in Bulk Dispatch (one place, no double booking); slingers stay here.
   const bulkD=r.method==='bulk'&&can.dispatch(r.method)&&r.status!=='delivered';
   const canD=can.dispatch(r.method)&&r.status!=='delivered'&&r.method!=='bulk';
+  // "Fill the bin": measured against the bin's own level, so it stays open across as many trips as it takes.
+  const fill=r.goal==='fill'&&OPEN_REQ.includes(r.status), fb=D.bin[r.bin_id];
+  const fillTarget=fill&&fb&&Number(fb.capacity_yd)>0?r1(Number(fb.capacity_yd)*FILL_PCT):0;
+  const fillNow=r1(Math.max(0,Number(S.onHand[r.bin_id]||0))), fillLeft=fillTarget?r1(Math.max(0,fillTarget-fillNow-(sched-del))):0;
   const formOpen=UI.openHaulFor===r.id;
   return `<article class="card">
-    <div class="top-line">${prioRank()[r.id]?`<span class="prio-n" title="Priority for Kevin">#${prioRank()[r.id]}</span>`:''}<span class="chip ${r.method==='bulk'?'c-info':'c-acc'}">${METHOD[r.method].label}</span>${late?'<span class="chip c-bad">Late</span>':''}</div>
-    <div>${open?`<div class="muted" style="font-size:.82rem">Truck &amp; volume: Kevin decides</div>`:`<div class="big num">${fmtYd(r.qty_yd)} <small class="muted" style="font-size:.6em">${fmtUnits(r.qty_yd)}</small></div>`}<div style="font-weight:600">${esc(prodName(r.product_id))}</div></div>
+    <div class="top-line">${prioRank()[r.id]?`<span class="prio-n" title="Priority for Kevin">#${prioRank()[r.id]}</span>`:''}<span class="chip ${r.method==='bulk'?'c-info':'c-acc'}">${METHOD[r.method].label}</span>${fill?`<span class="chip c-acc">Fill to ${Math.round(FILL_PCT*100)}%</span>`:''}${late?'<span class="chip c-bad">Late</span>':''}</div>
+    <div>${fill&&fillTarget?`<div class="muted" style="font-size:.82rem">Fill the bin: ${fmtN(fillNow)} of ${fmtN(fillTarget)} yd³ in${fillLeft>0?` · <b>${fmtN(fillLeft)} yd³ to go</b>`:' · at the fill level'}${sched-del>0?` · ${fmtN(r1(sched-del))} on the way`:''}</div>`
+      :open?`<div class="muted" style="font-size:.82rem">${fill?'Fill the bin':'One load'}: truck &amp; volume are Kevin's call</div>`:`<div class="big num">${fmtYd(r.qty_yd)} <small class="muted" style="font-size:.6em">${fmtUnits(r.qty_yd)}</small></div>`}<div style="font-weight:600">${esc(prodName(r.product_id))}</div></div>
     <div class="meta">Needed ${esc(whenDate(r.needed_by))} · ${esc(METHOD[r.method].who)} dispatches${r.notes?'<br>'+esc(r.notes):''}</div>
     ${r.method==='bulk'&&remaining>0&&!hs.length?(()=>{ const sug=trucks().map(t=>{ const c=truckCap(t.no,r.product_id,'dry'); return c?`${Math.ceil(remaining/c)} load${Math.ceil(remaining/c)>1?'s':''} on ${esc(t.no)}`:null; }).filter(Boolean);
       return sug.length?`<div class="meta">≈ ${sug.join(' · ')} <span class="muted">(dry)</span></div>`:`<div class="meta" style="color:var(--warn)">No truck capacity on file for this product</div>`; })():''}
@@ -1381,6 +1394,7 @@ function reqCard(r){
     ${bulkD?`<div class="form-actions"><a class="btn sm primary" style="text-decoration:none" href="../bulk-dispatch/">${hs.length?'Manage in Bulk Dispatch':'Schedule in Bulk Dispatch'}</a>
         ${!hs.length&&r.status==='requested'&&can.request()?confirmBtn('cancelReq','Cancel request',`data-id="${r.id}"`,'cancel'):''}</div>`:''}
     ${r.method==='bulk'&&!bulkD&&r.status==='requested'?`<div class="meta">Kevin schedules the truck in Bulk Dispatch.</div>`:''}
+    ${fill&&can.request()?`<div class="form-actions">${confirmBtn('enoughReq','That’s enough',`data-id="${r.id}"`,'ghost')}<span class="hint">Stops the fill. Trucks already booked still come.</span></div>`:''}
     <div class="meta">Requested by ${esc(r.created_by_name||'—')}</div>
   </article>`;
 }
@@ -1701,6 +1715,7 @@ const ACT={
   },
   undoIO(d){ run(()=>A.update('internal_orders',d.id,{status:'cancelled'}),'Order undone. Volume returned to the bin.'); },
   cancelReq(d){ run(()=>A.update('backfill_requests',d.id,{status:'cancelled'}),'Request cancelled.'); },
+  enoughReq(d){ run(()=>A.update('backfill_requests',d.id,{goal:'load'}),'Fill stopped. The order closes once the trucks already booked are confirmed.'); },
   haulStatus(d){ run(()=>A.update('hauls',d.id,{status:d.v}), d.v==='delivered'?'Delivery confirmed. Volume added to the bin.':'Marked en route.'); },
   haulCancel(d){ run(()=>A.update('hauls',d.id,{status:'cancelled'}),'Haul cancelled.'); },
   debrisHaul(d){ UI.selBin=d.id; UI.binMode='removal'; renderBinModal(); },
@@ -1840,7 +1855,7 @@ const FORM={
     const inModal=!!f.dataset.modal;
     if(!bin){ toast('That product has no bin. Add one in Setup.',true); return; }
     if(!isBulk(bin.product_id)){ toast(`${prodName(bin.product_id)} isn't hauled by Kevin, so it isn't ordered here. Record the delivery when it arrives.`,true); return; }
-    const ok=await run(()=>A.insert('backfill_requests',{bin_id:bin.id,product_id:bin.product_id,qty_yd:null,needed_by:fd.get('needed_by')||null,method:m,status:'requested',notes:fd.get('notes').trim()||null}),
+    const ok=await run(()=>A.insert('backfill_requests',{bin_id:bin.id,product_id:bin.product_id,qty_yd:null,goal:fd.get('goal')==='fill'?'fill':'load',needed_by:fd.get('needed_by')||null,method:m,status:'requested',notes:fd.get('notes').trim()||null}),
       `${prodName(bin.product_id)} added to Kevin's list. Rank it in the priority list.`);
     if(inModal){ if(ok){ UI.binMode='view'; renderBinModal(); } return; }
     f.reset(); $('#rq-date').value=isoDay(1);
