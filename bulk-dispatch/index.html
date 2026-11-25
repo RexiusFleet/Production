@@ -449,17 +449,17 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
   background:var(--surface);overflow:hidden}
 .reqqueue .qhead{display:flex;align-items:center;gap:8px;padding:8px 11px;
   border-bottom:1px solid var(--rule);background:var(--surface-2);font-size:12px}
-.reqqueue .qrow{display:flex;gap:8px;padding:9px 11px;overflow-x:auto}
-.qcard{flex:0 0 auto;min-width:148px;max-width:210px;text-align:left;display:grid;gap:2px;
-  padding:7px 9px;border:1px solid var(--rule);border-left:3px solid var(--brand);
-  border-radius:var(--r-sm);background:var(--surface);cursor:pointer;font:inherit;color:inherit}
-.qcard:hover{background:var(--surface-2)}
-.qcard.stuck{border-left-color:var(--crit);background:var(--crit-bg)}
-.qcard .qtop{display:flex;align-items:center;gap:5px}
-.qcard .qname{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.qcard .qmid{font-size:15px;font-weight:650;letter-spacing:-.01em}
-.qcard .qsub{font-size:10.5px;color:var(--ink-muted)}
-.qcard .qlate{color:var(--crit)}
+.reqqueue .qwrap{overflow-x:auto;max-height:262px;overflow-y:auto}
+.reqqueue table{font-size:12.5px}
+.reqqueue th{position:sticky;top:0;z-index:1;padding:6px 11px;background:var(--surface)}
+.reqqueue td{padding:6px 11px;white-space:nowrap}
+.reqqueue tbody tr{cursor:pointer}
+.reqqueue tbody tr:last-child td{border-bottom:0}
+.reqqueue tbody tr:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
+.reqqueue tr.stuck td{background:var(--crit-bg)}
+.reqqueue td.qname{font-weight:600;white-space:normal;min-width:150px}
+.reqqueue .qlate{color:var(--crit);font-weight:600}
+.reqqueue .qmore{padding:6px 11px;border-top:1px solid var(--rule);font-size:11.5px}
 .rankchip{display:inline-block;min-width:20px;text-align:center;padding:1px 4px;
   border-radius:var(--r-sm);background:var(--bar);color:#fff;font-size:10px;font-weight:650}
 .bingauge{position:relative;height:6px;margin:3px 0 2px;border-radius:3px;
@@ -4343,25 +4343,33 @@ function renderReqQueue(){
       <span class="muted small">${open.length} waiting · ${r1(open.reduce((a,r)=>a+reqRemaining(r),0))} yd
       · Jeff's order</span>
       <button class="btn sm ghost" id="qAll" style="margin-left:auto">Open the queue</button></div>
-    <div class="qrow">${open.slice(0, 12).map(r=>{
+    <div class="qwrap"><table>
+      <thead><tr><th>#</th><th>Product</th><th class="num">To move</th><th>Bin</th>
+        <th class="num">Next load</th><th>Needed</th><th>Asked by</th><th></th></tr></thead>
+      <tbody>${open.slice(0, 12).map(r=>{
       const p = reqProduct(r), u = reqUrgency(r), st = binState(r);
       const plan = reqLoadPlan(r, null);
       const stuck = plan.take <= 0.01;
-      return `<button class="qcard${stuck?' stuck':''}" data-req="${esc(r.id)}"
+      return `<tr class="${stuck?'stuck':''}" data-req="${esc(r.id)}" tabindex="0"
           title="${esc(p? p.name : (r.product||''))} — ${esc(loadSizeWhy(plan))}">
-        <span class="qtop">${num(r.rank,0)? `<span class="rankchip">#${num(r.rank)}</span>` : ''}
-          <span class="qname">${esc(p? p.name : (r.product||'product not set'))}</span></span>
-        <span class="qmid">${reqRemaining(r)} yd${
-          reqBooked(r)? ` <span class="muted">of ${reqYards(r)}</span>` : ''}</span>
-        <span class="qsub">${esc(r.bin || 'no bin')}${
-          st.known ? ` · ${stuck ? 'bin full' : st.room+' yd room'}` : ''}</span>
-        <span class="qsub ${u.chip==='late'?'qlate':'muted'}">${
-          stuck ? 'waiting on the bin' : 'next load ' + plan.take + ' yd'}${
-          r.needBy? ' · '+esc(u.label) : ''}</span>
-      </button>`;
-    }).join('')}</div>`;
-  $$('#sQueue [data-req]').forEach(el=>{
+        <td>${num(r.rank,0)? `<span class="rankchip">#${num(r.rank)}</span>` : ''}</td>
+        <td class="qname">${esc(p? p.name : (r.product||'product not set'))}</td>
+        <td class="num">${reqRemaining(r)} yd${
+          reqBooked(r)? ` <span class="muted">of ${reqYards(r)}</span>` : ''}</td>
+        <td>${esc(r.bin || 'no bin')}${
+          st.known ? ` <span class="muted">· ${stuck ? 'full' : st.room+' yd room'}</span>` : ''}</td>
+        ${stuck ? '<td style="text-align:right"><span class="qlate">waiting on the bin</span></td>'
+                : `<td class="num">${plan.take} yd</td>`}
+        <td class="${u.chip==='late'?'qlate':''}">${r.needBy? esc(prettyDate(r.needBy)) +
+          (u.label !== prettyDate(r.needBy)? ` <span class="${u.chip==='late'?'':'muted'}">· ${esc(u.label)}</span>` : '') : '<span class="muted">no date</span>'}</td>
+        <td>${esc(r.requestedBy || '—')}</td>
+        <td><button class="btn sm" data-reqgo="${esc(r.id)}">Schedule</button></td>
+      </tr>`;
+    }).join('')}</tbody></table></div>${
+      open.length > 12 ? `<div class="qmore muted">…and ${open.length-12} more — open the queue to see them all.</div>` : ''}`;
+  $$('#sQueue tr[data-req]').forEach(el=>{
     el.onclick = ()=>openRequestScheduler(el.dataset.req);
+    el.onkeydown = e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); openRequestScheduler(el.dataset.req); } };
   });
   const all = $('#qAll');
   if(all) all.onclick = ()=>showTab('requests');
