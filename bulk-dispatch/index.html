@@ -1671,6 +1671,9 @@ const Store = {
       DB.orders   = parsed.orders   || [];
       DB.requests = parsed.requests || [];
       DB.bins = parsed.bins || [];
+      DB.debrisPiles = parsed.debrisPiles || [];
+      DB.debrisPulledAt = parsed.debrisPulledAt || null;
+      if(parsed.yardLoads) DB.yardLoads = parsed.yardLoads;
       DB.dayDrivers = parsed.dayDrivers || {};
       // which default trucks this browser has already been offered
       DB.seenTrucks = Array.isArray(parsed.seenTrucks) ? parsed.seenTrucks : null;
@@ -4435,7 +4438,8 @@ function renderReqQueue(){
   const open = openRequests();
   const loads = yardLoadsOpen();
   const piles = groundPiles();
-  if(!open.length && !loads.length && !piles.length){ box.hidden = true; box.innerHTML = ''; UI.placeReq = null; UI.placeBack = null; return; }
+  const pileGap = Piles.configured && !piles.length;      // linked to Retail Yard, but no pile read yet
+  if(!open.length && !loads.length && !piles.length && !pileGap){ box.hidden = true; box.innerHTML = ''; UI.placeReq = null; UI.placeBack = null; return; }
   box.hidden = false;
   if(UI.placeReq && !open.some(r=>r.id === UI.placeReq)) UI.placeReq = null;
   const placing = UI.placeReq ? requestById(UI.placeReq) : null;
@@ -4494,6 +4498,10 @@ function renderReqQueue(){
           ? `<button class="btn sm${l.hasBack ? ' ghost' : ''}" data-tagback="${esc(l.orderId)}" title="Bring debris or food waste back on this truck's return">${l.hasBack ? 'Change haul back' : '+ Haul back'}</button> ` : ''}${l.reqId
           ? `<button class="btn sm ghost" data-reqdel="${esc(l.reqId)}" title="Delete the request this load is for">Delete request</button>` : ''}</td>
       </tr>`).join('')}</tbody></table></div>` : ''}
+    ${pileGap ? `<div class="qhead"><b>Ground Debris at Retail Yard</b>
+        <span class="small${DB.pilesError ? '' : ' muted'}"${DB.pilesError ? ' style="color:var(--crit)"' : ''}>${DB.pilesError
+          ? 'couldn’t be read — ' + esc(DB.pilesError) : 'checking Retail Yard…'}</span>
+        <button class="btn sm ghost" id="qPileRetry" style="margin-left:auto">Try again</button></div>` : ''}
     ${piles.map(pl=>{
       const booked = pileBooked(pl.id), left = r1(pl.onHand - booked);
       const over = pl.alert > 0 && left > pl.alert;
@@ -4526,6 +4534,7 @@ function renderReqQueue(){
   });
   const stop = $('#qPlaceStop'); if(stop) stop.onclick = ()=>{ UI.placeReq = null; UI.placeBack = null; renderReqQueue(); };
   $$('#sQueue [data-reqdel]').forEach(el=>{ el.onclick = e=>{ e.stopPropagation(); deleteRequestAsk(el.dataset.reqdel); }; });
+  const retry = $('#qPileRetry'); if(retry) retry.onclick = ()=>{ DB.pilesError = null; renderReqQueue(); Piles.refresh(); };
   $$('#sQueue [data-tagback]').forEach(el=>{ el.onclick = e=>{ e.stopPropagation(); openTagBack(el.dataset.tagback); }; });
   $$('#sQueue [data-pileback]').forEach(el=>{
     el.onclick = ()=>{ UI.placeReq = null; UI.placeBack = UI.placeBack === el.dataset.pileback ? null : el.dataset.pileback; renderReqQueue(); };
@@ -4894,6 +4903,7 @@ function renderScheduleIssues(plan, iso){
                  stock:'Not stocked', capacity:'Didn’t fit the day'};
   const out = [];
   for(const [kind, list] of Object.entries(groups)){
+    if(kind === 'late') continue;                 // no "Running late" box; each card still shows its own time
     out.push(`<div class="warnbox"><b>${esc(label[kind]||kind)} — ${list.length}</b>
       <div class="issue">${list.slice(0,6).map(i=>{
         const o = i.orderId? orderById(i.orderId) : null;
@@ -8469,10 +8479,18 @@ const YardCaps = {
 
 const Piles = {
   get configured(){ return Tracker.configured && Tracker.isFeed; },
+  /** Read the piles, send any pending hauls back, and redraw the queue. Never throws. */
+  async refresh(){
+    if(!this.configured) return;
+    try{ await this.pull(); DB.pilesError = null; }
+    catch(e){ DB.pilesError = e.message; console.warn('debris piles', e.message); }
+    try{ await BackSync.flush(); }catch(e){ console.warn(e.message); }
+    try{ renderReqQueue(); }catch(e){ console.warn(e); }
+  },
   async pull(){
     if(!this.configured) return {rows:0};
     const res = await fetch(`${Tracker._base()}/rest/v1/dispatch_debris?select=*`, {headers:Tracker._headers()});
-    if(!res.ok) throw new Error('debris piles read ' + res.status);
+    if(!res.ok) throw new Error(res.status === 401 || res.status === 403 ? 'this sign-in isn’t allowed to see the piles' : 'Retail Yard answered ' + res.status);
     const rows = await res.json();
     DB.debrisPiles = rows.map(x=>({id:String(x.id), code:String(x.code||''), name:String(x.product||x.code||'Pile'),
       role:String(x.debris_role||''), capacity:num(x.capacity_yd,0), alert:num(x.alert_over_yd,0),
@@ -8682,15 +8700,15 @@ function startTrackerPolling(){
   const mins = clamp(num(DB.settings.trackerPollMin, 10), 1, 120);
   if(!Tracker.configured) return;
   TRACKER_TIMER = setInterval(async ()=>{
+    Piles.refresh();
     try{
       const r = await Tracker.pull();
       await Tracker.flush();
       // bin levels move on their own, so refresh them on the same beat
       if(Bins.configured) try{ await Bins.pull(); }catch(e){ DB.binsError = e.message; }
       if(YardCaps.configured) try{ await YardCaps.pull(); }catch(e){ console.warn(e.message); }
-      if(Piles.configured) try{ await Piles.pull(); await BackSync.flush(); }catch(e){ console.warn(e.message); }
       if(Catalog.configured) try{ await Catalog.pull(); }catch(e){ DB.catalogError = e.message; }
-      renderRequests(); markTabCounts();
+      renderRequests(); renderReqQueue(); markTabCounts();
       if(r.added) toast(`${r.added} new Retail Yard request${r.added>1?'s':''} from the tracker`, 4000);
     }catch(e){
       // a poll that keeps failing has to be visible, not a line in the console
@@ -9223,12 +9241,12 @@ function findTableDialog(){
 async function pullTrackerNow(){
   if(!Tracker.configured){ toast('Add the tracker table in Settings first', 4000); return; }
   const btn = $('#btnReqPull'); if(btn){ btn.disabled = true; btn.textContent = 'Checking…'; }
+  Piles.refresh();
   try{
     DB.trackerError = null; DB.binsError = null; DB.catalogError = null;
     const r = await Tracker.pull();
     const sent = await Tracker.flush();
     if(YardCaps.configured) try{ await YardCaps.pull(); }catch(e){ console.warn(e.message); }
-    if(Piles.configured) try{ await Piles.pull(); await BackSync.flush(); }catch(e){ console.warn(e.message); }
     let binNote = '';
     if(Bins.configured){
       try{
@@ -9488,12 +9506,12 @@ async function boot(refresh){
   showTab(UI.tab);
   if(Tracker.configured){
     startTrackerPolling();
+    Piles.refresh();
     try{
       const r = await Tracker.pull();
       await Tracker.flush();
       if(YardCaps.configured) try{ await YardCaps.pull(); }catch(e){ console.warn(e.message); }
-      if(Piles.configured) try{ await Piles.pull(); await BackSync.flush(); }catch(e){ console.warn(e.message); }
-      renderRequests();
+      renderRequests(); renderReqQueue();
       if(r.added) toast(`${r.added} Retail Yard request${r.added>1?'s':''} waiting`, 4500);
     }catch(e){ console.warn('tracker pull failed', e.message); }
   }
