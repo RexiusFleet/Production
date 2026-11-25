@@ -4052,10 +4052,10 @@ function renderSchedule(){
           <div class="cust">${esc(jobLabel(o))}</div>
           <div class="sub">${esc(inter? jobRoute(o) : cityOf(o))}${prod? ' · '+esc(prod.name):''}</div>
           <div class="chips">${inter? `<span class="chip kind">${esc(JOB_KINDS[jobKind(o)].short)}</span>`:''}${
-            o.back && jobKind(o) !== 'debris' ? `<span class="chip kind" title="Brings this back to Coburg on the same trip">↩ ${esc(o.back.label)} ${num(o.back.yards)} yd</span>` : ''}${
+            o.back && jobKind(o) !== 'debris' ? `<span class="chip kind" title="Brings this back to Coburg on the same trip">↩ ${esc(o.back.label)} ${esc(uTxt(o.back.yards))}</span>` : ''}${
             isNewOrder(o)? '<span class="chip new">new</span>':''}${
             num(o.slotSpan,1) > 1? `<span class="chip">${num(o.slotSpan)} slots</span>`:''}${
-            num(o.yards)? `<span class="chip">${num(o.yards)} yd</span>`:''}${
+            num(o.yards)? `<span class="chip">${jobKind(o) === 'debris' && o.back ? esc(uTxt(o.yards)) : num(o.yards) + ' yd'}</span>`:''}${
             s && s.boxLabels && s.boxLabels.length
               ? `<span class="chip">${esc(s.boxLabels.join('+'))}</span>` : ''}${chip}</div>
         </div>`;
@@ -4451,7 +4451,7 @@ function renderReqQueue(){
         <button class="btn sm" id="qPlaceList">Pick from a list instead</button>
         <button class="btn sm" id="qPlaceStop" style="margin-left:auto">Cancel</button></div>`; })() : ''}
     ${placingBack ? `<div class="qplace" role="status"><span>Scheduling a haul of <b>${esc(placingBack.label)}</b> back to ${esc(depotPoints().home.name)}
-        — click an open slot on truck 85, 98 or 65 below.</span>
+        — click an open slot on truck 85, 98 or 65 below, or click a Retail Yard delivery already on one of them to bring it back on that trip.</span>
         <button class="btn sm" id="qPlaceStop" style="margin-left:auto">Cancel</button></div>` : ''}
     ${open.length ? '' : '<div class="qmore muted">Nothing waiting — every request has a load booked.</div>'}
     <div class="qwrap"${open.length ? '' : ' hidden'}><table>
@@ -4486,11 +4486,12 @@ function renderReqQueue(){
           l.when ? ` <span class="muted">· ${esc(l.when)}</span>` : ''}</td>
         <td>${esc(l.truck)}</td>
         <td class="qname">${esc(l.product)}${l.fill ? ' <span class="chip kind">fill</span>' : ''}</td>
-        <td class="num">${l.yards} yd</td>
+        <td class="num">${l.units ? esc(uTxt(l.yards)) : l.yards + ' yd'}</td>
         <td>${esc(l.bin || '—')}</td>
         <td><span class="chip ${l.chip}">${esc(l.label)}</span>${
           l.error ? ` <span class="small" style="color:var(--crit)" title="${esc(l.error)}">Retail Yard not updated</span>` : ''}</td>
-        <td style="text-align:right;white-space:nowrap">${l.reqId
+        <td style="text-align:right;white-space:nowrap">${l.canBack
+          ? `<button class="btn sm${l.hasBack ? ' ghost' : ''}" data-tagback="${esc(l.orderId)}" title="Bring debris or food waste back on this truck's return">${l.hasBack ? 'Change haul back' : '+ Haul back'}</button> ` : ''}${l.reqId
           ? `<button class="btn sm ghost" data-reqdel="${esc(l.reqId)}" title="Delete the request this load is for">Delete request</button>` : ''}</td>
       </tr>`).join('')}</tbody></table></div>` : ''}
     ${piles.map(pl=>{
@@ -4502,11 +4503,11 @@ function renderReqQueue(){
       return `<div class="qhead qhead2"><b>${esc(pl.name)} at Retail Yard</b>
           <span class="muted small">live from Retail Yard${DB.debrisPulledAt ? ' · as of ' + esc(new Date(DB.debrisPulledAt).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})) : ''}</span></div>
         <div class="pilebox${over ? ' over' : ''}">
-          <div class="pilebar" title="${esc(pl.onHand)} of ${esc(pl.capacity)} yd"><i style="width:${pct}%"></i>${
-            mark !== null ? `<u style="left:${mark}%" title="Alert level ${esc(pl.alert)} yd"></u>` : ''}</div>
-          <div class="piletext"><b>${esc(pl.onHand)} yd</b> on the pile${pl.capacity ? ` <span class="muted">of ${esc(pl.capacity)}</span>` : ''}${
-            pl.alert ? ` <span class="muted">· alert level ${esc(pl.alert)} yd</span>` : ''}${
-            booked ? ` · <b>${booked} yd</b> booked to come back` : ''}</div>
+          <div class="pilebar" title="${esc(uTxt(pl.onHand))} of ${esc(yd2u(pl.capacity))}"><i style="width:${pct}%"></i>${
+            mark !== null ? `<u style="left:${mark}%" title="Alert level ${esc(uTxt(pl.alert))}"></u>` : ''}</div>
+          <div class="piletext"><b>${esc(uTxt(pl.onHand))}</b> on the pile${pl.capacity ? ` <span class="muted">of ${esc(yd2u(pl.capacity))}</span>` : ''}${
+            pl.alert ? ` <span class="muted">· alert level ${esc(uTxt(pl.alert))}</span>` : ''}${
+            booked ? ` · <b>${uTxt(booked)}</b> booked to come back` : ''} <span class="muted">· 1 unit = ${unitYd()} yd</span></div>
           ${over ? `<div class="pilenote"><span class="chip late">Needs hauling</span> The pile is over its alert level${
               booked ? ' even after what is booked' : ''} — schedule a haul to bring it back to ${esc(depotPoints().home.name)}.</div>` : ''}
           ${DB.backError ? `<div class="small" style="color:var(--crit)">Retail Yard not updated — ${esc(DB.backError)}</div>` : ''}
@@ -4515,8 +4516,8 @@ function renderReqQueue(){
     }).join('')}`;
   $$('#sQueue tr[data-load]').forEach(el=>{
     const go = ()=>openBookingDetail(el.dataset.load, el.dataset.loadday || UI.date);
-    el.onclick = e=>{ if(e.target.closest('[data-reqdel]')) return; go(); };
-    el.onkeydown = e=>{ if(e.target.closest('[data-reqdel]')) return; if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); go(); } };
+    el.onclick = e=>{ if(e.target.closest('[data-reqdel],[data-tagback]')) return; go(); };
+    el.onkeydown = e=>{ if(e.target.closest('[data-reqdel],[data-tagback]')) return; if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); go(); } };
   });
   $$('#sQueue tr[data-req]').forEach(el=>{
     const go = ()=>{ UI.placeBack = null; UI.placeReq = (UI.placeReq === el.dataset.req) ? null : el.dataset.req; renderReqQueue(); };
@@ -4525,6 +4526,7 @@ function renderReqQueue(){
   });
   const stop = $('#qPlaceStop'); if(stop) stop.onclick = ()=>{ UI.placeReq = null; UI.placeBack = null; renderReqQueue(); };
   $$('#sQueue [data-reqdel]').forEach(el=>{ el.onclick = e=>{ e.stopPropagation(); deleteRequestAsk(el.dataset.reqdel); }; });
+  $$('#sQueue [data-tagback]').forEach(el=>{ el.onclick = e=>{ e.stopPropagation(); openTagBack(el.dataset.tagback); }; });
   $$('#sQueue [data-pileback]').forEach(el=>{
     el.onclick = ()=>{ UI.placeReq = null; UI.placeBack = UI.placeBack === el.dataset.pileback ? null : el.dataset.pileback; renderReqQueue(); };
   });
@@ -4569,14 +4571,14 @@ function yardLoadsOpen(){
     });
   });
   // a load out that also brings something back says so
-  out.forEach(l=>{ const o = orderById(l.orderId); if(o && o.back) l.product += ` + ↩ ${o.back.label} ${num(o.back.yards)} yd back`; });
+  out.forEach(l=>{ const o = orderById(l.orderId); if(o && o.back){ l.product += ` + ↩ ${o.back.label} ${uTxt(o.back.yards)} back`; l.hasBack = true; } if(o) l.canBack = canTagBack(o); });
   // trips that only bring something back from Retail Yard; they leave once the truck has done the run
   (DB.orders||[]).forEach(o=>{
     if(o.kind !== 'debris' || !o.back || o.status === 'cancelled' || o.status === 'delivered') return;
     const t = truckById(o.pinTruck);
     out.push({orderId:o.id, date:o.schedDate || '', when:o.slotTime ? min2hm(hm2min(o.slotTime)) : '',
       sort:(o.schedDate || '9999') + ' ' + (o.slotTime || '00:00'), truck:(t && t.name) || '—',
-      product:`↩ ${o.back.label} back to ${depotPoints().home.name}`, yards:r1(num(o.yards,0)), bin:'', fill:false,
+      product:`↩ ${o.back.label} back to ${depotPoints().home.name}`, yards:r1(num(o.yards,0)), units:true, bin:'', fill:false,
       label: o.schedDate && o.schedDate < todayISO() ? 'past due — not marked done' : 'scheduled',
       chip: o.schedDate && o.schedDate < todayISO() ? 'late' : 'ok', error:''});
   });
@@ -4599,16 +4601,28 @@ function backChoices(){
   return out;
 }
 function backChoice(key){ return backChoices().find(c=>c.key === key) || null; }
+/* Debris and food waste are talked about in units (one unit = Settings' yards per unit, 7.5 yd).
+ * Yards stay the stored figure, because Retail Yard keeps its piles in yards. */
+function unitYd(){ const u = num(DB.settings.yardsPerUnit, 7.5); return u > 0 ? u : 7.5; }
+function yd2u(yd){ return Math.round(num(yd,0) / unitYd() * 100) / 100; }
+function u2yd(u){ return Math.round(num(u,0) * unitYd() * 100) / 100; }
+function uTxt(yd){ const u = yd2u(yd); return `${u} unit${u === 1 ? '' : 's'}`; }
+/** A delivery to Retail Yard on an hourly truck that could carry something back. */
+function canTagBack(o){
+  if(!o || jobKind(o) !== 'yard-haul' || o.status === 'cancelled' || o.status === 'delivered') return false;
+  const t = truckById(o.pinTruck);
+  return !!(t && o.schedDate && !o.waveDate && !isWindowTruck(t));
+}
 /** Yards booked to come back off a pile that the truck has not hauled yet. */
-function pileBooked(pileId, skipOrderId){
+function pileBooked(pileId, skipOrderId){   // yards
   return r1((DB.orders||[]).reduce((a,o)=>a + (o.back && o.back.pileId === pileId && o.id !== skipOrderId &&
     o.status !== 'cancelled' && o.status !== 'delivered' ? num(o.back.yards, 0) : 0), 0));
 }
 /** Most a truck brings back in one run of this, and what is actually there to take. */
-function backDefault(t, choice){
+function backDefault(t, choice, skipOrderId){
   const max = t ? Math.floor(num(effCapacity(t, byId(DB.products, 'pdebris') || null, {internal:true}).cap, 0) * 10 + 1e-6) / 10 : 0;
   const pile = choice && choice.pileId ? debrisPiles().find(p=>p.id === choice.pileId) : null;
-  const there = pile && pile.onHand >= 0 ? Math.max(0, r1(pile.onHand - pileBooked(pile.id))) : null;
+  const there = pile && pile.onHand >= 0 ? Math.max(0, r1(pile.onHand - pileBooked(pile.id, skipOrderId))) : null;
   return {max, there, take: there === null ? max : Math.min(max, there)};
 }
 function backhaulOrder(back){
@@ -4681,16 +4695,7 @@ function openPlaceConfirm(id, truckId, time, iso, windowId, backKey){
           `<option value="${esc(x.id)}">${esc(reqProduct(x).name)}${x.bin? ' → bin '+esc(x.bin) : ''} (up to ${placeDefault(x, t).take} yd)</option>`).join('')}</select></label>`}
 
     ${canBack ? `
-    <h4 style="margin:16px 0 6px">Back to ${esc(dp.home.name)}</h4>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
-      <label class="field" style="min-width:240px;flex:1">Bring back
-        <select id="placeBack"><option value="">Nothing — coming back empty</option>${choices.map(c=>
-          `<option value="${esc(c.key)}" ${c.key === backKey ? 'selected' : ''}>${esc(c.label)}${
-            c.onHand !== null ? ` — ${esc(c.onHand)} yd on the pile` : ''}</option>`).join('')}</select></label>
-      <label class="field" style="width:130px" id="placeBackYdWrap" hidden>Yards back
-        <input id="placeBackYd" type="number" inputmode="decimal" min="0.5" step="0.5"></label>
-    </div>
-    <div class="small muted" id="placeBackNote" style="margin-top:6px"></div>` : ''}
+    <h4 style="margin:16px 0 6px">Back to ${esc(dp.home.name)}</h4>` + backFieldsHtml(backKey) : ''}
     <div class="small" id="placeHint" style="color:var(--crit);min-height:1.2em;margin-top:8px"></div>`, [
     {label:'Cancel', cls:'ghost', onClick:closeModal},
     {label:'Place it', cls:'primary', onClick:()=>{
@@ -4707,15 +4712,8 @@ function openPlaceConfirm(id, truckId, time, iso, windowId, backKey){
           return;
         }
       }
-      let back = null;
-      const bsel = $('#placeBack');
-      if(bsel && bsel.value){
-        const c = backChoice(bsel.value), bd = backDefault(t, c), byd = num($('#placeBackYd').value, 0);
-        if(!(byd > 0)){ hint.textContent = 'Enter the yards coming back.'; return; }
-        if(byd > bd.max + 0.01){ hint.textContent = `${t.name} brings back ${bd.max} yd at most.`; return; }
-        if(bd.there !== null && byd > bd.there + 0.01){ hint.textContent = `Only ${bd.there} yd of ${c.label} is there to take.`; return; }
-        back = {key:c.key, label:c.label, pileId:c.pileId, yards:r1(byd)};
-      }
+      const got = readBackFields(t, hint); if(!got.ok) return;
+      const back = got.back;
       if(!outOk && !back){ hint.textContent = 'Choose something to take out or bring back.'; return; }
 
       let o;
@@ -4738,25 +4736,91 @@ function openPlaceConfirm(id, truckId, time, iso, windowId, backKey){
       try{ runDay(iso); }catch(e){ console.warn(e); }
       Store.save(); renderRequests(); renderOrders(); renderSchedule();
       BackSync.kick();
-      const said = [outOk ? `${yd} yd of ${p.name} out` : 'out empty', back ? `${back.yards} yd of ${back.label} back` : 'back empty'].join(', ');
+      const said = [outOk ? `${yd} yd of ${p.name} out` : 'out empty', back ? `${uTxt(back.yards)} of ${back.label} back` : 'back empty'].join(', ');
       toast(`${t.name}, ${prettyDate(iso)}: ${said}${rest > 0.01
         ? ` — ${rest} yd still ${r.goal === 'fill' ? 'to reach the fill level' : 'to place'}. Click another slot, or Cancel.` : ''}`, 6000);
     }}
   ]);
+  wireBackFields(t, {emptyNote: r ? '' : 'Pick what the truck brings back.'});
+  const inp = $('#placeYd'); if(inp) inp.select();
+}
+
+/* --------------------------------------------- what comes back: shared fields */
+function backFieldsHtml(backKey){
+  return `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <label class="field" style="min-width:240px;flex:1">Bring back
+        <select id="placeBack"><option value="">Nothing — coming back empty</option>${backChoices().map(c=>
+          `<option value="${esc(c.key)}" ${c.key === backKey ? 'selected' : ''}>${esc(c.label)}${
+            c.onHand !== null ? ` — ${esc(uTxt(c.onHand))} on the pile` : ''}</option>`).join('')}</select></label>
+      <label class="field" style="width:130px" id="placeBackYdWrap" hidden>Units back
+        <input id="placeBackYd" type="number" inputmode="decimal" min="0.25" step="0.25"></label>
+    </div>
+    <div class="small muted" id="placeBackNote" style="margin-top:6px"></div>`;
+}
+function wireBackFields(t, opt){
+  opt = opt || {};
   const bsel = $('#placeBack'), byd = $('#placeBackYd'), wrap = $('#placeBackYdWrap'), note = $('#placeBackNote');
-  const syncBack = ()=>{
-    if(!bsel) return;
+  if(!bsel) return;
+  let first = true;
+  const sync = ()=>{
     const c = bsel.value ? backChoice(bsel.value) : null;
     wrap.hidden = !c;
-    if(!c){ note.textContent = r ? '' : 'Pick what the truck brings back.'; return; }
-    const bd = backDefault(t, c);
-    byd.max = bd.there === null ? bd.max : Math.min(bd.max, bd.there);
-    byd.value = bd.take > 0 ? bd.take : '';
-    note.textContent = `${t.name} brings back up to ${bd.max} yd a run` +
-      (bd.there !== null ? ` · ${bd.there} yd of ${c.label} is there to take` : (c.pileId ? ` · Retail Yard's level for ${c.label} is below zero, so it isn't used as a limit` : ` · ${c.label} is not a pile Retail Yard tracks, so no level is known`)) + '.';
+    if(!c){ note.textContent = opt.emptyNote || ''; first = false; return; }
+    const bd = backDefault(t, c, opt.skipOrderId);
+    byd.max = yd2u(bd.there === null ? bd.max : Math.min(bd.max, bd.there));
+    byd.value = first && opt.yards > 0 ? yd2u(opt.yards) : (bd.take > 0 ? yd2u(bd.take) : '');
+    first = false;
+    note.textContent = `One unit is ${unitYd()} yd. ${t.name} brings back up to ${uTxt(bd.max)} a run` +
+      (bd.there !== null ? ` · ${uTxt(bd.there)} of ${c.label} ${yd2u(bd.there) === 1 ? 'is' : 'are'} there to take`
+        : (c.pileId ? ` · Retail Yard's level for ${c.label} is below zero, so it isn't used as a limit`
+                    : ` · ${c.label} is not a pile Retail Yard tracks, so no level is known`)) + '.';
   };
-  if(bsel){ bsel.onchange = syncBack; syncBack(); }
-  const inp = $('#placeYd'); if(inp) inp.select();
+  bsel.onchange = sync; sync();
+}
+/** Reads the fields above. {ok:false} when something is wrong (the hint says what); back is null for "nothing". */
+function readBackFields(t, hint, skipOrderId){
+  const bsel = $('#placeBack');
+  if(!bsel || !bsel.value) return {ok:true, back:null};
+  const c = backChoice(bsel.value), bd = backDefault(t, c, skipOrderId);
+  const units = num($('#placeBackYd').value, 0), byd = u2yd(units);
+  if(!(units > 0)){ hint.textContent = 'Enter the units coming back.'; return {ok:false}; }
+  if(byd > bd.max + 0.05){ hint.textContent = `${t.name} brings back ${uTxt(bd.max)} at most.`; return {ok:false}; }
+  if(bd.there !== null && byd > bd.there + 0.05){ hint.textContent = `Only ${uTxt(bd.there)} of ${c.label} ${yd2u(bd.there) === 1 ? 'is' : 'are'} there to take.`; return {ok:false}; }
+  return {ok:true, back:{key:c.key, label:c.label, pileId:c.pileId, yards:r1(Math.min(byd, bd.max))}};
+}
+
+/* --------------------------------------------- add a haul back to a booked delivery
+ * A truck already taking product to Retail Yard can bring debris or food waste
+ * home on the same trip. This adds, changes or removes that return leg. */
+function openTagBack(orderId, backKey){
+  const o = orderById(orderId); if(!o) return;
+  const t = truckById(o.pinTruck);
+  if(!canTagBack(o)){ toast('A haul back can be added to a Retail Yard delivery on truck 85, 98 or 65 that has not been delivered yet', 5000); return; }
+  const prod = productOf(o), had = o.back || null, dp = depotPoints();
+  const pre = had ? had.key : (backKey || (groundPiles()[0] ? 'pile:' + groundPiles()[0].id : ''));
+  const btns = [{label:'Cancel', cls:'ghost', onClick:closeModal}];
+  const finish = msg=>{
+    closeModal(); UI.placeBack = null;
+    Store.save(); renderRequests(); renderOrders(); renderSchedule(); BackSync.kick(); toast(msg, 5000);
+  };
+  if(had) btns.push({label:'Remove the haul back', onClick:()=>{
+    delete o.back; logActivity('edited', o, `haul back removed (${had.label})`); finish(`${t.name} comes back empty`);
+  }});
+  btns.push({label: had ? 'Save' : 'Add it', cls:'primary', onClick:()=>{
+    const hint = $('#placeHint');
+    const got = readBackFields(t, hint, o.id); if(!got.ok) return;
+    if(!got.back){ hint.textContent = had ? 'Pick what comes back, or use “Remove the haul back”.' : 'Pick what the truck brings back.'; return; }
+    o.back = got.back;
+    logActivity('edited', o, `${uTxt(got.back.yards)} of ${got.back.label} back from Retail Yard`);
+    finish(`${t.name}, ${prettyDate(o.schedDate)}: ${uTxt(got.back.yards)} of ${got.back.label} coming back`);
+  }});
+  openModal(`${t.name} — ${had ? 'haul back' : 'add a haul back'}`, `
+    <div class="small muted">${esc(prettyDate(o.schedDate))} · ${esc(min2hm(hm2min(o.slotTime||'08:00')))}</div>
+    <p style="margin:10px 0 0">Going out: <b>${num(o.yards)} yd${prod ? ' of ' + esc(prod.name) : ''}</b> to Retail Yard.</p>
+    <h4 style="margin:16px 0 6px">Back to ${esc(dp.home.name)}</h4>
+    ${backFieldsHtml(pre)}
+    <div class="small" id="placeHint" style="color:var(--crit);min-height:1.2em;margin-top:8px"></div>`, btns);
+  wireBackFields(t, {skipOrderId:o.id, yards: had ? had.yards : 0, emptyNote:'Pick what the truck brings back.'});
 }
 
 /* --------------------------------------------- delete a request (asked twice)
@@ -4767,7 +4831,7 @@ function deleteRequestAsk(id){
   const p = reqProduct(r), name = p ? p.name : (r.product || 'this request');
   const trips = (r.hauls||[]).map(h=>orderById(h.orderId)).filter(o=>o && o.status !== 'cancelled' && o.status !== 'delivered');
   const linked = r.src === 'tracker' && r.extId && Tracker.isFeed;
-  const backs = trips.filter(o=>o.back).map(o=>`${num(o.back.yards)} yd of ${o.back.label}`);
+  const backs = trips.filter(o=>o.back).map(o=>`${uTxt(o.back.yards)} of ${o.back.label}`);
   openModal('Delete this request?', `
     <p style="margin:0"><b>${esc(name)}</b>${r.bin? ' for bin '+esc(r.bin) : ''}${r.requestedBy? ' — asked by '+esc(r.requestedBy) : ''}.</p>
     <p class="small muted" style="margin:8px 0 0">${trips.length ? `${trips.length} load${trips.length>1?'s':''} booked for it will come off the schedule. ` : ''}${
@@ -4975,7 +5039,16 @@ function wireGrid(){
     };
   });
   $$('#sGrid [data-book]').forEach(el=>{
-    el.onclick = ()=>{ if(UI.dragJustFinished) return; openBookingDetail(el.dataset.book, el.dataset.bookday || UI.date); };
+    el.onclick = ()=>{
+      if(UI.dragJustFinished) return;
+      if(UI.placeBack && UI.gridMode !== 'avail'){          // placing a haul back: a booked Retail Yard delivery can carry it home
+        const bo = orderById(el.dataset.book);
+        if(canTagBack(bo)) openTagBack(bo.id, UI.placeBack);
+        else toast('Pick an open slot, or a Retail Yard delivery on truck 85, 98 or 65');
+        return;
+      }
+      openBookingDetail(el.dataset.book, el.dataset.bookday || UI.date);
+    };
     el.onmousedown = e=>{
       if(e.button !== 0 || UI.gridMode === 'avail' || UI.placeReq || UI.placeBack) return;
       if(e.target.closest('input,button,select,a')) return;        // the delivered tick, etc.
@@ -5398,7 +5471,8 @@ function openBookingDetail(orderId, iso){
       ${isInternal(o)? `<tr><td class="muted">Job</td><td>${esc(JOB_KINDS[jobKind(o)].label)} · ${esc(jobRoute(o))}</td></tr>`:''}
       <tr><td class="muted">${isInternal(o)? 'Route' : 'Address'}</td><td>${esc(isInternal(o)? jobRoute(o) : (o.address||'—'))}</td></tr>
       <tr><td class="muted">Product</td><td>${esc(prod? prod.name : '—')}</td></tr>
-      <tr><td class="muted">Quantity</td><td>${num(o.yards)} yd</td></tr>
+      <tr><td class="muted">Quantity</td><td>${jobKind(o) === 'debris' && o.back ? esc(uTxt(o.yards)) + ' <span class="muted">(' + num(o.yards) + ' yd)</span>' : num(o.yards) + ' yd'}</td></tr>
+      ${o.back && jobKind(o) !== 'debris' ? `<tr><td class="muted">Coming back</td><td>${esc(uTxt(o.back.yards))} of ${esc(o.back.label)}</td></tr>` : ''}
       <tr><td class="muted">Phone</td><td>${esc(o.phone||'—')}</td></tr>
       <tr><td class="muted">Booked</td><td>${o.waveDate
         ? esc(WINDOWS[orderWindow(o)].label) + ' wave · ' + esc(COMMIT[orderCommit(o)].label)
@@ -5420,6 +5494,7 @@ function openBookingDetail(orderId, iso){
       renderSchedule(); renderOrders(); toast('Slot cleared');
     }},
     {label:'Move…', onClick:()=>{ closeModal(); openMoveDialog(o); }},
+    ...(canTagBack(o) ? [{label: o.back ? 'Change haul back' : 'Add a haul back', onClick:()=>{ closeModal(); openTagBack(o.id); }}] : []),
     {label:'Edit order', cls:'ghost', onClick:()=>{ closeModal(); editOrder(o.id); }},
     {label: o.status==='delivered'? 'Mark not delivered':'Mark delivered', cls:'primary', onClick:()=>{
       o.status = o.status==='delivered' ? 'scheduled' : 'delivered';
