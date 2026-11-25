@@ -621,7 +621,7 @@ code{font-family:var(--mono);font-size:12px;background:var(--surface-3);padding:
   <nav class="tabs" role="tablist">
     <button role="tab" data-tab="schedule" aria-selected="true">Schedule</button>
     <button role="tab" data-tab="intake" aria-selected="false">Intake</button>
-    <button role="tab" data-tab="requests" aria-selected="false">Yard requests
+    <button role="tab" data-tab="requests" aria-selected="false">99 requests
       <span class="tabcount" id="reqCount" hidden></span></button>
     <button role="tab" data-tab="orders" aria-selected="false">Orders</button>
     <button role="tab" data-tab="fleet" aria-selected="false">Fleet</button>
@@ -733,8 +733,8 @@ code{font-family:var(--mono);font-size:12px;background:var(--surface-3);padding:
   <section class="panel" id="panel-requests" hidden>
     <div class="spread" style="margin-bottom:12px">
       <div>
-        <h3 style="margin:0 0 2px">Retail yard backfill</h3>
-        <div class="muted small">What the yard has asked for. Scheduling one creates a haul
+        <h3 style="margin:0 0 2px">99 backfill</h3>
+        <div class="muted small">What 99 has asked for. Scheduling one creates a haul
           from the Coburg Rd yard to Hwy 99 and shows it as scheduled in Retail Yard.</div>
       </div>
       <div class="row">
@@ -1005,7 +1005,7 @@ code{font-family:var(--mono);font-size:12px;background:var(--surface-3);padding:
           <label class="field">Table <input type="text" id="set_sbTable"></label>
           <label class="field">Schema <input type="text" id="set_sbSchema" placeholder="public"></label>
         </div>
-        <h4 style="margin:16px 0 6px">Retail yard tracker</h4>
+        <h4 style="margin:16px 0 6px">99 tracker</h4>
         <div class="muted small" style="margin-bottom:8px">Where Jeff's backfill requests come from.
           Leave the URL and key blank to reuse the Supabase connection above.</div>
         <div class="three">
@@ -1027,7 +1027,7 @@ code{font-family:var(--mono);font-size:12px;background:var(--surface-3);padding:
         </div>
         <div class="three">
           <label class="field">Check every (min) <input type="number" min="1" max="120" id="set_trackerPollMin"></label>
-          <label class="field">Yard trucks <input type="text" id="set_yardTrucks" placeholder="t85,t98"></label>
+          <label class="field">99 trucks <input type="text" id="set_yardTrucks" placeholder="t85,t98"></label>
         </div>
         <label class="row small" style="gap:7px"><input type="checkbox" id="set_trackerWriteBack">
           <span>Tell the tracker when a request is scheduled, declined or delivered</span></label>
@@ -2378,7 +2378,7 @@ function requestToOrder(r){
   const p = reqProduct(r);
   return {
     id: uid(), kind:'yard-haul',
-    customer: 'Retail yard restock',
+    customer: '99 restock',
     productId: p ? p.id : '',
     yards: reqYards(r),
     forceDepot: r.fromDepot || 'home',      // Coburg Rd loads it
@@ -2490,10 +2490,10 @@ function scheduleRequest(id, iso, truckId, time, yards, windowId){
   if(windowId){                                  // a wave truck: booked into the AM or PM wave
     bookWave(o, iso, windowId, {pinTruck: truckId});
     time = '';
-    logActivity('added', o, `yard restock — ${prettyDate(iso)} ${WINDOWS[windowId].label.toLowerCase()}`);
+    logActivity('added', o, `99 restock — ${prettyDate(iso)} ${WINDOWS[windowId].label.toLowerCase()}`);
   } else {
     bookOrder(o, iso, truckId, time);
-    logActivity('added', o, `yard restock — ${prettyDate(iso)} ${min2hm(hm2min(time))}`);
+    logActivity('added', o, `99 restock — ${prettyDate(iso)} ${min2hm(hm2min(time))}`);
   }
 
   r.hauls = r.hauls || [];
@@ -2554,7 +2554,7 @@ function syncRequestsFromOrders(){
 
 const JOB_KINDS = {
   delivery:   { label:'Customer delivery', short:'delivery', icon:'' },
-  'yard-haul':{ label:'Haul to retail yard', short:'yard haul', icon:'→' },
+  'yard-haul':{ label:'Haul to 99', short:'99 haul', icon:'→' },
   debris:     { label:'Yard debris return',  short:'debris',    icon:'←' }
 };
 function jobKind(o){ return o && o.kind ? o.kind : 'delivery'; }
@@ -2563,7 +2563,7 @@ function jobLabel(o){
   const k = jobKind(o);
   if(k === 'delivery') return o.customer || '—';
   const dp = depotPoints();
-  if(k === 'yard-haul') return `Retail yard restock`;
+  if(k === 'yard-haul') return `99 restock`;
   return `Debris return`;
 }
 function jobRoute(o){
@@ -4389,7 +4389,7 @@ function renderReqQueue(){
   if(UI.placeReq && !open.some(r=>r.id === UI.placeReq)) UI.placeReq = null;
   const placing = UI.placeReq ? requestById(UI.placeReq) : null;
   const grid = $('#sGrid'); if(grid) grid.classList.toggle('placing', !!placing);
-  box.innerHTML = `<div class="qhead"><b>Open requests from the yard</b>
+  box.innerHTML = `<div class="qhead"><b>Open requests from 99</b>
       <span class="muted small">${open.length} waiting · Jeff's order</span>
       <button class="btn sm ghost" id="qAll" style="margin-left:auto">Open the queue</button></div>
     ${placing ? (()=>{ const pp = reqProduct(placing);
@@ -4421,8 +4421,8 @@ function renderReqQueue(){
       </tr>`;
     }).join('')}</tbody></table></div>${
       open.length > 12 ? `<div class="qmore muted">…and ${open.length-12} more — open the queue to see them all.</div>` : ''}
-    <div class="qhead qhead2"><b>Loads scheduled for the yard</b>
-      <span class="muted small">${loads.length ? `${loads.length} load${loads.length>1?'s':''} · ${r1(loads.reduce((a,l)=>a+l.yards,0))} yd · each stays here until the yard confirms the delivery`
+    <div class="qhead qhead2"><b>Loads scheduled for 99</b>
+      <span class="muted small">${loads.length ? `${loads.length} load${loads.length>1?'s':''} · ${r1(loads.reduce((a,l)=>a+l.yards,0))} yd · each stays here until 99 confirms the delivery`
                                               : 'none booked'}</span></div>
     ${loads.length ? `<div class="qwrap"><table>
       <thead><tr><th>When</th><th>Truck</th><th>Product</th><th class="num">Load</th><th>Bin</th><th>Status</th></tr></thead>
@@ -4481,7 +4481,7 @@ function yardLoadsOpen(){
         truck: (t && t.name) || h.truckId || '—',
         product: p ? p.name : (r.product || 'product not set'),
         yards: r1(num(o.yards, 0)), bin: r.bin || '', fill: r.goal === 'fill',
-        label: dropped ? 'dropped off — yard to confirm' : (o.schedDate && o.schedDate < todayISO() ? 'past due — not marked delivered' : 'scheduled'),
+        label: dropped ? 'dropped off — 99 to confirm' : (o.schedDate && o.schedDate < todayISO() ? 'past due — not marked delivered' : 'scheduled'),
         chip: dropped ? 'warn' : (o.schedDate && o.schedDate < todayISO() ? 'late' : 'ok'),
         error: r.pushError || ''
       });
@@ -8263,7 +8263,7 @@ function startTrackerPolling(){
       if(YardCaps.configured) try{ await YardCaps.pull(); }catch(e){ console.warn(e.message); }
       if(Catalog.configured) try{ await Catalog.pull(); }catch(e){ DB.catalogError = e.message; }
       renderRequests(); markTabCounts();
-      if(r.added) toast(`${r.added} new yard request${r.added>1?'s':''} from the tracker`, 4000);
+      if(r.added) toast(`${r.added} new 99 request${r.added>1?'s':''} from the tracker`, 4000);
     }catch(e){
       // a poll that keeps failing has to be visible, not a line in the console
       DB.trackerError = DB.trackerError || e.message;
@@ -8336,7 +8336,7 @@ function renderRequests(){
   if(warn){
     const bits = [];
     if(!Tracker.configured)
-      bits.push('The tracker is not linked yet — Settings → Retail yard tracker.');
+      bits.push('The tracker is not linked yet — Settings → 99 tracker.');
     else if(DB.trackerError) bits.push(DB.trackerError);
     else if(DB.trackerPulledAt && DB.trackerSeen === 0)
       bits.push(`The tracker answered with no rows at all. If Jeff has just submitted one, check that`
@@ -8365,7 +8365,7 @@ function renderRequests(){
     let st = REQ_STATUS[r.status] || {label:r.status, chip:''};
     // the truck has dropped it; the bin only fills when the yard confirms on its side
     if(r.feed && r.status==='delivered' && String(r.trackerStatus) !== 'delivered')
-      st = {label:'dropped off — yard to confirm', chip:'warn'};
+      st = {label:'dropped off — 99 to confirm', chip:'warn'};
     const o = r.orderId ? orderById(r.orderId) : null;
     return `<tr data-id="${esc(r.id)}">
       <td class="small">${num(r.rank,0)? `<span class="rankchip">#${num(r.rank)}</span> ` : ''}${
@@ -8401,7 +8401,7 @@ function renderRequests(){
         ${r.status==='declined'? `<button class="btn sm" data-reopen>Reopen</button>`:''}
       </td></tr>`;
   }).join('') || `<tr><td colspan="7" class="muted" style="text-align:center;padding:22px">
-      Nothing from the yard yet.${Tracker.configured? '' : ' Link the tracker in Settings, or log a request here.'}
+      Nothing from 99 yet.${Tracker.configured? '' : ' Link the tracker in Settings, or log a request here.'}
     </td></tr>`;
 
   $$('#reqTable [data-sched]').forEach(b=>b.onclick=e=>
@@ -8464,14 +8464,14 @@ function openRequestScheduler(id){
 
     const head = $('#reqPlan');
     if(head) head.innerHTML = per <= 0
-      ? `<span style="color:var(--crit)">No yard truck can haul ${esc(prod? prod.name : 'this')} at all —
+      ? `<span style="color:var(--crit)">None of the 99 trucks can haul ${esc(prod? prod.name : 'this')} at all —
          check its weight per yard in Products.</span>`
       : (thisTrip <= 0.01
         ? `<div style="color:var(--crit)">${esc(st.bin? st.bin.name : 'That bin')} has no room —
            ${st.current}/${st.capacity} yd${st.inbound? ` with ${st.inbound} yd already on the way`:''}.</div>
            <div class="small muted">Nothing more can go in until it draws down. The request stays open.</div>`
         : `<div><b>${left} yd</b> still to move${done? ` (${done} yd already booked)` : ''} ·
-           ${esc((perTruck||{}).name || 'a yard truck')} takes <b>${per} yd</b> a trip
+           ${esc((perTruck||{}).name || 'a 99 truck')} takes <b>${per} yd</b> a trip
            (${esc(haulCapacity(perTruck||pool[0], prod).limit)}).
            Next load: <b>${thisTrip} yd</b>${binCapped
              ? ` — a part load, because that is all ${esc(st.bin? st.bin.name : 'the bin')} will take
@@ -8588,7 +8588,7 @@ function openDeclineRequest(id){
     <label class="field">Reason<select id="reqWhy">
       <option>No truck free before it is needed</option>
       <option>Product is not available to haul</option>
-      <option>Quantity is wrong — ask the yard</option>
+      <option>Quantity is wrong — ask 99</option>
       <option>Already covered by another haul</option>
       <option>Other</option>
     </select></label>
@@ -8605,7 +8605,7 @@ function openDeclineRequest(id){
 
 function openLogRequest(){
   const prodOpts = (DB.products||[]).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
-  openModal('Log a yard request', `
+  openModal('Log a 99 request', `
     <div class="small muted">For a request that came by radio or in person. It behaves exactly
       like one from the tracker, but nothing is sent back.</div>
     <div class="two">
@@ -9064,7 +9064,7 @@ async function boot(refresh){
       await Tracker.flush();
       if(YardCaps.configured) try{ await YardCaps.pull(); }catch(e){ console.warn(e.message); }
       renderRequests();
-      if(r.added) toast(`${r.added} yard request${r.added>1?'s':''} waiting`, 4500);
+      if(r.added) toast(`${r.added} 99 request${r.added>1?'s':''} waiting`, 4500);
     }catch(e){ console.warn('tracker pull failed', e.message); }
   }
   if(refresh) toast('Reloaded');
