@@ -399,7 +399,19 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .scell.blocked{cursor:pointer;color:var(--crit);background:
   repeating-linear-gradient(45deg, rgba(179,38,30,.14) 0 7px, rgba(179,38,30,.04) 7px 14px);
   font-size:10px;letter-spacing:.04em;align-items:flex-start;text-transform:uppercase;font-weight:600}
-.scell.booked{cursor:pointer}
+.scell.booked{cursor:grab}
+.wstop,.wkstop{cursor:grab}
+.sgrid.moving{cursor:grabbing;user-select:none}
+.sgrid.moving .scell.open,.sgrid.moving .scell.wband{box-shadow:inset 0 0 0 1px var(--brand)}
+.sgrid.moving .droptarget{box-shadow:inset 0 0 0 3px var(--brand) !important;background:rgba(45,106,71,.12) !important}
+.sgrid.moving .dropbad{box-shadow:inset 0 0 0 3px var(--crit) !important;background:var(--crit-bg) !important}
+.sgrid .dragsrc{opacity:.35}
+.dragghost{position:fixed;z-index:9999;pointer-events:none;max-width:260px;padding:7px 10px;border-radius:6px;
+  background:var(--surface);border:2px solid var(--brand);box-shadow:0 8px 22px rgba(0,0,0,.28);font-size:12px}
+.dragghost b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dragghost span{display:block;color:var(--ink-muted);font-size:11px;margin-top:2px}
+.dragghost.bad{border-color:var(--crit)}
+.dragghost.bad span{color:var(--crit)}
 .scell.booked:hover{box-shadow:inset 0 0 0 2px rgba(22,24,26,.25)}
 .scell .cust{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .scell .sub{color:var(--ink-2);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -460,6 +472,7 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .reqqueue td.qname{font-weight:600;white-space:normal;min-width:150px}
 .reqqueue .qlate{color:var(--crit);font-weight:600}
 .reqqueue .qmore{padding:6px 11px;border-top:1px solid var(--rule);font-size:11.5px}
+.reqqueue .qhead2{border-top:1px solid var(--rule)}
 .reqqueue tr.placing td{background:var(--brand-bg, rgba(45,106,67,.10));box-shadow:inset 0 2px 0 var(--brand), inset 0 -2px 0 var(--brand)}
 .reqqueue .qplace{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 11px;
   border-bottom:1px solid var(--rule);background:var(--brand);color:#fff;font-size:12.5px}
@@ -4367,13 +4380,16 @@ function waveOf(tr, wid){
 function renderReqQueue(){
   const box = $('#sQueue');
   if(!box) return;
+  // keep requests, and Retail Yard's hauls, in step with what just changed on the board
+  if(syncRequestsFromOrders()) Store.save();
   const open = openRequests();
-  if(!open.length){ box.hidden = true; box.innerHTML = ''; return; }
+  const loads = yardLoadsOpen();
+  if(!open.length && !loads.length){ box.hidden = true; box.innerHTML = ''; UI.placeReq = null; return; }
   box.hidden = false;
   if(UI.placeReq && !open.some(r=>r.id === UI.placeReq)) UI.placeReq = null;
   const placing = UI.placeReq ? requestById(UI.placeReq) : null;
   const grid = $('#sGrid'); if(grid) grid.classList.toggle('placing', !!placing);
-  box.innerHTML = `<div class="qhead"><b>From the yard</b>
+  box.innerHTML = `<div class="qhead"><b>Open requests from the yard</b>
       <span class="muted small">${open.length} waiting · Jeff's order</span>
       <button class="btn sm ghost" id="qAll" style="margin-left:auto">Open the queue</button></div>
     ${placing ? (()=>{ const pp = reqProduct(placing);
@@ -4381,7 +4397,8 @@ function renderReqQueue(){
         placing.bin? ' for bin '+esc(placing.bin) : ''} — click an open slot on any truck below.</span>
         <button class="btn sm" id="qPlaceList">Pick from a list instead</button>
         <button class="btn sm" id="qPlaceStop" style="margin-left:auto">Cancel</button></div>`; })() : ''}
-    <div class="qwrap"><table>
+    ${open.length ? '' : '<div class="qmore muted">Nothing waiting — every request has a load booked.</div>'}
+    <div class="qwrap"${open.length ? '' : ' hidden'}><table>
       <thead><tr><th>#</th><th>Product</th><th>Bin space</th><th>Needed by</th><th></th></tr></thead>
       <tbody>${open.slice(0, 12).map(r=>{
       const p = reqProduct(r), u = reqUrgency(r), st = binState(r);
@@ -4403,7 +4420,27 @@ function renderReqQueue(){
         <td><button class="btn sm${on?'':' primary'}" data-reqgo="${esc(r.id)}">${on? 'Cancel' : 'Schedule'}</button></td>
       </tr>`;
     }).join('')}</tbody></table></div>${
-      open.length > 12 ? `<div class="qmore muted">…and ${open.length-12} more — open the queue to see them all.</div>` : ''}`;
+      open.length > 12 ? `<div class="qmore muted">…and ${open.length-12} more — open the queue to see them all.</div>` : ''}
+    <div class="qhead qhead2"><b>Loads scheduled for the yard</b>
+      <span class="muted small">${loads.length ? `${loads.length} load${loads.length>1?'s':''} · ${r1(loads.reduce((a,l)=>a+l.yards,0))} yd · each stays here until the yard confirms the delivery`
+                                              : 'none booked'}</span></div>
+    ${loads.length ? `<div class="qwrap"><table>
+      <thead><tr><th>When</th><th>Truck</th><th>Product</th><th class="num">Load</th><th>Bin</th><th>Status</th></tr></thead>
+      <tbody>${loads.map(l=>`<tr data-load="${esc(l.orderId)}" data-loadday="${esc(l.date||'')}" tabindex="0" title="Click to open this load">
+        <td>${l.date ? esc(prettyDate(l.date)) : '<span class="muted">no date</span>'}${
+          l.when ? ` <span class="muted">· ${esc(l.when)}</span>` : ''}</td>
+        <td>${esc(l.truck)}</td>
+        <td class="qname">${esc(l.product)}${l.fill ? ' <span class="chip kind">fill</span>' : ''}</td>
+        <td class="num">${l.yards} yd</td>
+        <td>${esc(l.bin || '—')}</td>
+        <td><span class="chip ${l.chip}">${esc(l.label)}</span>${
+          l.error ? ` <span class="small" style="color:var(--crit)" title="${esc(l.error)}">Retail Yard not updated</span>` : ''}</td>
+      </tr>`).join('')}</tbody></table></div>` : ''}`;
+  $$('#sQueue tr[data-load]').forEach(el=>{
+    const go = ()=>openBookingDetail(el.dataset.load, el.dataset.loadday || UI.date);
+    el.onclick = go;
+    el.onkeydown = e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); go(); } };
+  });
   $$('#sQueue tr[data-req]').forEach(el=>{
     const go = ()=>{ UI.placeReq = (UI.placeReq === el.dataset.req) ? null : el.dataset.req; renderReqQueue(); };
     el.onclick = go;
@@ -4413,6 +4450,44 @@ function renderReqQueue(){
   const list = $('#qPlaceList'); if(list) list.onclick = ()=>{ const id = UI.placeReq; UI.placeReq = null; renderReqQueue(); openRequestScheduler(id); };
   const all = $('#qAll');
   if(all) all.onclick = ()=>showTab('requests');
+}
+
+/**
+ * Every load booked for the retail yard that the yard has not confirmed yet.
+ * A load stays on this list from the moment it is booked — through the truck
+ * dropping it — and only leaves when the yard confirms the delivery on its side
+ * (that is what fills the bin). A load with no link to Retail Yard leaves when
+ * it is marked delivered here.
+ */
+function yardLoadsOpen(){
+  const out = [];
+  (DB.requests||[]).forEach(r=>{
+    if(r.status === 'declined') return;
+    const p = reqProduct(r);
+    (r.hauls||[]).forEach(h=>{
+      const o = orderById(h.orderId);
+      if(!o || o.status === 'cancelled') return;
+      const link = (r.yardHauls||{})[h.orderId];
+      const yardSays = link ? (r.yardSeen||{})[link.haulId] : null;
+      const linked = !!(r.feed && r.extId);
+      if(linked ? (yardSays === 'delivered' || String(r.trackerStatus) === 'delivered' && o.status === 'delivered' && !link)
+                : o.status === 'delivered') return;
+      const t = truckById(o.pinTruck || h.truckId);
+      const dropped = o.status === 'delivered';
+      out.push({
+        orderId: o.id, date: o.schedDate || h.date || '',
+        when: o.slotTime ? min2hm(hm2min(o.slotTime)) : (o.windowId && WINDOWS[o.windowId] ? WINDOWS[o.windowId].label : ''),
+        sort: (o.schedDate || h.date || '9999') + ' ' + (o.slotTime || (o.windowId === 'pm' ? '12:00' : '00:00')),
+        truck: (t && t.name) || h.truckId || '—',
+        product: p ? p.name : (r.product || 'product not set'),
+        yards: r1(num(o.yards, 0)), bin: r.bin || '', fill: r.goal === 'fill',
+        label: dropped ? 'dropped off — yard to confirm' : (o.schedDate && o.schedDate < todayISO() ? 'past due — not marked delivered' : 'scheduled'),
+        chip: dropped ? 'warn' : (o.schedDate && o.schedDate < todayISO() ? 'late' : 'ok'),
+        error: r.pushError || ''
+      });
+    });
+  });
+  return out.sort((a,b)=>a.sort.localeCompare(b.sort));
 }
 
 /* --------------------------------------------- place a yard request on the board
@@ -4644,8 +4719,15 @@ function wireGrid(){
     };
   });
   $$('#sGrid [data-book]').forEach(el=>{
-    el.onclick = ()=> openBookingDetail(el.dataset.book, el.dataset.bookday || UI.date);
+    el.onclick = ()=>{ if(UI.dragJustFinished) return; openBookingDetail(el.dataset.book, el.dataset.bookday || UI.date); };
+    el.onmousedown = e=>{
+      if(e.button !== 0 || UI.gridMode === 'avail' || UI.placeReq) return;
+      if(e.target.closest('input,button,select,a')) return;        // the delivered tick, etc.
+      e.stopPropagation();                                           // not a wave drag, not a new-job drag
+      UI.dragMove = {orderId: el.dataset.book, x: e.clientX, y: e.clientY, started:false, src: el};
+    };
   });
+  wireOrderDrag();
   $$('#sGrid [data-del]').forEach(el=>{
     el.onchange = e=>{
       const o = orderById(el.dataset.del);
@@ -4725,6 +4807,121 @@ function dragNewRange(){
   }
   return {start: all[a], span: end - a + 1};
 }
+/* ------------------------------------------------- drag a booked job to move it
+ * Press on a job, drag it to another open slot (any truck, and any day in the
+ * week view) or onto a wave truck's AM/PM band, and let go. The target lights up
+ * green when the job fits there and red, with the reason, when it does not. */
+function moveTargetAt(x, y){
+  const el = document.elementFromPoint(x, y);
+  const cell = el && el.closest ? el.closest('#sGrid [data-slot], #sGrid [data-wave]') : null;
+  if(!cell) return null;
+  if(cell.dataset.slot){
+    const [truckId, time] = cell.dataset.slot.split('|');
+    return {el: cell, truckId, time, iso: cell.dataset.slotday || UI.date};
+  }
+  const [truckId, windowId] = cell.dataset.wave.split('|');
+  return {el: cell, truckId, windowId, iso: cell.dataset.waveday || UI.date};
+}
+/** Can this job go there? {ok, why} — why is said to the dispatcher either way. */
+function moveCheck(o, tg){
+  const t = truckById(tg.truckId);
+  if(!t) return {ok:false, why:'no truck there'};
+  const prod = productOf(o), yd = num(o.yards, 0);
+  const cap = prod ? effCapacity(t, prod, {internal: isInternal(o)}).cap : Infinity;
+  const where = tg.windowId ? `${t.name}, ${WINDOWS[tg.windowId].label.toLowerCase()}`
+                            : `${t.name}, ${min2hm(hm2min(tg.time))}`;
+  const day = tg.iso !== o.schedDate ? ` · ${prettyDate(tg.iso)}` : '';
+  if(tg.windowId){
+    if(o.waveDate === tg.iso && o.windowId === tg.windowId && o.pinTruck === tg.truckId)
+      return {ok:false, same:true, why:'already here'};
+    if(typeof truckRunsOn === 'function' && !truckRunsOn(tg.iso, t.id)) return {ok:false, why:`${t.name} is not running that day`};
+  } else {
+    if(o.schedDate === tg.iso && o.pinTruck === tg.truckId && o.slotTime === tg.time && !o.waveDate)
+      return {ok:false, same:true, why:'already here'};
+    if(isBlocked(tg.iso, tg.truckId, tg.time)) return {ok:false, why:'that slot is blocked'};
+    const span = Math.max(1, num(o.slotSpan, 1));
+    if(!slotRangeFree(tg.iso, tg.truckId, tg.time, span, o.id))
+      return {ok:false, why: span > 1 ? `needs ${span} free slots in a row there` : 'that slot is taken'};
+  }
+  if(yd > cap + 0.01)
+    return {ok:false, why:`${yd} yd is more than ${t.name} carries of this (${Math.floor(cap*10)/10} yd)`};
+  return {ok:true, why: where + day};
+}
+function moveOrderTo(o, tg){
+  const from = {iso: o.schedDate, truck: o.pinTruck, time: o.slotTime, win: o.windowId, wave: !!o.waveDate};
+  const t = truckById(tg.truckId);
+  const keep = o.status;                              // moving a job does not change what stage it is at
+  if(tg.windowId){
+    bookWave(o, tg.iso, tg.windowId, {pinTruck: tg.truckId, commit: o.commit});
+  } else {
+    if(from.wave){ o.waveDate = null; o.windowId = null; }
+    bookOrder(o, tg.iso, tg.truckId, tg.time);
+  }
+  if(keep && keep !== 'pending') o.status = keep;
+  const to = tg.windowId ? `${prettyDate(tg.iso)} ${WINDOWS[tg.windowId].label.toLowerCase()}`
+                         : `${prettyDate(tg.iso)} ${min2hm(hm2min(tg.time))}`;
+  logActivity('moved', o, `dragged to ${t.name} — ${to}`);
+  try{ if(from.iso && from.iso !== tg.iso) runDay(from.iso); runDay(tg.iso); }catch(e){ console.warn(e); }
+  Store.save(); renderSchedule(); renderOrders(); renderRequests();
+  const promiseChanged = !isInternal(o) && (from.iso !== tg.iso ||
+    (tg.windowId ? from.win !== tg.windowId : (from.wave || from.time !== tg.time)));
+  toast(`${jobLabel(o)} moved to ${t.name}, ${to}${promiseChanged ? ' — the customer may need a call' : ''}`, 5000);
+}
+function wireOrderDrag(){
+  if(wireOrderDrag.done) return;
+  wireOrderDrag.done = true;
+  let ghost = null, last = null;
+  const clear = ()=>{
+    if(ghost){ ghost.remove(); ghost = null; }
+    if(last){ last.classList.remove('droptarget','dropbad'); last = null; }
+    const g = $('#sGrid'); if(g) g.classList.remove('moving');
+    $$('#sGrid .dragsrc').forEach(el=>el.classList.remove('dragsrc'));
+  };
+  document.addEventListener('mousemove', e=>{
+    const d = UI.dragMove; if(!d) return;
+    const o = orderById(d.orderId);
+    if(!o){ UI.dragMove = null; clear(); return; }
+    if(!d.started){
+      if(Math.hypot(e.clientX - d.x, e.clientY - d.y) < 6) return;
+      if(o.status === 'delivered' || o.status === 'cancelled'){
+        UI.dragMove = null; toast('A delivered job stays where it was — untick Delivered to move it'); return;
+      }
+      d.started = true;
+      ghost = document.createElement('div'); ghost.className = 'dragghost';
+      document.body.appendChild(ghost);
+      $('#sGrid').classList.add('moving');
+      $$(`#sGrid [data-book="${CSS.escape(d.orderId)}"]`).forEach(el=>el.classList.add('dragsrc'));
+    }
+    e.preventDefault();
+    const tg = moveTargetAt(e.clientX, e.clientY);
+    const chk = tg ? moveCheck(o, tg) : null;
+    if(last && (!tg || last !== tg.el)){ last.classList.remove('droptarget','dropbad'); last = null; }
+    if(tg && !chk.same){ last = tg.el; last.classList.toggle('droptarget', chk.ok); last.classList.toggle('dropbad', !chk.ok); }
+    ghost.classList.toggle('bad', !!(chk && !chk.ok && !chk.same));
+    ghost.innerHTML = `<b>${esc(jobLabel(o))}${num(o.yards)? ' · '+num(o.yards)+' yd' : ''}</b><span>${
+      esc(chk ? (chk.ok ? '→ ' + chk.why : chk.why) : 'drop on an open slot')}</span>`;
+    ghost.style.left = Math.min(window.innerWidth - 270, e.clientX + 14) + 'px';
+    ghost.style.top  = Math.min(window.innerHeight - 60, e.clientY + 14) + 'px';
+  });
+  document.addEventListener('mouseup', e=>{
+    const d = UI.dragMove; if(!d) return;
+    UI.dragMove = null;
+    if(!d.started) return;                               // a plain click: the booking opens as usual
+    UI.dragJustFinished = true;
+    setTimeout(()=>{ UI.dragJustFinished = false; }, 350);
+    const o = orderById(d.orderId), tg = moveTargetAt(e.clientX, e.clientY);
+    clear();
+    if(!o || !tg) return;
+    const chk = moveCheck(o, tg);
+    if(chk.same) return;
+    if(!chk.ok){ toast(`Not moved — ${chk.why}`, 4500); return; }
+    moveOrderTo(o, tg);
+  });
+  document.addEventListener('keydown', e=>{
+    if(e.key === 'Escape' && UI.dragMove){ UI.dragMove = null; clear(); }
+  });
+}
+
 function paintDragNew(){
   const sel = dragNewRange(); if(!sel) return;
   const t = truckById(UI.dragNew.truckId);
