@@ -4508,6 +4508,7 @@ function renderReqQueue(){
       const pct = pl.capacity > 0 ? Math.max(0, Math.min(100, pl.onHand / pl.capacity * 100)) : 0;
       const mark = pl.capacity > 0 && pl.alert > 0 ? Math.min(100, pl.alert / pl.capacity * 100) : null;
       const on = UI.placeBack === 'pile:' + pl.id;
+      const log = pileLog(pl);
       return `<div class="qhead qhead2"><b>${esc(pl.name)} at Retail Yard</b>
           <span class="muted small">live from Retail Yard${DB.debrisPulledAt ? ' · as of ' + esc(new Date(DB.debrisPulledAt).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})) : ''}</span></div>
         <div class="pilebox${over ? ' over' : ''}">
@@ -4520,7 +4521,21 @@ function renderReqQueue(){
               booked ? ' even after what is booked' : ''} — schedule a haul to bring it back to ${esc(depotPoints().home.name)}.</div>` : ''}
           ${DB.backError ? `<div class="small" style="color:var(--crit)">Retail Yard not updated — ${esc(DB.backError)}</div>` : ''}
           <div><button class="btn sm${on ? '' : (over ? ' primary' : '')}" data-pileback="pile:${esc(pl.id)}">${on ? 'Cancel' : 'Schedule a haul back'}</button></div>
-        </div>`;
+        </div>
+        <div class="qhead qhead2"><b>Hauls back scheduled</b>
+          <span class="muted small">${log.rows.length ? `${log.rows.length} haul${log.rows.length>1?'s':''} · ${uTxt(log.rows.reduce((a,x)=>a+x.yards,0))} · pile after the last one: ${uTxt(log.end)}` : 'none booked'}</span></div>
+        ${log.rows.length || log.other > 0.01 ? `<div class="qwrap"><table>
+          <thead><tr><th>When</th><th>Truck</th><th>Trip</th><th class="num">Volume back</th><th class="num">Pile after this haul</th></tr></thead>
+          <tbody>${log.other > 0.01 ? `<tr><td class="muted" colspan="3">Booked in Retail Yard, not on this schedule</td>
+              <td class="num">${esc(uTxt(log.other))}</td><td class="num">${esc(uTxt(r1(pl.onHand - log.other)))}</td></tr>` : ''}
+          ${log.rows.map(x=>{ const stillOver = pl.alert > 0 && x.after > pl.alert;
+            return `<tr data-load="${esc(x.orderId)}" data-loadday="${esc(x.date)}" tabindex="0" title="Click to open this load">
+              <td>${x.date ? esc(prettyDate(x.date)) : '<span class="muted">no date</span>'}${x.time ? ` <span class="muted">· ${esc(min2hm(hm2min(x.time)))}</span>` : ''}</td>
+              <td>${esc(x.truck)}</td>
+              <td>${x.withLoad ? `return leg of the ${esc(x.withLoad)} delivery` : 'haul back only'}</td>
+              <td class="num">${esc(uTxt(x.yards))}</td>
+              <td class="num"><b>${esc(uTxt(x.after))}</b>${stillOver ? ' <span class="chip late">over alert</span>' : (pl.alert > 0 ? ' <span class="chip ok">under alert</span>' : '')}</td>
+            </tr>`; }).join('')}</tbody></table></div>` : ''}`;
     }).join('')}`;
   $$('#sQueue tr[data-load]').forEach(el=>{
     const go = ()=>openBookingDetail(el.dataset.load, el.dataset.loadday || UI.date);
@@ -4626,6 +4641,22 @@ function canTagBack(o){
 function pileBooked(pileId, skipOrderId){   // yards
   return r1((DB.orders||[]).reduce((a,o)=>a + (o.back && o.back.pileId === pileId && o.id !== skipOrderId &&
     o.status !== 'cancelled' && o.status !== 'delivered' ? num(o.back.yards, 0) : 0), 0));
+}
+/** Hauls back booked off a pile, soonest first, each with what the pile should hold once it is done.
+ *  `other` is yards Retail Yard has booked to leave that were not scheduled here. */
+function pileLog(pl){
+  const links = DB.settings.backLinks || {};
+  const rows = (DB.orders||[]).filter(o=>o.back && o.back.pileId === pl.id && o.status !== 'cancelled' && o.status !== 'delivered')
+    .map(o=>{ const t = truckById(o.pinTruck);
+      return {orderId:o.id, date:o.schedDate || '', time:o.slotTime || '', truck:(t && t.name) || '—', yards:r1(num(o.back.yards,0)),
+        withLoad: jobKind(o) !== 'debris' ? ((productOf(o)||{}).name || 'product') : '',
+        sort:(o.schedDate || '9999') + ' ' + (o.slotTime || '00:00')}; })
+    .sort((a,b)=>a.sort.localeCompare(b.sort));
+  const mine = rows.reduce((a,x)=>a + (links[x.orderId] && !links[x.orderId].done ? x.yards : 0), 0);
+  const other = Math.max(0, r1(pl.bookedOut - mine));
+  let level = pl.onHand - other;
+  rows.forEach(x=>{ level -= x.yards; x.after = r1(level); });
+  return {rows, other, end: rows.length ? rows[rows.length-1].after : r1(pl.onHand - other)};
 }
 /** Most a truck brings back in one run of this, and what is actually there to take. */
 function backDefault(t, choice, skipOrderId){
