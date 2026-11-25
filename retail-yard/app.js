@@ -1106,7 +1106,7 @@ VIEWS.debris={
       <div class="sec">
         <div class="sec-head"><h2>Yard Debris</h2>
           ${can.debris()?`<button class="btn sm order" data-act="debrisForm" data-v="intake">Add debris</button>
-          <button class="btn sm" data-act="debrisForm" data-v="grind">Record grind</button>`:''}</div>
+          <button class="btn sm red" data-act="debrisForm" data-v="grind">Record grind</button>`:''}</div>
         ${f?`<div class="panel panel-pad"><div class="sec-head"><h3 style="margin:0">${esc(title)}</h3><button class="btn sm ghost" data-act="debrisForm" data-v="">Close</button></div>
           <form class="form" data-form="debris" data-kind="${f}" autocomplete="off">${debrisFields(f,null)}
           <div class="form-actions full"><button class="btn ${cls}">${esc(btn)}</button></div></form></div>`:''}
@@ -1683,7 +1683,7 @@ function debrisModalHTML(b,head,name){
     ${photoSection(b)}
     ${can.debris()||can.adjust()?`<div class="bm-actions">
       ${can.debris()&&b.debris_role!=='ground'?'<button class="btn order" data-act="binMode" data-v="intake">Add debris</button>':''}
-      ${can.debris()&&b.debris_role==='grind'?'<button class="btn" data-act="binMode" data-v="grind">Record grind</button>':''}
+      ${can.debris()&&b.debris_role==='grind'?'<button class="btn red" data-act="binMode" data-v="grind">Record grind</button>':''}
       ${can.adjust()?'<button class="btn" data-act="binMode" data-v="count">Count pile</button>':''}</div>`:''}
     ${recent.length?label('Recent activity')+`<div class="timeline">${recent.map(m=>`<div class="tl"><span class="d">${esc(fmtDate(m.occurred_on||m.created_at.slice(0,10)))}</span><span>${esc(m.note||m.kind)}</span><span class="q num ${m.qty_yd<0?'neg':'pos'}">${signed(bQty(b,m.qty_yd))}</span></div>`).join('')}</div>`:''}
     ${can.binCapacity()&&hasCap(b)?`<form class="cap-form" data-form="binCap" data-id="${b.id}" data-unit="${inUnits(b)?'unit':'yd'}" autocomplete="off">

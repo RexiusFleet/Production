@@ -473,6 +473,12 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .qsec .qtitle .dir{font-size:12px;opacity:.92}
 .qsec .qtitle .btn{margin-left:auto}
 .qsec.back .qplace{background:#8a5a1c}
+.qsec .qtitle{cursor:pointer;user-select:none}
+.qsec .qtitle .qchev{width:12px;font-size:12px}
+.qsec .qtitle .qsum{font-size:12px;opacity:.92;margin-left:auto}
+.qsec .qtitle .qsum ~ .btn{margin-left:0}
+.qsec.min > :not(.qtitle){display:none}
+.qsec.min .qtitle{padding:6px 12px}
 .warnbox.nodrv{border-left:5px solid var(--crit);background:var(--crit-bg)}
 .warnbox.nodrv a{color:inherit;font-weight:600}
 .nodrv-list{display:grid;gap:5px;margin-top:10px;justify-items:center}
@@ -658,7 +664,7 @@ code{font-family:var(--mono);font-size:12px;background:var(--surface-3);padding:
     <button role="tab" data-tab="confirm" aria-selected="false">Confirm deliveries
       <span class="tabcount" id="cfCount" hidden></span></button>
     <button role="tab" data-tab="intake" aria-selected="false">Intake</button>
-    <button role="tab" data-tab="requests" aria-selected="false">Retail Yard requests
+    <button role="tab" data-tab="requests" aria-selected="false" hidden>Retail Yard requests
       <span class="tabcount" id="reqCount" hidden></span></button>
     <button role="tab" data-tab="orders" aria-selected="false">Orders</button>
     <button role="tab" data-tab="fleet" aria-selected="false">Fleet</button>
@@ -4566,11 +4572,28 @@ function renderReqQueue(){
   const placingBack = !placing && UI.placeBack ? backChoice(UI.placeBack) : null;
   const grid = $('#sGrid'); if(grid) grid.classList.toggle('placing', !!(placing || placingBack));
   const dpn = depotPoints();
-  box.innerHTML = `<section class="qsec out">
-    <div class="qtitle"><b>Product requests</b><span class="dir">→ going out to Retail Yard</span>
-      <button class="btn sm" id="qAll">Open the queue</button></div>
+  /* The calendar is the main thing on this tab, so each section folds down to its title bar when it
+     needs nothing from Kevin: no open requests / the pile at or under its alert level. A click on the
+     bar opens or closes it by hand, and that choice sticks until the page is reloaded. */
+  UI.qOpen = UI.qOpen || {};
+  const backLogN = piles.reduce((a,pl)=>a + pileLog(pl).rows.length, 0) + otherBack.length;
+  const outQuiet = !open.length, backQuiet = !DB.pilesError && piles.every(pl=>!(pl.alert > 0 && pl.onHand > pl.alert));
+  const outMin = !placing && (UI.qOpen.out === undefined ? outQuiet : !UI.qOpen.out);
+  const backMin = !placingBack && (UI.qOpen.back === undefined ? backQuiet : !UI.qOpen.back);
+  const outSum = `${open.length ? open.length + ' open request' + (open.length>1?'s':'') : 'no open requests'} · ${loads.length} load${loads.length===1?'':'s'} scheduled`;
+  const backSum = (piles.length ? piles.map(pl=>`${pl.name} ${uTxt(pl.onHand)}${pl.alert ? (pl.onHand > pl.alert ? ' — over the ' : ' — under the ') + uTxt(pl.alert) + ' alert level' : ''}`).join(' · ')
+      : (DB.pilesError ? 'pile couldn’t be read' : 'checking Retail Yard…')) + ` · ${backLogN} haul${backLogN===1?'':'s'} back scheduled`;
+  box.innerHTML = `<section class="qsec out${outMin ? ' min' : ''}">
+    <div class="qtitle" data-qtoggle="out" role="button" tabindex="0" aria-expanded="${!outMin}" title="${outMin ? 'Show' : 'Hide'} this section">
+      <span class="qchev">${outMin ? '▸' : '▾'}</span><b>Product requests</b><span class="dir">→ going out to Retail Yard</span>
+      <span class="qsum">${esc(outSum)}</span>
+      <button class="btn sm" id="qLog" title="For a request that came by radio or in person">+ Log a request</button>
+      <button class="btn sm" id="qPull" title="Read requests, bin levels and the pile from Retail Yard now">Check Retail Yard</button></div>
     <div class="qhead"><b>Open requests</b>
-      <span class="muted small">${open.length} waiting · Jeff's order</span></div>
+      <span class="muted small">${open.length} waiting · Jeff's order</span>
+      <label class="small muted" style="display:inline-flex;align-items:center;gap:6px;margin-left:auto">Loads sized for
+        <select id="qCond" style="width:auto;padding:3px 6px;font-size:12px">
+          <option value="dry" ${yardConditions() === 'dry' ? 'selected' : ''}>dry product</option><option value="wet" ${yardConditions() === 'wet' ? 'selected' : ''}>wet product</option></select></label></div>
     ${placing ? (()=>{ const pp = reqProduct(placing);
       return `<div class="qplace" role="status"><span>Placing <b>${esc(pp? pp.name : (placing.product||'this request'))}</b>${
         placing.bin? ' for bin '+esc(placing.bin) : ''} — click an open slot on any truck below.</span>
@@ -4579,7 +4602,7 @@ function renderReqQueue(){
     ${open.length ? '' : '<div class="qmore muted">Nothing waiting — every request has a load booked.</div>'}
     <div class="qwrap"${open.length ? '' : ' hidden'}><table>
       <thead><tr><th>#</th><th>Product</th><th>Bin space</th><th></th></tr></thead>
-      <tbody>${open.slice(0, 12).map(r=>{
+      <tbody>${open.map(r=>{
       const p = reqProduct(r), u = reqUrgency(r), st = binState(r);
       const full = st.known && st.room <= 0.01;
       const on = placing && placing.id === r.id;
@@ -4597,8 +4620,7 @@ function renderReqQueue(){
         <td style="white-space:nowrap"><button class="btn sm${on?'':' primary'}" data-reqgo="${esc(r.id)}">${on? 'Cancel' : 'Schedule'}</button>
           <button class="btn sm ghost" data-reqdel="${esc(r.id)}" title="Delete this request">Delete</button></td>
       </tr>`;
-    }).join('')}</tbody></table></div>${
-      open.length > 12 ? `<div class="qmore muted">…and ${open.length-12} more — open the queue to see them all.</div>` : ''}
+    }).join('')}</tbody></table></div>
     <div class="qhead qhead2"><b>Loads scheduled for Retail Yard</b>
       <span class="muted small">${loads.length ? `${loads.length} load${loads.length>1?'s':''} · ${r1(loads.reduce((a,l)=>a+l.yards,0))} yd · each stays here until Retail Yard confirms the delivery`
                                               : 'none booked'}</span></div>
@@ -4618,8 +4640,10 @@ function renderReqQueue(){
           ? `<button class="btn sm ghost" data-reqdel="${esc(l.reqId)}" title="Delete the request this load is for">Delete request</button>` : ''}</td>
       </tr>`).join('')}</tbody></table></div>` : ''}
     </section>
-    ${Piles.configured || otherBack.length ? `<section class="qsec back">
-    <div class="qtitle"><b>Debris backhauls</b><span class="dir">← coming back from Retail Yard to ${esc(dpn.home.name)}</span></div>
+    ${Piles.configured || otherBack.length ? `<section class="qsec back${backMin ? ' min' : ''}">
+    <div class="qtitle" data-qtoggle="back" role="button" tabindex="0" aria-expanded="${!backMin}" title="${backMin ? 'Show' : 'Hide'} this section">
+      <span class="qchev">${backMin ? '▸' : '▾'}</span><b>Debris backhauls</b><span class="dir">← coming back from Retail Yard to ${esc(dpn.home.name)}</span>
+      <span class="qsum">${esc(backSum)}</span></div>
     ` : ''}
     ${placingBack ? `<div class="qplace" role="status"><span>Scheduling a haul of <b>${esc(placingBack.label)}</b> back to ${esc(depotPoints().home.name)}
         — click an open slot on truck 85, 98 or 65 below, or click a Retail Yard delivery already on one of them to bring it back on that trip.</span>
@@ -4691,14 +4715,20 @@ function renderReqQueue(){
   $$('#sQueue [data-extnew]').forEach(el=>{ el.onclick = ()=>openExtHaul(el.dataset.extnew); });
   $$('#sQueue [data-extdone]').forEach(el=>{ el.onclick = ()=>extHaulFinish(el.dataset.extdone, 'done'); });
   $$('#sQueue [data-extcancel]').forEach(el=>{ el.onclick = ()=>extHaulFinish(el.dataset.extcancel, 'cancelled'); });
+  $$('#sQueue [data-qtoggle]').forEach(el=>{
+    const flip = ()=>{ const k = el.dataset.qtoggle; UI.qOpen[k] = el.closest('.qsec').classList.contains('min'); renderReqQueue(); };
+    el.onclick = e=>{ if(e.target.closest('button')) return; flip(); };
+    el.onkeydown = e=>{ if(e.target.closest('button')) return; if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); flip(); } };
+  });
   const retry = $('#qPileRetry'); if(retry) retry.onclick = ()=>{ DB.pilesError = null; renderReqQueue(); Piles.refresh(); };
   $$('#sQueue [data-tagback]').forEach(el=>{ el.onclick = e=>{ e.stopPropagation(); openTagBack(el.dataset.tagback); }; });
   $$('#sQueue [data-pileback]').forEach(el=>{
     el.onclick = ()=>{ UI.placeReq = null; UI.placeBack = UI.placeBack === el.dataset.pileback ? null : el.dataset.pileback; renderReqQueue(); };
   });
   const list = $('#qPlaceList'); if(list) list.onclick = ()=>{ const id = UI.placeReq; UI.placeReq = null; renderReqQueue(); openRequestScheduler(id); };
-  const all = $('#qAll');
-  if(all) all.onclick = ()=>showTab('requests');
+  const qp = $('#qPull'); if(qp) qp.onclick = async ()=>{ qp.disabled = true; qp.textContent = 'Checking…'; try{ await pullTrackerNow(); }finally{ renderReqQueue(); } };
+  const ql = $('#qLog'); if(ql) ql.onclick = ()=>openLogRequest();
+  const qc = $('#qCond'); if(qc) qc.onchange = ()=>{ DB.settings.yardConditions = qc.value === 'wet' ? 'wet' : 'dry'; Store.save(); renderRequests(); renderSchedule(); };
 }
 
 /**
@@ -9802,6 +9832,7 @@ async function pullTrackerNow(){
 
 /* ------------------------------------------------------------------ tabs */
 function showTab(name){
+  if(name === 'requests') name = 'schedule';      // Retail Yard requests live above the schedule now
   UI.tab = name;
   $$('nav.tabs button').forEach(b=>b.setAttribute('aria-selected', String(b.dataset.tab===name)));
   const sb = $('.bar-actions [data-tab="settings"]');
