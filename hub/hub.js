@@ -97,7 +97,7 @@
 
     box.innerHTML =
       '<div class="admin-head"><h2>Who can open what</h2>' +
-      '<span class="muted">People appear here after their first sign-in to this page. Each app still applies its own permissions inside.</span></div>' +
+      '<span class="muted">Everyone with an account is listed, whether or not they have signed in yet. Each app still applies its own permissions inside.</span></div>' +
       '<div class="scroll"><table><thead><tr><th>Person</th>' +
       apps.map(function (a) { return '<th>' + esc(a.name) + '</th>'; }).join('') + '</tr></thead><tbody>' +
       '<tr class="all-row"><td>Everyone signed in</td>' + apps.map(function (a) {
