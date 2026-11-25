@@ -230,6 +230,16 @@ function withValidation(adapter){
       return adapter.update(t,id,validateWrite(t,'update',patch));
     },
     async setSetting(k,v){ return adapter.setSetting(k,validateSetting(k,v)); },
+    // Correct a recorded grind (pile, amounts, date, notes). The piles are corrected with it.
+    async editGrind(id,p){
+      if(!isId(id)||!isId(p?.bin_id)) throw new ValidationError('Invalid record.');
+      const qy=Number(p.qty_yd), ty=Number(p.to_qty_yd), day=String(p.happened_on||'');
+      if(!(qy>0&&qy<=2000)) throw new ValidationError('Amount ground must be between 0 and 2,000 yd³.');
+      if(!(ty>0&&ty<=2000)) throw new ValidationError('Ground made must be between 0 and 2,000 yd³.');
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new ValidationError('Choose a date.');
+      const notes=p.notes?cleanStr(p.notes).slice(0,500):null;
+      return adapter.editGrind(id,{bin_id:p.bin_id,qty_yd:qy,to_qty_yd:ty,happened_on:day,notes:notes||null});
+    },
     async uploadPhoto(binId,blob,takenAt){
       if(!isId(binId)) throw new ValidationError('Invalid pile.');
       if(!(blob instanceof Blob)||blob.type!=='image/jpeg'||blob.size>5*1024*1024) throw new ValidationError('The photo must be a JPEG under 5 MB.');
@@ -509,6 +519,21 @@ function DemoAdapter(){
       if(t==='hauls') syncReqVolume(r.request_id);
       save();
     },
+    async editGrind(id,p){
+      // Mirrors yard.edit_grind() in the database
+      const r=db.debris_events.find(x=>x.id===id);
+      if(!r||r.kind!=='grind') throw new Error('That grind was not found');
+      if(r.status!=='done') throw new Error('An undone grind can’t be edited');
+      const ob=db.bins.find(x=>x.id===r.bin_id), b=db.bins.find(x=>x.id===p.bin_id), tb=db.bins.find(x=>x.id===r.to_bin_id);
+      if(!b||b.site!=='debris'||b.debris_role!=='grind') throw new Error('Only green waste and wood debris are ground');
+      if(p.bin_id!==r.bin_id||Number(p.qty_yd)!==Number(r.qty_yd)||Number(p.to_qty_yd)!==Number(r.to_qty_yd)||p.happened_on!==r.happened_on){
+        const M=(bin,qy,kind,note,on)=>move({bin_id:bin.id,product_id:bin.product_id,qty_yd:qy,kind,note,source_table:'debris_events',source_id:r.id,occurred_on:on});
+        M(ob,Number(r.qty_yd),'adjustment','Grind edited (old amount backed out)',r.happened_on); M(tb,-Number(r.to_qty_yd),'adjustment','Grind edited (old amount backed out)',r.happened_on);
+        M(b,-Number(p.qty_yd),'grind','Ground into '+tb.code+' (edited)',p.happened_on); M(tb,Number(p.to_qty_yd),'grind','Ground from '+b.code+' (edited)',p.happened_on);
+      }
+      Object.assign(r,{bin_id:p.bin_id,qty_yd:p.qty_yd,to_qty_yd:p.to_qty_yd,happened_on:p.happened_on,notes:p.notes,edited_at:nowISO(),edited_by_name:me().name});
+      save();
+    },
     async setSetting(k,v){ db.settings[k]=v; save(); },
     async updateMany(t,ids,patch){ for(const id of ids) await this.update(t,id,patch); },
     async linkTitle(pid,title){
@@ -588,6 +613,7 @@ function LiveAdapter(cfg){
     },
     async insert(t,row){ const clean={...row}; delete clean.created_by_name; return q(sb.from(t).insert(clean).select().single()); },
     async update(t,id,patch){ return q(sb.from(t).update(patch).eq('id',id)); },
+    async editGrind(id,p){ return q(sb.rpc('edit_grind',{p_id:id,p_bin_id:p.bin_id,p_qty_yd:p.qty_yd,p_to_qty_yd:p.to_qty_yd,p_happened_on:p.happened_on,p_notes:p.notes})); },
     async setSetting(k,v){ return q(sb.from('settings').upsert({key:k,value:v})); },
     async updateMany(t,ids,patch){ return q(sb.from(t).update(patch).in('id',ids)); },
     async linkTitle(pid,title){ return q(sb.rpc('link_shopify_title',{p_product_id:pid,p_title:title})); },
@@ -899,7 +925,7 @@ VIEWS.yard={
       }
       if(has('hauling','admin')){
         S.backfills.filter(r=>r.method==='bulk'&&r.status==='requested').forEach(r=>{
-          items.push(`<div class="alert" style="--c:var(--info)"><p>${prioRank()[r.id]?`<span class="prio-n">#${prioRank()[r.id]}</span> `:''}<b>${esc(r.created_by_name||'Jeff')}</b> needs <b>${esc(prodName(r.product_id))}</b>${r.qty_yd?` (<span class="num">${fmtYd(r.qty_yd)}</span>)`:''}, needed ${whenDate(r.needed_by)}.</p>
+          items.push(`<div class="alert" style="--c:var(--info)"><p>${prioRank()[r.id]?`<span class="prio-n">#${prioRank()[r.id]}</span> `:''}<b>${esc(r.created_by_name||'Jeff')}</b> needs <b>${esc(prodName(r.product_id))}</b>${r.qty_yd?` (<span class="num">${fmtYd(r.qty_yd)}</span>)`:''}${r.needed_by?`, needed ${whenDate(r.needed_by)}`:''}.</p>
             <div class="btns"><a class="btn sm primary" style="text-decoration:none" href="../bulk-dispatch/">Schedule in Bulk Dispatch</a></div></div>`);
         });
       }
@@ -1020,6 +1046,22 @@ function debrisFields(kind,bin){
     <label class="field"><span>Loads</span><input name="loads" type="number" min="1" max="50" step="1" value="1"></label>`+num('qty','Volume',bin)+date+
     `<label class="field"><span>Status</span><select name="status"><option value="done">Hauled already (take out now)</option><option value="scheduled">Schedule (confirm when hauled)</option></select></label>`+notes;
 }
+// Correct a grind that was recorded wrong: which pile, how much went in, how much came out, the date, the note.
+function grindEditRow(e){
+  const amt=(name,label,yd)=>`<label class="field"><span>${label}</span><div class="qty">
+    <input name="${name}" type="number" step="any" min="0.01" required inputmode="decimal" value="${esc(Math.round(Number(yd)/ydu()*1000)/1000)}">
+    <select name="${name}_unit" aria-label="Unit"><option value="yd">yd³</option><option value="unit" selected>units (${fmtN(ydu())} yd³)</option></select></div></label>`;
+  const piles=D.debrisBins.filter(b=>b.debris_role==='grind');
+  return `<tr class="edit-row"><td colspan="9" style="background:var(--sunken)">
+    <form class="form inline-form" data-form="grindEdit" data-id="${e.id}" autocomplete="off" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+      <label class="field"><span>Ground from</span><select name="bin_id" required>${piles.map(b=>`<option value="${esc(b.id)}" ${b.id===e.bin_id?'selected':''}>${esc(prodName(b.product_id))}</option>`).join('')}</select></label>
+      ${amt('qty','Amount ground',e.qty_yd)}${amt('to_qty','Ground made',e.to_qty_yd)}
+      <label class="field"><span>Date</span><input name="happened_on" type="date" value="${esc(e.happened_on)}" max="${isoDay()}"></label>
+      <label class="field full"><span>Notes</span><input name="notes" maxlength="500" value="${esc(e.notes||'')}"></label>
+      <div class="form-actions full"><button class="btn primary sm">Save changes</button><button type="button" class="btn sm ghost" data-act="grindEdit" data-id="${e.id}">Cancel</button>
+        <span class="hint">Saving corrects both piles to match.</span></div>
+    </form></td></tr>`;
+}
 // Haul away (removals) is switched off on the Yard Debris side; old removal records stay in the Ledger.
 const DEBRIS_FORMS={intake:['Add debris','order','Add to pile'],grind:['Record grind','primary','Save grind']};
 function debrisCard(b){
@@ -1097,8 +1139,9 @@ VIEWS.debris={
           <td><b>${esc(prodName(D.bin[e.bin_id]?.product_id))}</b></td><td class="num" style="text-align:right">${u(e.qty_yd)}</td>
           <td>${esc(prodName(D.bin[e.to_bin_id]?.product_id))}</td><td class="num" style="text-align:right">${u(e.to_qty_yd)}</td>
           <td class="num" style="text-align:right">${pct(Number(e.qty_yd),Number(e.to_qty_yd))}</td>
-          <td>${esc(e.created_by_name||'—')}</td><td class="muted">${esc(e.notes||'')}</td>
-          <td>${off?'<span class="chip c-mute">Undone</span>':can.debris()?confirmBtn('debrisUndo','Undo',`data-id="${e.id}"`,'ghost'):''}</td></tr>`; }).join('')}
+          <td>${esc(e.created_by_name||'—')}</td><td class="muted">${esc(e.notes||'')}${e.edited_at?` <span class="chip c-mute" title="Edited ${esc(fmtDate(String(e.edited_at).slice(0,10)))}${e.edited_by_name?' by '+esc(e.edited_by_name):''}">Edited</span>`:''}</td>
+          <td style="white-space:nowrap">${off?'<span class="chip c-mute">Undone</span>':can.debris()?`<button class="btn sm ghost" data-act="grindEdit" data-id="${e.id}">${UI.editGrind===e.id?'Close':'Edit'}</button> `+confirmBtn('debrisUndo','Undo',`data-id="${e.id}"`,'ghost'):''}</td></tr>
+          ${!off&&UI.editGrind===e.id&&can.debris()?grindEditRow(e):''}`; }).join('')}
       </tbody></table></div>`;
     },
     dAlerts(){
@@ -1164,7 +1207,6 @@ function orderFormFields(bin,qty=''){
         <div class="field"><span>How much</span><div class="seg">
           <label><input type="radio" name="goal" value="load" checked> One load</label>
           <label><input type="radio" name="goal" value="fill"> Fill the bin (to ${Math.round(FILL_PCT*100)}%)</label></div></div>
-        <label class="field"><span>Needed by</span><input id="rq-date" name="needed_by" type="date" value="${isoDay(1)}"></label>
         <input type="hidden" name="method" value="bulk">
         <label class="field full"><span>Notes for Kevin</span><input id="rq-notes" name="notes" maxlength="500"></label>
 `;
@@ -1302,7 +1344,7 @@ VIEWS.backfill={
           <div class="main"><span class="t">${esc(prodName(r.product_id))}</span>
             <span class="m">${(()=>{ const hs=S.hauls.filter(h=>h.request_id===r.id&&h.status!=='cancelled');
               return hs.length?hs.map(h=>`Truck ${esc(h.truck_no)} · ${fmtYd(h.volume_yd)} (${fmtUnits(h.volume_yd)}) · ${esc(whenDate(h.haul_on))}`).join(' + ')
-                :'Kevin picks the truck &amp; volume'; })()} · needed ${esc(whenDate(r.needed_by))}${r.notes?' · '+esc(r.notes):''}</span></div>
+                :'Kevin picks the truck &amp; volume'; })()}${r.needed_by?' · needed '+esc(whenDate(r.needed_by)):''}${r.notes?' · '+esc(r.notes):''}</span></div>
           <span class="chip ${r.status==='requested'?'c-warn':'c-info'}">${r.status==='requested'?'Requested':'Scheduled'}</span>${late?'<span class="chip c-bad">Late</span>':''}
           ${edit?`<span class="act">
             <button class="btn sm" data-act="prioMove" data-id="${r.id}" data-v="top" ${i===0?'disabled':''} aria-label="Move to top">⤒ Top</button>
@@ -1378,7 +1420,7 @@ function reqCard(r){
     <div class="top-line">${prioRank()[r.id]?`<span class="prio-n" title="Priority for Kevin">#${prioRank()[r.id]}</span>`:''}<span class="chip ${r.method==='bulk'?'c-info':'c-acc'}">${METHOD[r.method].label}</span>${fill?`<span class="chip c-acc">Fill to ${Math.round(FILL_PCT*100)}%</span>`:''}${late?'<span class="chip c-bad">Late</span>':''}</div>
     <div>${fill&&fillTarget?`<div class="muted" style="font-size:.82rem">Fill the bin: ${fmtN(fillNow)} of ${fmtN(fillTarget)} yd³ in${fillLeft>0?` · <b>${fmtN(fillLeft)} yd³ to go</b>`:' · at the fill level'}${sched-del>0?` · ${fmtN(r1(sched-del))} on the way`:''}</div>`
       :open?`<div class="muted" style="font-size:.82rem">${fill?'Fill the bin':'One load'}: truck &amp; volume are Kevin's call</div>`:`<div class="big num">${fmtYd(r.qty_yd)} <small class="muted" style="font-size:.6em">${fmtUnits(r.qty_yd)}</small></div>`}<div style="font-weight:600">${esc(prodName(r.product_id))}</div></div>
-    <div class="meta">Needed ${esc(whenDate(r.needed_by))} · ${esc(METHOD[r.method].who)} dispatches${r.notes?'<br>'+esc(r.notes):''}</div>
+    <div class="meta">${r.needed_by?'Needed '+esc(whenDate(r.needed_by))+' · ':''}${esc(METHOD[r.method].who)} dispatches${r.notes?'<br>'+esc(r.notes):''}</div>
     ${r.method==='bulk'&&remaining>0&&!hs.length?(()=>{ const sug=trucks().map(t=>{ const c=truckCap(t.no,r.product_id,'dry'); return c?`${Math.ceil(remaining/c)} load${Math.ceil(remaining/c)>1?'s':''} on ${esc(t.no)}`:null; }).filter(Boolean);
       return sug.length?`<div class="meta">≈ ${sug.join(' · ')} <span class="muted">(dry)</span></div>`:`<div class="meta" style="color:var(--warn)">No truck capacity on file for this product</div>`; })():''}
     ${hs.length&&r.qty_yd?`<div class="progress" title="${fmtN(del)} of ${fmtN(r.qty_yd)} yd³ delivered"><i style="width:${Math.min(100,del/r.qty_yd*100)}%"></i></div>`:''}
@@ -1723,6 +1765,7 @@ const ACT={
   debrisDone(d){ run(()=>A.update('debris_events',d.id,{status:'done'}),'Removal confirmed. Volume taken off the pile.'); },
   debrisCancel(d){ run(()=>A.update('debris_events',d.id,{status:'cancelled'}),'Removal cancelled.'); },
   debrisUndo(d){ run(()=>A.update('debris_events',d.id,{status:'cancelled'}),'Undone. The piles are back to where they were.'); },
+  grindEdit(d){ UI.editGrind=UI.editGrind===d.id?null:d.id; render(); if(UI.editGrind) $('[data-form="grindEdit"] [name=qty]')?.focus(); },
   orderSize(d,el){
     const f=el.closest('form'); const q=f?.querySelector('[name=qty]'), u=f?.querySelector('[name=qty_unit]'); if(!q) return;
     // Truck loads are counted in units, so the size goes in as units.
@@ -1858,7 +1901,7 @@ const FORM={
     const ok=await run(()=>A.insert('backfill_requests',{bin_id:bin.id,product_id:bin.product_id,qty_yd:null,goal:fd.get('goal')==='fill'?'fill':'load',needed_by:fd.get('needed_by')||null,method:m,status:'requested',notes:fd.get('notes').trim()||null}),
       `${prodName(bin.product_id)} added to Kevin's list. Rank it in the priority list.`);
     if(inModal){ if(ok){ UI.binMode='view'; renderBinModal(); } return; }
-    f.reset(); $('#rq-date').value=isoDay(1);
+    f.reset();
   },
   async haul(fd,f){
     const r=S.backfills.find(x=>x.id===f.dataset.req);
@@ -1914,6 +1957,17 @@ const FORM={
     const ok=await run(()=>A.insert('debris_events',row),msg);
     if(!ok) return;
     if(inModal){ UI.binMode='view'; renderBinModal(); } else { UI.debrisForm=null; render(); }
+  },
+  async grindEdit(fd,f){
+    const id=f.dataset.id, e=S.debris.find(x=>x.id===id); if(!e) return;
+    const qty=toYd(fd,'qty'), tq=toYd(fd,'to_qty');
+    if(!(qty>0)){ toast('Enter how much was ground.',true); return; }
+    if(!(tq>0)){ toast('Enter how much ground material was made.',true); return; }
+    const day=fd.get('happened_on')||e.happened_on;
+    if(dayDiff(day)>0){ toast('The date can’t be in the future.',true); return; }
+    const ok=await run(()=>A.editGrind(id,{bin_id:fd.get('bin_id'),qty_yd:qty,to_qty_yd:tq,happened_on:day,notes:String(fd.get('notes')||'').trim()||null}),
+      'Grind updated. Both piles have been corrected.');
+    if(ok){ UI.editGrind=null; render(); }
   },
   async binCount(fd,f){
     const b=D.bin[f.dataset.id]; if(!b) return;
