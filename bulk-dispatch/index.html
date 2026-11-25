@@ -171,6 +171,13 @@ div.field > input{text-transform:none;letter-spacing:0;font-weight:400}
 .addrstatus{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-height:20px;
   text-transform:none;letter-spacing:0;font-weight:400}
 .addrstatus .btn.sm{margin-left:2px}
+.addropt .addrmain{font-weight:600}
+.addropt .addrsec{color:var(--ink-muted)}
+.addrpast,.addrhelp{display:flex;align-items:center;gap:6px;flex-wrap:wrap;text-transform:none;letter-spacing:0;font-weight:400;font-size:12px}
+.addrpast .btn.sm{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.addrhelp{padding:8px 10px;border:1px dashed #cfcfc8;border-radius:var(--r-sm);background:var(--surface-2)}
+.addrhelp select,.addrhelp input{width:auto;padding:4px 7px;font-size:12px}
+.addrread{font-size:13px;color:var(--ink);font-weight:600}
 textarea{min-height:90px;font-family:var(--mono);font-size:12px;resize:vertical}
 input[type=checkbox]{width:15px;height:15px;accent-color:var(--brand)}
 
@@ -1963,6 +1970,9 @@ function verifyAddress(o){
     return {state:'exact', label:'yard', why:'an internal haul delivers to one of our yards'};
   if(!addr && !hasCoords)
     return {state:'missing', label:'no address', why:'nothing to route to — the order falls back to nothing'};
+  if(hasCoords && o.addrApprox === 'street')
+    return {state:'partial', label:'street only', zone:zoneFor(o),
+            why:'on the right street, but no house number was found — confirm it with the customer before the truck goes'};
   if(hasCoords)
     return {state:'exact', label:'exact', why:'routing from real coordinates'};
 
@@ -2010,9 +2020,10 @@ async function verifyOrderAddress(o){
   if(!key) return verifyAddress(o);
   const hit = DB.geo[key];
   if(hit){ o.lat = hit.lat; o.lng = hit.lng; if(!o.zip && hit.zip) o.zip = hit.zip; return verifyAddress(o); }
-  if(!mapsReady()) return verifyAddress(o);
+  if(!mapsReady() || UI.mapsNoKey) return verifyAddress(o);
   const r = await mapsFetch('geocode', {address:o.address});
   o.lat = r.lat; o.lng = r.lng;
+  if(r.street_only) o.addrApprox = 'street';
   if(!o.zip) o.zip = r.zip || zipOf(o.address);
   DB.geo[key] = {lat:r.lat, lng:r.lng, zip:o.zip||'', src:'google'};
   return verifyAddress(o);
@@ -6440,9 +6451,14 @@ function editOrder(id, prefill){
       <div class="field addrwrap">
         <span>Delivery address</span>
         <input type="text" name="address" id="addrInput" autocomplete="off" spellcheck="false"
-               value="${esc(o.address)}" placeholder="street, city, OR 974xx">
+               value="${esc(o.address)}" placeholder="house number and street — e.g. 2450 river">
         <div class="addrmenu" id="addrMenu" hidden></div>
+        <div class="addrpast" id="addrPast" hidden></div>
         <div class="addrstatus" id="addrStatus"></div>
+        <div class="addrhelp" id="addrHelp" hidden></div>
+        <input type="hidden" name="zip" value="${esc(o.zip||'')}">
+        <input type="hidden" name="addrApprox" value="${esc(o.addrApprox||'')}">
+        <input type="hidden" name="landmark" value="${esc(o.landmark||'')}">
       </div>
     </div>
     <div id="internalFields" ${kind==='delivery'?'hidden':''}>
@@ -6530,7 +6546,9 @@ function editOrder(id, prefill){
                                  : JOB_KINDS[k].label,
         phone: val(m,'phone').trim(),
         address: val(m,'address').trim(),
-        zip: zipOf(val(m,'address')),
+        zip: zipOf(val(m,'address')) || val(m,'zip') || '',
+        addrApprox: val(m,'addrApprox') || null,
+        landmark: val(m,'landmark').trim() || null,
         productId: val(m,'productId'),
         yards: num(val(m,'yards'),0),
         window: val(m,'window'),
@@ -6544,7 +6562,8 @@ function editOrder(id, prefill){
         city: val(m,'city').trim(),
         lat: val(m,'lat')===''? null : num(val(m,'lat')),
         lng: val(m,'lng')===''? null : num(val(m,'lng')),
-        notes: val(m,'notes'),
+        notes: (()=>{ const n = val(m,'notes'), lm = val(m,'landmark').trim();
+          return lm && !n.includes(lm) ? [n.trim(), 'Landmark: ' + lm].filter(Boolean).join(' · ') : n; })(),
         status: o.status==='delivered'||o.status==='cancelled' ? o.status : (val(m,'schedDate')? 'scheduled':'pending'),
         source: o.source||'manual',
         shopifyId: o.shopifyId||null,
@@ -7096,104 +7115,221 @@ function renderSlotPicker(m){
   });
 }
 
-/* ------------------------------------------- address typeahead + verifying */
+/* ------------------------------------------- address entry
+ * Built for a rep with a customer on the phone:
+ *   1. the phone number brings up where this customer has had deliveries before;
+ *   2. a house number and the first letters of the street bring up real addresses near us
+ *      (Google, leaning toward our delivery area) — Enter takes the top one and fills in the
+ *      city, ZIP and map position;
+ *   3. the full address is shown back in one line to read to the customer;
+ *   4. when it can't be found there is always a way forward: street only, or just the town,
+ *      plus a landmark for the driver — the order is flagged to confirm, never blocked. */
 function wireAddressField(m, o){
   const input = m.querySelector('#addrInput');
   const menu  = m.querySelector('#addrMenu');
   const stat  = m.querySelector('#addrStatus');
   if(!input || !menu || !stat) return;
-
-  const latEl = m.querySelector('[name="lat"]'), lngEl = m.querySelector('[name="lng"]');
+  const past = m.querySelector('#addrPast'), help = m.querySelector('#addrHelp');
+  const F = n=>m.querySelector(`[name="${n}"]`);
+  const latEl = F('lat'), lngEl = F('lng'), zipEl = F('zip'), apxEl = F('addrApprox'), lmEl = F('landmark'), cityEl = F('city');
   const coords = ()=>({lat: latEl && latEl.value!=='' ? num(latEl.value) : null,
                        lng: lngEl && lngEl.value!=='' ? num(lngEl.value) : null});
   const setCoords = (lat, lng)=>{ if(latEl) latEl.value = lat==null? '' : lat;
                                   if(lngEl) lngEl.value = lng==null? '' : lng; };
-  const probe = ()=>({...o, address: input.value, zip: zipOf(input.value), ...coords()});
-
-  let items = [], active = -1, busy = false;
+  const probe = ()=>({...o, address: input.value, zip: zipOf(input.value) || (zipEl ? zipEl.value : ''),
+                      addrApprox: apxEl ? apxEl.value : '', ...coords()});
+  const newSession = ()=>uid('s') + Date.now().toString(36);
+  let items = [], active = -1, busy = false, session = newSession(), helpOpen = false, lastMsg = '';
 
   const paintStatus = (msg)=>{
+    if(msg !== undefined) lastMsg = msg;
     const v = verifyAddress(probe());
     const st = ADDR_STATE[v.state] || ADDR_STATE.unknown;
-    const canGeo = mapsReady() && input.value.trim() && v.state !== 'exact';
+    const typed = input.value.trim();
+    const canGeo = mapsReady() && !UI.mapsNoKey && typed && v.state !== 'exact';
+    const zone = v.zone || zoneFor(probe());
     stat.innerHTML =
-      `<span class="chip ${st.chip}">${esc(v.label)}</span>
-       <span class="small muted">${esc(msg || v.why)}</span>` +
-      (canGeo ? `<button type="button" class="btn sm" id="addrVerify"${busy?' disabled':''}>${
-        busy? 'Checking…' : 'Look it up'}</button>` : '') +
-      (!mapsReady() && v.state !== 'exact'
-        ? `<span class="small muted">· add a Maps key in Settings to pin it exactly</span>` : '');
+      (v.state === 'exact' && typed
+        ? `<span class="chip ok">✓ found</span><span class="addrread" title="Read this back to the customer">${esc(typed)}</span>` +
+          (zone ? `<span class="small muted">· ${esc(zone.name)}</span>` : '')
+        : `<span class="chip ${st.chip}">${esc(v.state === 'unknown' && !zipOf(typed) ? 'not found yet' : v.label)}</span><span class="small muted">${esc(lastMsg ||
+            (['unknown','missing'].includes(v.state) && !UI.mapsNoKey ? 'pick the address from the list as you type — or use “Can’t find it?”' : v.why))}</span>`) +
+      (canGeo ? `<button type="button" class="btn sm" id="addrVerify"${busy?' disabled':''}>${busy? 'Checking…' : 'Look it up'}</button>` : '') +
+      (typed && v.state !== 'exact' ? `<button type="button" class="btn sm ghost" id="addrCant">${helpOpen ? 'Hide' : 'Can’t find it?'}</button>` : '') +
+      (UI.mapsNoKey ? `<span class="small muted">· address lookup isn’t switched on yet (the Google key hasn’t been added)</span>` : '');
     const vb = stat.querySelector('#addrVerify');
-    if(vb) vb.onclick = async ()=>{
-      busy = true; paintStatus('looking it up…');
-      try{
-        const t = probe();
-        await verifyOrderAddress(t);
-        setCoords(t.lat, t.lng);
-        busy = false; paintStatus('found it — routing from real coordinates now');
-        Store.save();
-      }catch(e){
-        busy = false; paintStatus('could not find that address — ' + e.message);
-      }
+    if(vb) vb.onclick = lookUp;
+    const cb = stat.querySelector('#addrCant');
+    if(cb) cb.onclick = ()=>{ helpOpen = !helpOpen; paintHelp(); paintStatus(); };
+  };
+
+  /** Look up whatever is typed, as it stands. */
+  const lookUp = async ()=>{
+    busy = true; paintStatus('looking it up…');
+    try{
+      const r = await mapsFetch('geocode', {address: input.value});
+      busy = false;
+      if(r.formatted) input.value = r.formatted;
+      setCoords(r.lat, r.lng);
+      if(zipEl) zipEl.value = r.zip || zipOf(input.value) || '';
+      if(cityEl && r.city) cityEl.value = r.city;
+      if(apxEl) apxEl.value = r.street_only ? 'street' : '';
+      const key = normAddrKey(input.value); if(key && !r.street_only) DB.geo[key] = {lat:r.lat, lng:r.lng, zip:r.zip||'', src:'google'};
+      paintStatus(r.street_only ? '' : ''); if(r.street_only){ helpOpen = true; paintHelp(); }
+    }catch(e){
+      busy = false; helpOpen = true; paintHelp();
+      paintStatus('not found — ' + e.message);
+    }
+  };
+
+  /** Ways forward when the address will not come up. */
+  const paintHelp = ()=>{
+    if(!help) return;
+    help.hidden = !helpOpen;
+    if(!helpOpen){ help.innerHTML = ''; return; }
+    const zones = (DB.zones||[]).filter(z=>String(z.zips||'').trim());
+    const cur = zoneFor(probe());
+    help.innerHTML = `<span>Still take the order:</span>
+      <label style="display:inline-flex;gap:5px;align-items:center">town or area
+        <select id="addrZone"><option value="">choose…</option>${zones.map(z=>
+          `<option value="${esc(z.id)}" ${cur && cur.id === z.id ? 'selected' : ''}>${esc(z.name)}</option>`).join('')}</select></label>
+      <label style="display:inline-flex;gap:5px;align-items:center;flex:1;min-width:220px">landmark / cross street
+        <input type="text" id="addrLandmark" style="flex:1" maxlength="120" placeholder="e.g. past the red barn, off Hwy 36" value="${esc(lmEl ? lmEl.value : '')}"></label>
+      <span class="small muted" style="flex-basis:100%">The truck is routed to the middle of that area and the order is listed under “addresses to confirm” on the Orders tab. The landmark prints on the driver’s manifest.</span>`;
+    const zs = help.querySelector('#addrZone');
+    zs.onchange = ()=>{
+      const z = byId(DB.zones, zs.value); if(!z) return;
+      const zip = String(z.zips||'').split(',').map(x=>x.trim()).filter(Boolean)[0] || '';
+      if(zipEl) zipEl.value = zip;
+      setCoords(null, null); if(apxEl) apxEl.value = '';
+      if(zip && !zipOf(input.value)) input.value = input.value.trim().replace(/[,\s]+$/,'') + `, ${z.name.split('/')[0].trim()}, OR ${zip}`;
+      paintStatus('');
     };
+    const lm = help.querySelector('#addrLandmark');
+    lm.oninput = ()=>{ if(lmEl) lmEl.value = lm.value; };
   };
 
   const closeMenu = ()=>{ menu.hidden = true; menu.innerHTML = ''; items = []; active = -1; };
-
   const paintMenu = ()=>{
     if(!items.length){ closeMenu(); return; }
+    if(active < 0 || active >= items.length) active = 0;        // Enter always has something to take
     menu.innerHTML = items.map((it,i)=>`
       <div class="addropt ${i===active?'on':''}" data-i="${i}">
-        <span class="addrlabel">${esc(it.label)}</span>
-        <span class="small muted">${esc(it.customer || (it.kind==='zone' ? 'delivery zone' :
-          (it.kind==='places' ? 'Google' : 'past order')))}</span>
-      </div>`).join('');
+        <span class="addrlabel">${it.main ? `<span class="addrmain">${esc(it.main)}</span> <span class="addrsec">${esc(it.secondary||'')}</span>` : esc(it.label)}</span>
+        <span class="small muted">${esc(it.kind==='places' ? (it.streetOnly ? 'street only' : (it.miles != null ? it.miles + ' mi' : ''))
+          : (it.customer || (it.kind==='zone' ? 'delivery zone' : 'past order')))}</span>
+      </div>`).join('') + `<div class="addropt" style="cursor:default"><span class="small muted">Enter takes the highlighted one · ↑ ↓ to move</span></div>`;
     menu.hidden = false;
-    $$('#addrMenu .addropt').forEach(el=>{
+    $$('#addrMenu .addropt[data-i]').forEach(el=>{
       el.onmousedown = e=>{ e.preventDefault(); pick(num(el.dataset.i)); };
     });
   };
 
-  const pick = (i)=>{
+  const pick = async (i)=>{
     const it = items[i]; if(!it) return;
+    closeMenu();
+    if(it.kind === 'places' && it.placeId){
+      input.value = it.label; busy = true; paintStatus('getting the full address…');
+      try{
+        const r = await mapsFetch('place', {id: it.placeId, session});
+        session = newSession();                                // one lookup = one session
+        if(r.formatted) input.value = r.formatted;
+        setCoords(r.lat, r.lng);
+        if(zipEl) zipEl.value = r.zip || zipOf(input.value) || '';
+        if(cityEl && r.city) cityEl.value = r.city;
+        if(apxEl) apxEl.value = r.street_only ? 'street' : '';
+        const key = normAddrKey(input.value); if(key && !r.street_only && r.lat != null) DB.geo[key] = {lat:r.lat, lng:r.lng, zip:r.zip||'', src:'google'};
+        busy = false; lastMsg = ''; helpOpen = !!r.street_only; paintHelp(); paintStatus('');
+      }catch(e){ busy = false; paintStatus('could not get that address — ' + e.message); }
+      return;
+    }
     input.value = it.label;
-    const z = m.querySelector('[name="zip"]');
-    if(z && it.zip) z.value = it.zip;
+    if(zipEl) zipEl.value = it.zip || zipOf(it.label) || '';
+    if(apxEl) apxEl.value = '';
     // a past order's own coordinates carry over; a zone town does not pretend to be exact
     setCoords(it.kind === 'zone' ? null : (it.lat ?? null),
               it.kind === 'zone' ? null : (it.lng ?? null));
-    closeMenu(); paintStatus();
+    paintStatus('');
   };
 
-  let seq = 0;
-  const search = async ()=>{
+  let seq = 0, timer = null;
+  const search = ()=>{
     const q = input.value;
-    items = suggestAddresses(q, 8);
-    paintMenu(); paintStatus();
-    if(!mapsReady() || q.trim().length < 4) return;
+    // whatever was known about the old text no longer applies to the new text
+    setCoords(null, null); if(apxEl) apxEl.value = ''; if(zipEl) zipEl.value = ''; if(cityEl) cityEl.value = '';
+    items = suggestAddresses(q, 4).filter(x=>x.kind === 'history');
+    paintMenu(); paintStatus('');
+    clearTimeout(timer);
+    if(!mapsReady() || UI.mapsNoKey || q.trim().length < 3) { if(!items.length){ items = suggestAddresses(q, 6); paintMenu(); } return; }
     const mine = ++seq;
-    try{
-      const r = await mapsFetch('places', {input:q, region:'us'});
-      if(mine !== seq) return;                       // a newer keystroke won
-      const hits = (r.predictions || r.suggestions || []).slice(0,6).map(x=>({
-        kind:'places', label: x.description || x.text || String(x),
-        placeId: x.place_id || x.placeId || null, zip: zipOf(x.description || '')
-      })).filter(x=>x.label);
-      if(hits.length) { items = hits.concat(items.filter(x=>x.kind!=='places')).slice(0,8); paintMenu(); }
-    }catch(e){ /* suggestions are a convenience — never block typing */ }
+    timer = setTimeout(async ()=>{
+      try{
+        const r = await mapsFetch('places', {input:q, session});
+        if(mine !== seq) return;                       // a newer keystroke won
+        const hits = (r.predictions || []).slice(0,6).map(x=>({
+          kind:'places', label: x.description || '', main:x.main || '', secondary:x.secondary || '',
+          placeId: x.place_id || null, streetOnly: !!x.street_only, miles: x.miles ?? null, zip: zipOf(x.description || '')
+        })).filter(x=>x.label);
+        // real house addresses first, then streets, then what we have delivered to before
+        hits.sort((a,b)=>(a.streetOnly?1:0) - (b.streetOnly?1:0));
+        items = hits.concat(items.filter(x=>x.kind !== 'places')).slice(0,8);
+        if(!hits.length && !items.length) items = suggestAddresses(q, 6);
+        if(document.activeElement === input) paintMenu();
+      }catch(e){ if(!items.length){ items = suggestAddresses(q, 6); paintMenu(); } paintStatus(''); }
+    }, 180);
   };
 
   input.oninput = search;
-  input.onfocus = ()=>{ if(input.value) search(); };
-  input.onblur  = ()=>{ setTimeout(()=>{ closeMenu(); paintStatus(); }, 120); };
+  input.onfocus = ()=>{ if(input.value && verifyAddress(probe()).state !== 'exact') search(); };
+  input.onblur  = ()=>{ setTimeout(()=>{ closeMenu(); paintStatus(); }, 150); };
   input.onkeydown = e=>{
     if(menu.hidden) return;
     if(e.key === 'ArrowDown'){ e.preventDefault(); active = Math.min(items.length-1, active+1); paintMenu(); }
     else if(e.key === 'ArrowUp'){ e.preventDefault(); active = Math.max(0, active-1); paintMenu(); }
-    else if(e.key === 'Enter' && active >= 0){ e.preventDefault(); pick(active); }
+    else if((e.key === 'Enter' || e.key === 'Tab') && active >= 0 && items.length){ e.preventDefault(); pick(active); }
     else if(e.key === 'Escape'){ closeMenu(); }
   };
+
+  /* A returning caller: their number brings up where we have delivered for them before. */
+  const phoneEl = F('phone'), custEl = F('customer');
+  const paintPast = ()=>{
+    if(!past) return;
+    const digits = String(phoneEl ? phoneEl.value : '').replace(/\D/g,'');
+    const name = String(custEl ? custEl.value : '').trim().toLowerCase();
+    const seen = new Set(), hits = [];
+    if(digits.length >= 7 || name.length >= 4) DB.orders.slice().reverse().forEach(x=>{
+      if(!x.address || x.id === o.id || (x.kind && x.kind !== 'delivery')) return;
+      const pd = String(x.phone||'').replace(/\D/g,'');
+      const byPhone = digits.length >= 7 && pd && (pd.endsWith(digits) || digits.endsWith(pd));
+      const byName = !byPhone && name.length >= 4 && String(x.customer||'').trim().toLowerCase() === name;
+      if(!byPhone && !byName) return;
+      const k = normAddrKey(x.address); if(seen.has(k)) return; seen.add(k);
+      hits.push(x);
+    });
+    past.hidden = !hits.length || !!input.value.trim();
+    past.innerHTML = hits.length ? `<span class="small muted">Delivered here before:</span>` + hits.slice(0,4).map((x,i)=>
+      `<button type="button" class="btn sm" data-past="${i}" title="${esc(x.customer||'')}">${esc(x.address)}</button>`).join('') : '';
+    past.querySelectorAll('[data-past]').forEach(b=>b.onclick = ()=>{
+      const x = hits[num(b.dataset.past)];
+      input.value = x.address;
+      setCoords(x.lat === '' ? null : (x.lat ?? null), x.lng === '' ? null : (x.lng ?? null));
+      if(zipEl) zipEl.value = x.zip || zipOf(x.address) || '';
+      if(apxEl) apxEl.value = x.addrApprox || '';
+      if(custEl && !custEl.value.trim() && x.customer) custEl.value = x.customer;
+      past.hidden = true; paintStatus('');
+    });
+  };
+  if(phoneEl) phoneEl.addEventListener('input', paintPast);
+  if(custEl) custEl.addEventListener('change', paintPast);
+  input.addEventListener('input', ()=>{ if(past) past.hidden = !!input.value.trim() || !past.innerHTML; });
+  paintPast();
+  if(o.landmark || (o.address && verifyAddress(o).state !== 'exact' && o.id)){ helpOpen = !!o.landmark; paintHelp(); }
   paintStatus();
+  // is the lookup switched on? (asked once per page load; a quiet no is fine)
+  if(mapsBuiltIn() && !DB.settings.mapsProxy && UI.mapsNoKey === undefined){
+    UI.mapsNoKey = false;
+    mapsFetch('ping', {}).then(r=>{ UI.mapsNoKey = !(r && r.key); if(m.isConnected) paintStatus(); }).catch(()=>{});
+  }
 }
 
 function afterOrderChange(){
@@ -8107,18 +8243,25 @@ function importRows(raw){
 }
 
 /* --------------------------------------------------------------- maps / geo */
-function mapsReady(){ return !!(DB.settings.mapsProxy || DB.settings.mapsKey); }
+/** Address lookup runs through this project's own "maps" function unless Settings names another proxy. */
+function mapsBuiltIn(){ return sbUrl() ? sbUrl().replace(/\/+$/,'') + '/functions/v1/maps' : ''; }
+function mapsProxyUrl(){ return DB.settings.mapsProxy || mapsBuiltIn(); }
+function mapsReady(){ return !!(mapsProxyUrl() || DB.settings.mapsKey); }
 
 async function mapsFetch(action, params){
   const s = DB.settings;
-  if(s.mapsProxy){
-    const url = new URL(s.mapsProxy);
+  if(mapsProxyUrl() && !(s.mapsKey && !s.mapsProxy && !Auth.token)){
+    const mine = !s.mapsProxy;                                  // our own function: it wants the person's sign-in
+    const url = new URL(mapsProxyUrl());
     url.searchParams.set('action', action);
-    Object.entries(params).forEach(([k,v])=>url.searchParams.set(k, v));
-    const r = await fetch(url.toString(), {method:'GET'});
-    if(!r.ok) throw new Error('proxy '+r.status);
-    const j = await r.json();
-    if(j.error) throw new Error(j.error);
+    Object.entries(params).forEach(([k,v])=>{ if(v != null && v !== '') url.searchParams.set(k, v); });
+    if(mine && Auth.required) await Auth.ensureFresh(120);
+    const r = await fetch(url.toString(), {method:'GET',
+      headers: mine ? {apikey: sbKey(), ...(Auth.token ? {Authorization:'Bearer ' + Auth.token} : {})} : {}});
+    const j = await r.json().catch(()=>null);
+    if(!r.ok) throw new Error((j && j.error) || (r.status === 401 ? 'sign in again to use address lookup' : 'address lookup answered ' + r.status));
+    if(j && j.error){ if(/key has not been added/i.test(j.error)) UI.mapsNoKey = true; throw new Error(j.error); }
+    UI.mapsNoKey = false;
     return j;
   }
   if(!s.mapsKey) throw new Error('No Maps key or proxy configured');
