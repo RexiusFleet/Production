@@ -460,6 +460,12 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .reqqueue td.qname{font-weight:600;white-space:normal;min-width:150px}
 .reqqueue .qlate{color:var(--crit);font-weight:600}
 .reqqueue .qmore{padding:6px 11px;border-top:1px solid var(--rule);font-size:11.5px}
+.reqqueue tr.placing td{background:var(--brand-bg, rgba(45,106,67,.10));box-shadow:inset 0 2px 0 var(--brand), inset 0 -2px 0 var(--brand)}
+.reqqueue .qplace{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 11px;
+  border-bottom:1px solid var(--rule);background:var(--brand);color:#fff;font-size:12.5px}
+.reqqueue .qplace .btn{background:transparent;color:#fff;border-color:rgba(255,255,255,.55)}
+.sgrid.placing .scell.open,.sgrid.placing .scell.wband{cursor:copy;box-shadow:inset 0 0 0 1px var(--brand)}
+.sgrid.placing .scell.open:hover,.sgrid.placing .scell.wband:hover{box-shadow:inset 0 0 0 3px var(--brand)}
 .rankchip{display:inline-block;min-width:20px;text-align:center;padding:1px 4px;
   border-radius:var(--r-sm);background:var(--bar);color:#fff;font-size:10px;font-weight:650}
 .bingauge{position:relative;height:6px;margin:3px 0 2px;border-radius:3px;
@@ -2436,10 +2442,9 @@ function declineRequest(id, why){
  * Book ONE trip against a request. A backfill bigger than a truckload stays
  * open with the balance still showing, so Kevin can spread it over the week.
  */
-function scheduleRequest(id, iso, truckId, time, yards){
+function scheduleRequest(id, iso, truckId, time, yards, windowId){
   const r = requestById(id); if(!r) return null;
-  const t = truckById(truckId);
-  if(t && !isYardTruck(t)) return null;          // 85, 98 and 65 only
+  const t = truckById(truckId);                  // any truck Kevin runs
   const per = t ? r1(haulCapacity(t, reqProduct(r)).cap) : reqRemaining(r);
   // never book more than the bin will hold when it arrives
   const st = binState(r);
@@ -2451,8 +2456,14 @@ function scheduleRequest(id, iso, truckId, time, yards){
   const o = requestToOrder(r);
   o.yards = take;
   DB.orders.push(o);
-  bookOrder(o, iso, truckId, time);
-  logActivity('added', o, `yard restock — ${prettyDate(iso)} ${min2hm(hm2min(time))}`);
+  if(windowId){                                  // a wave truck: booked into the AM or PM wave
+    bookWave(o, iso, windowId, {pinTruck: truckId});
+    time = '';
+    logActivity('added', o, `yard restock — ${prettyDate(iso)} ${WINDOWS[windowId].label.toLowerCase()}`);
+  } else {
+    bookOrder(o, iso, truckId, time);
+    logActivity('added', o, `yard restock — ${prettyDate(iso)} ${min2hm(hm2min(time))}`);
+  }
 
   r.hauls = r.hauls || [];
   r.hauls.push({orderId:o.id, date:iso, time, truckId, yards:take});
@@ -2952,7 +2963,7 @@ function planSlottedDay(iso){
         issues.push({orderId:seed.id, kind:'stock', msg:`${prod.name} isn't stocked at either yard`});
         i++; continue;
       }
-      const { cap, limit } = effCapacity(t, prod);
+      const { cap, limit } = effCapacity(t, prod, {internal: isInternal(seed)});
       if(cap <= 0.01){
         issues.push({orderId:seed.id, kind:'capacity', msg:`${t.name} can't carry ${prod.name}`});
         i++; continue;
@@ -3132,9 +3143,10 @@ function arrivalRisk(o){
   const yd = num(o.yards, 0);
   if(!yd)   return {level:'warn', msg:'no quantity on the order'};
   if(!prod) return {level:'warn', msg:'product not matched to the catalogue'};
-  const fits = activeTrucks().filter(t => effCapacity(t, prod).cap >= yd - 0.01);
+  const inter = {internal: isInternal(o)};
+  const fits = activeTrucks().filter(t => effCapacity(t, prod, inter).cap >= yd - 0.01);
   if(!fits.length){
-    const big = Math.max(0, ...activeTrucks().map(t=>effCapacity(t, prod).cap));
+    const big = Math.max(0, ...activeTrucks().map(t=>effCapacity(t, prod, inter).cap));
     return {level:'bad', msg:`${yd} yd — nothing carries more than ${r1(big)} yd in one trip, so it needs splitting`};
   }
   const want = requestedDate(o);
@@ -4339,41 +4351,122 @@ function renderReqQueue(){
   const open = openRequests();
   if(!open.length){ box.hidden = true; box.innerHTML = ''; return; }
   box.hidden = false;
+  if(UI.placeReq && !open.some(r=>r.id === UI.placeReq)) UI.placeReq = null;
+  const placing = UI.placeReq ? requestById(UI.placeReq) : null;
+  const grid = $('#sGrid'); if(grid) grid.classList.toggle('placing', !!placing);
   box.innerHTML = `<div class="qhead"><b>From the yard</b>
-      <span class="muted small">${open.length} waiting · ${r1(open.reduce((a,r)=>a+reqRemaining(r),0))} yd
-      · Jeff's order</span>
+      <span class="muted small">${open.length} waiting · Jeff's order</span>
       <button class="btn sm ghost" id="qAll" style="margin-left:auto">Open the queue</button></div>
+    ${placing ? (()=>{ const pp = reqProduct(placing);
+      return `<div class="qplace" role="status"><span>Placing <b>${esc(pp? pp.name : (placing.product||'this request'))}</b>${
+        placing.bin? ' for bin '+esc(placing.bin) : ''} — click an open slot on any truck below.</span>
+        <button class="btn sm" id="qPlaceList">Pick from a list instead</button>
+        <button class="btn sm" id="qPlaceStop" style="margin-left:auto">Cancel</button></div>`; })() : ''}
     <div class="qwrap"><table>
-      <thead><tr><th>#</th><th>Product</th><th class="num">To move</th><th>Bin</th>
-        <th class="num">Next load</th><th>Needed</th><th>Asked by</th><th></th></tr></thead>
+      <thead><tr><th>#</th><th>Product</th><th>Bin space</th><th>Needed by</th><th></th></tr></thead>
       <tbody>${open.slice(0, 12).map(r=>{
       const p = reqProduct(r), u = reqUrgency(r), st = binState(r);
-      const plan = reqLoadPlan(r, null);
-      const stuck = plan.take <= 0.01;
-      return `<tr class="${stuck?'stuck':''}" data-req="${esc(r.id)}" tabindex="0"
-          title="${esc(p? p.name : (r.product||''))} — ${esc(loadSizeWhy(plan))}">
+      const full = st.known && st.room <= 0.01;
+      const on = placing && placing.id === r.id;
+      return `<tr class="${full?'stuck ':''}${on?'placing':''}" data-req="${esc(r.id)}" tabindex="0"
+          title="Click, then click a slot on the board to place it">
         <td>${num(r.rank,0)? `<span class="rankchip">#${num(r.rank)}</span>` : ''}</td>
-        <td class="qname">${esc(p? p.name : (r.product||'product not set'))}</td>
-        <td class="num">${reqRemaining(r)} yd${
-          reqBooked(r)? ` <span class="muted">of ${reqYards(r)}</span>` : ''}</td>
-        <td>${esc(r.bin || 'no bin')}${
-          st.known ? ` <span class="muted">· ${stuck ? 'full' : st.room+' yd room'}</span>` : ''}</td>
-        ${stuck ? '<td style="text-align:right"><span class="qlate">waiting on the bin</span></td>'
-                : `<td class="num">${plan.take} yd</td>`}
+        <td class="qname">${esc(p? p.name : (r.product||'product not set'))}${
+          reqBooked(r)? ` <span class="muted small">· ${reqBooked(r)} yd already booked</span>` : ''}</td>
+        <td>${st.known
+            ? (full ? '<span class="qlate">Full</span>' : `<b>${st.room} yd</b>`) +
+              ` <span class="muted">· ${esc(r.bin||'bin')} holds ${st.current}${st.inbound? ' + '+st.inbound+' on the way' : ''} of ${st.capacity}</span>`
+            : `<span class="muted">${esc(r.bin || 'no bin')} · level not known</span>`}</td>
         <td class="${u.chip==='late'?'qlate':''}">${r.needBy? esc(prettyDate(r.needBy)) +
           (u.label !== prettyDate(r.needBy)? ` <span class="${u.chip==='late'?'':'muted'}">· ${esc(u.label)}</span>` : '') : '<span class="muted">no date</span>'}</td>
-        <td>${esc(r.requestedBy || '—')}</td>
-        <td><button class="btn sm" data-reqgo="${esc(r.id)}">Schedule</button></td>
+        <td><button class="btn sm${on?'':' primary'}" data-reqgo="${esc(r.id)}">${on? 'Cancel' : 'Schedule'}</button></td>
       </tr>`;
     }).join('')}</tbody></table></div>${
       open.length > 12 ? `<div class="qmore muted">…and ${open.length-12} more — open the queue to see them all.</div>` : ''}`;
   $$('#sQueue tr[data-req]').forEach(el=>{
-    el.onclick = ()=>openRequestScheduler(el.dataset.req);
-    el.onkeydown = e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); openRequestScheduler(el.dataset.req); } };
+    const go = ()=>{ UI.placeReq = (UI.placeReq === el.dataset.req) ? null : el.dataset.req; renderReqQueue(); };
+    el.onclick = go;
+    el.onkeydown = e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); go(); } };
   });
+  const stop = $('#qPlaceStop'); if(stop) stop.onclick = ()=>{ UI.placeReq = null; renderReqQueue(); };
+  const list = $('#qPlaceList'); if(list) list.onclick = ()=>{ const id = UI.placeReq; UI.placeReq = null; renderReqQueue(); openRequestScheduler(id); };
   const all = $('#qAll');
   if(all) all.onclick = ()=>showTab('requests');
 }
+
+/* --------------------------------------------- place a yard request on the board
+ * Kevin picks a request in the queue, then clicks the slot he wants on any of
+ * his trucks. The load defaults to the most that truck carries of that product,
+ * cut back to what the bin has room for (and, when Jeff asked for a set volume,
+ * to what is still owed on it). */
+function placeDefault(r, t){
+  const max = t ? Math.max(0, num(haulCapacity(t, reqProduct(r)).cap, 0)) : 0;
+  const st = binState(r);
+  const room = st.known ? Math.max(0, st.room) : null;
+  let take = max, why = 'truck';
+  if(room !== null && room < take - 0.01){ take = room; why = 'bin'; }
+  if(!r.openVolume){
+    const left = reqRemaining(r);
+    if(left > 0.01 && left < take - 0.01){ take = left; why = 'request'; }
+  }
+  return {max: Math.floor(max*10 + 1e-6)/10, room, take: Math.floor(take*10 + 1e-6)/10, why, st};
+}
+function openPlaceConfirm(id, truckId, time, iso, windowId){
+  const r = requestById(id), t = truckById(truckId);
+  if(!r || !t) return;
+  const p = reqProduct(r);
+  if(!p){ UI.placeReq = null; renderReqQueue(); openRequestScheduler(id); toast('Pick the product for this request first'); return; }
+  const d = placeDefault(r, t);
+  const when = windowId ? WINDOWS[windowId].label.toLowerCase() + ' wave' : min2hm(hm2min(time));
+  if(d.take <= 0.01){
+    toast(d.why === 'bin' ? `Bin ${r.bin||''} is full — nothing can go in until it draws down`
+                          : `${t.name} has no load size for ${p.name}`, 5000);
+    return;
+  }
+  const ceiling = d.room === null ? d.max : Math.min(d.max, d.room);
+  const lim = haulCapacity(t, p).limit;
+  openModal(`${p.name} → ${t.name}`, `
+    <div class="small muted">${esc(prettyDate(iso))} · ${esc(when)}${r.bin? ' · bin '+esc(r.bin) : ''}${
+      r.needBy? ' · needed by '+esc(prettyDate(r.needBy)) : ''}</div>
+    <label class="field" style="margin-top:12px;max-width:220px">Yards on this load
+      <input id="placeYd" type="number" inputmode="decimal" min="0.5" step="0.5" max="${ceiling}" value="${d.take}"></label>
+    <div class="small" style="margin-top:8px;display:grid;gap:3px">
+      <span>${esc(t.name)} carries up to <b>${d.max} yd</b> of this <span class="muted">(${esc(lim)})</span>.</span>
+      ${d.st.known ? `<span>Bin ${esc(r.bin||'')} has room for <b>${d.room} yd</b>
+          <span class="muted">(${d.st.current}${d.st.inbound? ' + '+d.st.inbound+' on the way' : ''} of ${d.st.capacity})</span>.</span>`
+        : `<span class="muted">The bin's level isn't known, so the truck's full load is used.</span>`}
+      ${d.why === 'bin' ? `<span style="color:#8a6100">The bin can't take a full load, so this one is cut to ${d.take} yd.</span>` : ''}
+      ${d.why === 'request' ? `<span class="muted">Only ${d.take} yd is still owed on this request.</span>` : ''}
+    </div>
+    <div class="small" id="placeHint" style="color:var(--crit);min-height:1.2em;margin-top:6px"></div>`, [
+    {label:'Cancel', cls:'ghost', onClick:closeModal},
+    {label:'Place it', cls:'primary', onClick:()=>{
+      const yd = num($('#placeYd').value, 0);
+      if(!(yd > 0)){ $('#placeHint').textContent = 'Enter the yards for this load.'; return; }
+      if(yd > ceiling + 0.01){
+        $('#placeHint').textContent = d.room !== null && d.room < d.max
+          ? `The bin only has room for ${d.room} yd.` : `${t.name} carries ${d.max} yd of this at most.`;
+        return;
+      }
+      r.productId = p.id;
+      if(r.openVolume && !(num(r.yards,0) > 0)){ r.yards = yd; r.units = 0; }
+      const o = scheduleRequest(r.id, iso, truckId, time, yd, windowId);
+      if(!o){ $('#placeHint').textContent = 'That load could not be booked.'; return; }
+      closeModal();
+      const rest = r.status === 'open' ? reqRemaining(r) : 0;
+      if(rest <= 0.01) UI.placeReq = null;
+      try{ runDay(iso); }catch(e){ console.warn(e); }
+      Store.save(); renderRequests(); renderOrders(); renderSchedule();
+      toast(rest > 0.01
+        ? `${yd} yd placed on ${t.name} — ${rest} yd still to place. Click another slot, or Cancel.`
+        : `${yd} yd of ${p.name} placed on ${t.name}, ${prettyDate(iso)}`, 5000);
+    }}
+  ]);
+  const inp = $('#placeYd'); if(inp) inp.select();
+}
+document.addEventListener('keydown', e=>{
+  if(e.key === 'Escape' && UI.placeReq && $('#scrim').hidden){ UI.placeReq = null; renderReqQueue(); }
+});
 
 function renderScheduleIssues(plan, iso){
   const box = $('#sIssues');
@@ -4437,6 +4530,11 @@ function wireGrid(){
     const iso = el.dataset.slotday || UI.date;
     el.onclick = ()=>{
       if(UI.dragJustFinished) return;
+      if(UI.placeReq && UI.gridMode!=='avail'){
+        if(isBlocked(iso, truckId, time)) toast('That slot is blocked — pick an open one');
+        else openPlaceConfirm(UI.placeReq, truckId, time, iso);
+        return;
+      }
       if(UI.gridMode==='avail'){
         setBlocked(iso, truckId, time, !isBlocked(iso, truckId, time));
         Store.save(); renderSchedule();
@@ -4449,6 +4547,7 @@ function wireGrid(){
     // drag across a column to block or open a run of slots
     el.onmousedown = e=>{
       e.preventDefault();
+      if(UI.placeReq && UI.gridMode!=='avail') return;      // placing a yard request: a click, not a drag
       if(UI.gridMode==='avail'){
         const turnOn = !isBlocked(iso, truckId, time);
         UI.dragBlock = {truckId, turnOn, iso};
@@ -4505,10 +4604,12 @@ function wireGrid(){
     if(el.dataset.wave) el.onclick = ()=>{
       if(UI.dragJustFinished) return;
       if(UI.gridMode === 'avail'){ toast('Wave trucks are scheduled by window, not by slot'); return; }
+      if(UI.placeReq){ openPlaceConfirm(UI.placeReq, truckId, null, iso, windowId); return; }
       openWaveBooking(truckId, windowId, iso);
     };
     el.onmousedown = e=>{
       if(UI.gridMode === 'avail') return;
+      if(UI.placeReq) return;
       if(e.target.closest('.wstop')) return;        // clicking a stop opens that order
       e.preventDefault();
       UI.dragWave = {truckId, iso, wins:[windowId], moved:false};
