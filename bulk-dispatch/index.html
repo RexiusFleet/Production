@@ -289,6 +289,16 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
   border-top:1px solid rgba(22,24,26,.06)}
 .wstop:first-of-type{border-top:0}
 .wstop:hover{background:rgba(255,255,255,.6)}
+.wload-times{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:4px 8px 5px;font-size:11.5px}
+.wload-times b{font-size:12.5px}
+.wstop .weta{font-family:var(--mono);font-weight:700;font-size:12.5px;min-width:52px;color:var(--good, #0f7a2e)}
+.wstop .weta.late{color:var(--crit)}
+.wstop .wbody{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.wstop .wwho{font-weight:600;white-space:normal}
+.wstop .wqty{font-weight:400}
+.wstop .wsub{font-size:11px;color:var(--ink-muted);white-space:normal}
+.wstop.isdone{opacity:.55}
+.wstop .wchips{justify-content:flex-start}
 .wseq{width:17px;height:17px;border-radius:3px;background:var(--ink);color:#fff;font-size:9.5px;
   font-family:var(--mono);font-weight:700;display:grid;place-items:center;flex:none;margin-top:1px}
 .wwho{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
@@ -4313,23 +4323,38 @@ function renderWaveColumn(iso, t, col, start, step, ticks, pt, c){
       continue;
     }
     const tr = pc.tr;
+    const isToday = iso === todayISO(), nowM = (d=>d.getHours()*60 + d.getMinutes())(new Date());
+    const streetOf = o=>{ const a = String(o.address||'').split(',').map(x=>x.trim()).filter(Boolean);
+      return a.length ? a[0] + (a[1] && !/^OR\b/i.test(a[1]) ? ', ' + a[1] : '') : (cityOf(o) || 'no address'); };
     const stops = tr.stops.map((st,k)=>{
       const o = orderById(st.orderId) || {};
       const late = (st.lateBy || 0) > grace;
-      const chip = st.commit === 'firm'
-        ? `<span class="chip ${Math.abs(st.drift||0) <= num(DB.settings.firmTol,30) ? 'ok':'late'}">${min2hm(st.arriveMin)} firm ${esc(o.firmTime||'')}</span>`
-        : (late ? `<span class="chip late">${min2hm(st.arriveMin)} +${st.lateBy}m</span>`
-                : `<span class="chip ok">${min2hm(st.arriveMin)}</span>`);
-      return `<div class="wstop" data-book="${esc(st.orderId)}" data-bookday="${esc(iso)}">
+      const done = o.status === 'delivered';
+      const overdue = isToday && !done && st.arriveMin + num(st.serviceMin,0) < nowM;
+      const named = o.customer && !/^unnamed$/i.test(String(o.customer).trim());
+      const who = jobKind(o) === 'delivery' ? (named ? o.customer : streetOf(o)) : jobLabel(o);
+      const flag = done ? '<span class="chip done">delivered</span>'
+        : st.commit === 'firm'
+          ? `<span class="chip ${Math.abs(st.drift||0) <= num(DB.settings.firmTol,30) ? 'ok':'late'}">firm ${esc(o.firmTime||'')}</span>`
+          : (late ? `<span class="chip late">${st.lateBy} min late for the window</span>`
+                  : (overdue ? '<span class="chip warn" title="The plan had this delivered by now and it is not ticked off">due — not marked delivered</span>' : ''));
+      return `<div class="wstop${done ? ' isdone' : ''}" data-book="${esc(st.orderId)}" data-bookday="${esc(iso)}" title="Click to open this order">
         <span class="wseq">${k+1}</span>
-        <span class="wwho">${esc(jobLabel(o))}</span>
-        <span class="wchips">${o.groupId? `<span class="chip" title="${esc(groupLabel(o))}">${
+        <span class="weta${late ? ' late' : ''}" title="Expected arrival${st.estimated ? ' (drive time is an estimate)' : ''}">${min2hm(st.arriveMin)}</span>
+        <span class="wbody">
+          <span class="wwho">${esc(who)} <span class="wqty">· ${st.yards} yd</span></span>
+          <span class="wsub">${named && jobKind(o) === 'delivery' ? esc(streetOf(o)) + ' · ' : ''}unloaded by ${min2hm(st.arriveMin + num(st.serviceMin,0))}${
+            (st.boxLabels||[]).length ? ' · in the ' + esc(st.boxLabels.join(' + ')) + ' box' : ''}</span>
+          <span class="wchips">${o.groupId? `<span class="chip" title="${esc(groupLabel(o))}">${
             num(o.groupPart,0)}/${num(o.groupOf,0)}</span>`:''}${
-          st.commit !== 'soft' ? `<span class="chip kind">${esc(COMMIT[st.commit].short)}</span>`:''}
-          <span class="chip">${st.yards} yd</span>
-          ${(st.boxLabels||[]).length? `<span class="chip">${esc(st.boxLabels.join('+'))}</span>`:''}
-          ${chip}</span></div>`;
+          st.commit !== 'soft' && st.commit !== 'firm' ? `<span class="chip kind">${esc(COMMIT[st.commit].short)}</span>`:''}${
+          orderNoDriver(o) ? '<span class="chip late">⚠ no driver</span>' : ''}${flag}</span>
+        </span></div>`;
     }).join('');
+    const depot = depotPoints()[tr.depot] || depotPoints().home;
+    const backMin = tr.endPos && depot && depot.lat != null ? tr.endMin + travel(tr.endPos, depot).min : null;
+    const allDone = tr.stops.every(st=>(orderById(st.orderId)||{}).status === 'delivered');
+    const behind = isToday && !allDone && tr.loadDoneMin < nowM && !tr.stops.some(st=>(orderById(st.orderId)||{}).status === 'delivered');
     html += `<div class="wload" data-waveband="${esc(t.id)}|${esc(tr.windowId || bandOf(tr.startMin))}"
                data-wavebandday="${esc(iso)}"
                style="grid-column:${col};grid-row:${r1row} / span ${span};
@@ -4337,9 +4362,12 @@ function renderWaveColumn(iso, t, col, start, step, ticks, pt, c){
       <div class="wload-head">
         <b>Load ${loads.indexOf(tr)+1}</b>
         <span>${esc(tr.productName)}</span>
-        <span class="muted">${tr.depotName} ${min2hm(tr.loadDoneMin)}</span>
         <span class="muted" style="margin-left:auto">${tr.yards}/${tr.capacity} yd · ${Math.round(tr.fill*100)}%</span>
-      </div>${binBar(t, tr, c)}${stops}</div>`;
+      </div>
+      <div class="wload-times"><span>Leaves ${esc(tr.depotName)} <b>${min2hm(tr.loadDoneMin)}</b></span>
+        <span class="muted">· ${tr.stops.length} stop${tr.stops.length>1?'s':''}${backMin != null ? ' · back about ' + min2hm(backMin) : ''}</span>
+        ${behind ? '<span class="chip warn" title="The plan has this load on the road already">should have left</span>' : ''}</div>
+      ${binBar(t, tr, c)}${stops}</div>`;
   }
   return html;
 }
@@ -6070,9 +6098,12 @@ function openBookingDetail(orderId, iso){
   const t = truckById(o.pinTruck) || {name:'?'};
   const prod = productOf(o);
   const plan = DB.plans[iso];
-  let s = null;
-  if(plan) plan.trucks.forEach(pt=>pt.trips.forEach(tr=>tr.stops.forEach(x=>{ if(x.orderId===o.id) s=x; })));
-  openModal(`${jobLabel(o)} — ${t.name} ${min2hm(hm2min(o.slotTime||'08:00'))}`, `
+  let s = null, onTruck = null, loadNo = 0, leaves = null;
+  if(plan) plan.trucks.forEach(pt=>pt.trips.slice().sort((a,b)=>a.startMin-b.startMin).forEach((tr,ti)=>tr.stops.forEach(x=>{
+    if(x.orderId===o.id){ s=x; onTruck = truckById(pt.truckId); loadNo = ti + 1; leaves = tr.loadDoneMin; } })));
+  const titleTruck = (onTruck || t).name;
+  openModal(`${jobLabel(o)} — ${titleTruck === '?' ? 'truck not chosen yet' : titleTruck}${o.slotTime ? ' ' + min2hm(hm2min(o.slotTime))
+      : (o.waveDate || o.windowId ? ', ' + WINDOWS[orderWindow(o)].label.toLowerCase() : '')}`, `
     <table>
       ${isInternal(o)? `<tr><td class="muted">Job</td><td>${esc(JOB_KINDS[jobKind(o)].label)} · ${esc(jobRoute(o))}</td></tr>`:''}
       <tr><td class="muted">${isInternal(o)? 'Route' : 'Address'}</td><td>${esc(isInternal(o)? jobRoute(o) : (o.address||'—'))}</td></tr>
@@ -6089,6 +6120,7 @@ function openBookingDetail(orderId, iso){
       <tr><td class="muted">Driver</td><td>${(()=>{ const d = loadDriver({...o, schedDate:iso, truckId:o.pinTruck});
         return d ? esc(d.name) + (loadDriverIsOverride({...o, schedDate:iso, truckId:o.pinTruck})
           ? ' <span class="chip">this load only</span>' : '') : '—'; })()}</td></tr>
+      ${s && loadNo && !o.slotTime ? `<tr><td class="muted">Leaves the yard</td><td>${min2hm(leaves)} on ${esc(titleTruck)}, load ${loadNo}</td></tr>` : ''}
       <tr><td class="muted">Expected arrival</td><td>${arrivalText(o, s)}</td></tr>
       ${o.notes? `<tr><td class="muted">Notes</td><td>${esc(o.notes)}</td></tr>`:''}
       <tr><td class="muted">Added</td><td>${o.createdAt? esc(new Date(o.createdAt).toLocaleString()) + ' · ' + esc(sinceLabel(o.createdAt)) : '—'}</td></tr>
